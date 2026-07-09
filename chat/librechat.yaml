@@ -3,6 +3,11 @@
 version: 1.2.1
 cache: true
 
+# Allow LibreChat to reach the internal MCP server container (SSRF protection allowlist).
+mcpSettings:
+  allowedAddresses:
+    - "mcp-server:8100"
+
 endpoints:
   custom:
     # GLM (Zhipu / z.ai) — OpenAI-compatible API. Key comes from chat/.env (GLM_API_KEY).

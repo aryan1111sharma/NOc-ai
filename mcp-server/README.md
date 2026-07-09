@@ -59,8 +59,25 @@ python scripts/generate_openapi.py /path/to/noc-server/noc_backend
 | `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8100` | http transport bind |
 | `REQUEST_TIMEOUT` | `30` | per-request timeout (seconds) |
 
+## On-charger control-center catalog
+
+Beyond the NOC API tools, the server adds one knowledge tool, **`get_control_center_api_catalog`**,
+built from `noc_mcp/catalog/rbac-rules.csv` (the RBAC-authoritative on-charger API list). It
+returns the **124 GET (read) endpoints** across the on-device services — network/GSM (:8000),
+RFID (:8001), power allocation (:8002), charging controller (:8003), and platform dev-tools /
+diagnostics (:8005-8007) — with each endpoint's port, path, required role, and response schema.
+
+The model calls this to discover what live per-charger data exists, then fetches a specific
+endpoint through the **generic charger proxy** tool
+(`proxy_api_call_path_based_...`) using the endpoint's port + path. To refresh the catalog,
+replace `noc_mcp/catalog/rbac-rules.csv` and rebuild.
+
+> Safety note: the generic proxy can technically forward non-GET methods to a charger. The
+> catalog only lists GET reads and instructs read-only use, but for a hard guarantee, lock the
+> proxy tool to `method=GET` (or replace it with typed GET-only wrappers).
+
 ## Notes / follow-ups
 
-- All **153** GET operations are exposed. Auto-generated tool names are verbose
-  (`dashboard_summary_api_v1_dashboard_summary_get`); a naming-cleanup pass (`mcp_names` /
+- All **153** GET operations are exposed (+1 catalog tool = 154). Auto-generated tool names are
+  verbose (`dashboard_summary_api_v1_dashboard_summary_get`); a naming-cleanup pass (`mcp_names` /
   `mcp_component_fn`) is recommended to improve LLM tool-selection.

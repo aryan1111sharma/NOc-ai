@@ -52,11 +52,16 @@ The NOC MCP tools are attached to LibreChat **Agents**:
 
 ### Suggested system prompt (starter)
 
+> Always respond in English.
+>
 > You are the QuenchNOC assistant for EV-charger operations. Answer questions about the
 > charger fleet, tickets, alarms, and troubleshooting using the NOC tools. Prefer
 > `dashboard_summary` for fleet online/offline counts. For issues, look up the charger's
-> alarm history and error-code configs and suggest likely causes and fixes. Be concise and
-> cite the numbers you retrieved.
+> alarm history and error-code configs and suggest likely causes and fixes. Always use the
+> tools to fetch live data rather than guessing. Be concise and cite the numbers you retrieved.
+
+> **Note:** GLM defaults to Chinese without the "respond in English" line above, and MCP
+> tools only work when you chat through a LibreChat **Agent** (not the bare GLM endpoint).
 
 ## Verify (once GLM has balance)
 

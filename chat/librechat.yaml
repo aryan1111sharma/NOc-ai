@@ -1,0 +1,26 @@
+# LibreChat configuration — GLM 5.2 endpoint + NOC read-only MCP server.
+# Docs: https://www.librechat.ai/docs/configuration/librechat_yaml
+version: 1.2.1
+cache: true
+
+endpoints:
+  custom:
+    # GLM (Zhipu / z.ai) — OpenAI-compatible API. Key comes from chat/.env (GLM_API_KEY).
+    - name: "GLM"
+      apiKey: "${GLM_API_KEY}"
+      baseURL: "https://api.z.ai/api/paas/v4"
+      models:
+        default: ["glm-5.2", "glm-5.1", "glm-4.6"]
+        fetch: false
+      titleConvo: true
+      titleModel: "glm-4.6"
+      modelDisplayLabel: "GLM (NOC Assistant)"
+
+# NOC read-only MCP server (this repo, mcp-server/). Its 153 GET tools become available
+# to LibreChat Agents. Build a LibreChat Agent using the GLM model + this server's tools.
+mcpServers:
+  noc:
+    type: streamable-http
+    url: "http://mcp-server:8100/mcp"
+    # timeout for tool calls (ms); NOC reports/telemetry can be slow.
+    timeout: 60000

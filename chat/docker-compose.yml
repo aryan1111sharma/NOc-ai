@@ -1,0 +1,69 @@
+# NOC AI Assistant — LibreChat (web UI) + GLM 5.2 (brain) + NOC read-only MCP server.
+#
+# Usage:
+#   cd chat
+#   cp .env.example .env        # then fill in secrets + GLM key + NOC read-only creds
+#   docker compose up -d
+#   open http://localhost:3080
+#
+# LibreChat requires a user account (true anonymous is unsupported); ALLOW_REGISTRATION=true
+# in .env keeps signup open to everyone, which is the practical "open access".
+
+services:
+  api:
+    image: ghcr.io/danny-avila/librechat:latest
+    container_name: noc-librechat
+    ports:
+      - "3080:3080"
+    depends_on:
+      - mongodb
+      - meilisearch
+      - mcp-server
+    env_file:
+      - .env
+    environment:
+      - HOST=0.0.0.0
+      - MONGO_URI=mongodb://mongodb:27017/LibreChat
+      - MEILI_HOST=http://meilisearch:7700
+      - CONFIG_PATH=/app/librechat.yaml
+    volumes:
+      - ./librechat.yaml:/app/librechat.yaml:ro
+      - librechat-images:/app/client/public/images
+      - librechat-logs:/app/api/logs
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: noc-librechat-mongo
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: noc-librechat-meili
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
+      - MEILI_NO_ANALYTICS=true
+    volumes:
+      - meili-data:/meili_data
+    restart: unless-stopped
+
+  # Read-only NOC MCP server (this repo). Exposes 153 GET endpoints as tools over HTTP.
+  mcp-server:
+    build: ../mcp-server
+    container_name: noc-mcp-server
+    environment:
+      - NOC_BASE_URL=${NOC_BASE_URL}
+      - NOC_EMAIL=${NOC_EMAIL}
+      - NOC_PASSWORD=${NOC_PASSWORD}
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8100
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  meili-data:
+  librechat-images:
+  librechat-logs:

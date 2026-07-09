@@ -1,0 +1,15 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Logs / scratch
+*.log
+.DS_Store

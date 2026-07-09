@@ -13,7 +13,10 @@ endpoints:
     # GLM (Zhipu / z.ai) — OpenAI-compatible API. Key comes from chat/.env (GLM_API_KEY).
     - name: "GLM"
       apiKey: "${GLM_API_KEY}"
-      baseURL: "https://api.z.ai/api/paas/v4"
+      # GLM Coding Plan endpoint (OpenAI-compatible). NOT the general /api/paas/v4 endpoint,
+      # which is pay-as-you-go and returns 429 "insufficient balance". Verified: this URL
+      # returns 200 and GLM-5.2 emits tool calls correctly.
+      baseURL: "https://api.z.ai/api/coding/paas/v4"
       models:
         default: ["glm-5.2", "glm-5.1", "glm-4.6"]
         fetch: false

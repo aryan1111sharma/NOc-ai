@@ -121,9 +121,9 @@ plus the **role-based access-control** workstream.
   `mcp-server/tests`, `cms-mcp-server/tests`); today only the changelog workflow runs.
   *Accept:* PRs run both test suites and block on failure.
   *Status:* workflow `.github/workflows/tests.yml` added (matrix over both servers, Python 3.12)
-  and green locally; **remaining (manual):** push the branch to see it run on GitHub, then
-  enable branch protection → required checks `pytest (mcp-server)` / `pytest (cms-mcp-server)`
-  to make red checks merge-blocking.
+  and **running green on GitHub Actions** (it correctly caught a real import bug red, then went
+  green after the fix). **Remaining (manual, GitHub UI):** enable branch protection → required
+  checks `pytest (mcp-server)` / `pytest (cms-mcp-server)` so red checks block merge.
 - [ ] **P3-2 — Tool-name cleanup.** Apply `mcp_names`/`mcp_component_fn` to the 153 verbose
   auto-names (`mcp-server/README.md:81-83`) for better LLM tool selection.
   *Accept:* tools expose concise names; tests updated; agent still selects correctly.

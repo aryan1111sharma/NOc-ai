@@ -123,6 +123,21 @@ plus the **role-based access-control** workstream.
 - [ ] **P3-4 — Agent config as code.** The LibreChat Agent (endpoint/tools/system prompt) is
   hand-wired in the UI (`chat/RUNBOOK.md`); capture it reproducibly so it survives `down -v`.
   *Accept:* agent config is restorable from source without manual UI steps.
+- [ ] **P3-5 — Testing standard for new MCP servers.** Every new MCP server (see **CAP-3**,
+  **EVT-3**) ships a `pytest` suite mirroring `mcp-server/tests`, wired into the **P3-1** CI gate.
+  *Accept:* the new server's suite runs in CI and blocks the PR on failure.
+- [ ] **P3-6 — Tool-level tests for `noc`/`cms` (close the coverage gap).** Today only
+  `test_auth.py` exists — the **actual tools are untested**, so "green" proves only auth works.
+  Add **FastMCP in-memory `Client`** tests (mock the backend with `httpx.MockTransport`, same
+  trick as `test_auth.py`) that `list_tools` + `call_tool` and assert each tool's fields / shape /
+  empty+limit handling. Covers CMS's 7 curated tools and NOC's catalog + proxy tools. (Test
+  levels for reference: ① in-memory tool tests · ② MCP Inspector `fastmcp dev` · ③ http transport
+  probe · ④ end-to-end in LibreChat.) *Accept:* every CMS tool + NOC catalog/proxy tool has a test;
+  suite runs offline and is in the **P3-1** gate.
+- [ ] **P3-7 — Injectable backend client (testability enabler for P3-6).** `build_server()`
+  hardcodes `build_client()`, so tools can't be tested against a mock. Make `build_server(client=…)`
+  accept an injected client (both servers). *Accept:* `build_server(client=mock)` works and **P3-6**
+  uses it; production path (no arg) unchanged.
 
 ---
 
@@ -264,6 +279,60 @@ chats** need a purge job. Must cascade (Mongo + Meili + files) and stay in sync 
 > Caveat: retention governs **our** store only. Data sent to GLM/z.ai for inference is subject
 > to the provider's retention — outside our control (reinforces **D1**).
 
+## CAP — Claude-app-style output (visual rendering + documents)
+
+Goal: bring Manthan AI's **output quality** toward the Claude app — rich visual rendering plus
+document **create** and **read**. Delivered via **native LibreChat features + self-hosted MCP**,
+**not** by importing Claude Code skills/plugins.
+
+> **Harness note (why not "just add the plugin"):** LibreChat has **no skill runtime** — it can't
+> read a `SKILL.md`, has no Skill tool, no progressive disclosure. So a Claude Code skill/plugin
+> **cannot be installed here regardless of the model** (swapping GLM→Claude does **not** change
+> this — it's the *app*, not the cook). LibreChat only consumes **MCP** (open protocol) + its own
+> native features. The reusable asset from a skill is its *code* (e.g. Anthropic's open-source
+> docx/xlsx/pptx/pdf skills), re-packaged as MCP tools. Same constraint on Open WebUI, which reaches
+> MCP only via an `mcpo` (MCP→OpenAPI) proxy.
+
+- [ ] **CAP-1 — Enable Artifacts (visual output, native).** Turn on `interface.artifacts` in
+  `chat/librechat.yaml` for the rich side panel (React/HTML/Mermaid), like Claude Artifacts.
+  *Accept:* a GLM reply renders a Mermaid diagram / HTML table in the Artifacts panel.
+- [ ] **CAP-2 — Enable file uploads + RAG (document reading, native).** Turn on uploads + the
+  `rag_api` service so PDF/DOCX/XLSX/CSV are parsed and queryable; images via GLM vision models.
+  *Accept:* a user uploads a PDF/xlsx, asks about it, and gets a grounded answer citing it.
+- [ ] **CAP-3 — `docgen` MCP (Word/Excel/PDF generation).** Self-hosted FastMCP mirroring
+  `noc`/`cms`, exposing tools that build `.docx`/`.xlsx`/`.pdf` (python-docx / openpyxl /
+  reportlab); implementation reference = Anthropic's open-source document skills. Keeps NOC data
+  off third-party sandboxes (vs LibreChat's paid Code Interpreter). *Accept:* "make an Excel of X"
+  returns a downloadable `.xlsx`; likewise `.docx` and `.pdf`.
+- [ ] **CAP-4 — (Optional) Google Workspace MCP.** Add a Google Docs/Sheets/Slides/Drive MCP for
+  **live Google files** (which export to Word/Excel/PDF natively). Heavier: needs a Google Cloud
+  OAuth setup. Gated on: does the team want Google-hosted docs or just downloadable files?
+  *Accept:* the assistant creates a Google Sheet the user can open/export.
+- [ ] **CAP-5 — GLM output-quality validation (gate).** Artifacts + document formatting depend
+  heavily on model capability; **Claude ≫ GLM** at emitting clean React/HTML and structured docs.
+  Validate a fixed set of "make a chart / report" prompts on GLM before promising these features,
+  or select a stronger model (ties **D1**, **P0-7**).
+  *Accept:* the prompt set produces acceptable output on the chosen model, recorded here.
+
+## EVT — EV-charger test MCP (exploratory, from ev-charger-toolkit)
+
+The `ev-charger-toolkit` plugin (`E:\cjain\my_plugins\ev-charger-toolkit`) is **skills-only** (no
+MCP server), so it **cannot be added to LibreChat directly**. To use it here, re-implement its
+*actions* — drive a CSMS via its operator API, fetch OTPs from the internal REST API, generate
+pytest/checklists from its templates — as a **self-hosted MCP**, mirroring `noc_mcp`/`cms_mcp`.
+Separate exploratory track (like **EPIC**).
+
+- [ ] **EVT-1 — Confirm target APIs reachable + credentialed.** The skill drives a CSMS operator
+  API and an internal OTP REST API. *Accept:* an authenticated call to each returns data from the
+  stack's network.
+- [ ] **EVT-2 — Decide the tool surface (brainstorming).** Which actions become tools — status
+  reads / test-file generation / full end-to-end run. *Accept:* agreed tool list before code.
+- [ ] **EVT-3 — Scaffold `ev-test-mcp-server/`.** Mirror `noc_mcp`; implement the agreed tools;
+  use the skill's `.py.template` files as generators; ship tests (see **P3-5**).
+  *Accept:* GLM can invoke e.g. `fetch_otp` / `generate_test_suite`; tests pass.
+- [ ] **EVT-4 — Wire into `librechat.yaml`** as a third MCP server next to `noc`/`cms`.
+  *Accept:* the server appears and a tool call succeeds end-to-end from chat.
+
 ## EPIC — Epicor ERP MCP (exploratory, BLOCKED)
 
 Potential **read-only MCP for Epicor ERP**, mirroring `noc_mcp`/`cms_mcp`. Separate from the
@@ -282,6 +351,81 @@ local/admin instance — most promising lead).
   after EP-1/EP-2 clear. *Accept:* server exposes read-only Epicor tools; tests pass.
   > Decision **D-EP1:** no UI-automation fallback — REST API is the only supported path.
 
+## JIRA — Jira MCP integration (two-tenant, exploratory)
+
+Two **separate** Jira tenants to surface in the assistant: **ChargeZone** (a client's tracker)
+and **Ecog** (the charging-controller **vendor's** tracker). MCP does **not** merge tenants —
+one MCP connection per Jira, each with its own credential, RBAC gate, and access-control surface.
+Fits the multi-MCP boundary rule (split by backend / ownership / audience). **Read-only first**;
+write (create/transition issues in a client's or vendor's tracker) is a separate trust decision.
+Separate exploratory track (like **EPIC**, **EVT**).
+
+> **Data-boundary caveat (gates external sharing):** ChargeZone data is **client-confidential**
+> and Ecog data is **vendor-confidential / cross-company**. Piping either into the shared
+> Adore Manthan.AI stack sends it to the configured inference provider — reinforces **D1**
+> (residency) and means each Jira MCP must be scoped to the right audience only (**AC-8**),
+> not visible fleet-wide.
+
+- [ ] **JR-0 — Decide hosting + auth per tenant (gate).** For **each** Jira: Atlassian **Cloud**
+  or on-prem **Server/Data Center**? (decides hosted Atlassian remote MCP vs. self-hosted server)
+  and per-user OAuth vs. a shared read-only service token (per-user inherits Jira's own RBAC —
+  safer than a blended service account, mirrors **D2**). *Accept:* hosting + auth model recorded
+  here for both ChargeZone and Ecog.
+- [ ] **JR-1 — Confirm API reachability + credentials, both tenants.** Authenticated call
+  (REST/JQL) against each Jira returns data from the stack's network. *Accept:* a `search`/issue
+  read succeeds against **both** ChargeZone and Ecog.
+- [ ] **JR-2 — Decide the tool surface (brainstorming).** Which read actions become tools
+  (JQL search, issue detail, status/transitions view, comments, sprint/board reads); write
+  deferred. *Accept:* agreed read-only tool list before code.
+- [ ] **JR-3 — Stand up one MCP connection per tenant.** Two connections (hosted Atlassian remote
+  MCP and/or self-hosted per JR-0), each with its own credential — never one blended Jira MCP;
+  new self-built servers ship tests (see **P3-5**). *Accept:* each tenant's tools list and a read
+  call succeeds end-to-end from chat.
+- [ ] **JR-4 — Scope visibility by audience (ties AC-8).** ChargeZone MCP not exposed to
+  Ecog-facing users and vice-versa; wire each to the intended agent/role. *Accept:* a user
+  scoped to one tenant cannot see or call the other tenant's tools.
+- [ ] **JR-5 — (Deferred) Write access decision.** Whether/where to allow create/transition, and
+  under what guardrails (which tenant, which roles, GET-locked read stays the default elsewhere).
+  *Accept:* explicit decision recorded before any write tool is built.
+
+## RCA — Autonomous alarm-triage / root-cause agent (exploratory)
+
+Beyond the **reactive** LibreChat chat, a **proactive** agent: on a charger alarm, pull that
+charger's logs + diagnostics, correlate them, check the relevant firmware/code, and post a
+root-cause summary to the team (Slack / ticket). **Reuses the existing MCP tools unchanged** — this
+is a different *harness* (autonomous), not different tools. Candidate harness: a **Hermes-style
+agent framework** ([`NousResearch/hermes-agent`](https://github.com/NousResearch/hermes-agent) —
+MCP-native, built-in cron/scheduler, multi-platform delivery, persistent memory) **or** a small
+custom trigger→MCP→LLM loop. Separate exploratory track (like **EPIC** / **EVT** / **JIRA**).
+**Human-in-the-loop: RCA output is a triage first-draft an engineer confirms — never auto-close.**
+
+**Tool-audit findings (feasibility basis):**
+- **Logs exist only via `noc_mcp`** → per-charger dev-tools service (`:8005`): `logs/sources`,
+  `logs/{source}` (returns **JSON lines** — agent-friendly), plus `metrics` (cpu/mem/disk),
+  `services` + `docker-compose-status`, `test-connectivity`, `m7/status` (firmware), and config/file
+  `view` = a real RCA toolkit. The NOC **backend** API has **no** log endpoints.
+- **`cms_mcp` = alarm signal only** (`cms_get_recent_alerts`: error code + timestamp) — **no logs**.
+- **⚠ All `:8005` log/diagnostic endpoints require `admin` role**, colliding with the read-only
+  service-account posture (**P1-1**, **D2**) — the **#1 gating question**.
+
+- [ ] **RCA-1 — Resolve log access vs read-only posture (gate).** How the agent reads admin-gated
+  `:8005` logs without violating **P1-1/D2** (a scoped elevated credential for the RCA agent only?
+  per-charger scoping?). *Accept:* a documented access model that retrieves logs without granting
+  broad admin.
+- [ ] **RCA-2 — Verify log content is useful on a live charger.** Confirm `logs/{source}` returns
+  root-cause-grade lines (not empty/rotated) for a real fault. *Accept:* logs pulled for one real
+  alarm contain the diagnostic signal.
+- [ ] **RCA-3 — Alarm trigger.** Event/webhook from NOC, or a poll loop (cron) over new alarms /
+  `cms_get_recent_alerts`. *Accept:* a new alarm wakes the agent within N minutes.
+- [ ] **RCA-4 — Code/firmware access for correlation.** Read access to the controller/firmware repo
+  so a fault code maps to a code path. *Accept:* the agent cites the relevant source for a known fault.
+- [ ] **RCA-5 — Spike the loop (one alarm type, human-reviewed).** Minimal
+  trigger→gather(logs+diagnostics)→analyze→post-to-Slack on a single fault; **read-only, no charger
+  actions**. *Accept:* one real/simulated alarm yields a human-reviewed RCA note in Slack/ticket.
+- [ ] **RCA-6 — Decide harness (Hermes vs custom).** Only after the spike shows value: weigh
+  `hermes-agent` (autonomy/memory/cron/multi-platform, but **young/unproven**) vs a small custom
+  loop. *Accept:* harness decision recorded with rationale.
+
 ## Suggested sequencing
 
 1. **Decisions:** D1 (residency), D2 (identity/scope), D4 (capacity/retention scope).
@@ -293,6 +437,16 @@ local/admin instance — most promising lead).
 6. **DR** (retention) alongside P1.
 7. **P2 / P3** → operational maturity, ongoing.
 
-_Epicor MCP (EP-*) is a separate exploratory track, gated on API access — not in this sequence._
+_Epicor MCP (EP-*) and Jira MCP (JR-*) are separate exploratory tracks, gated on API access
+(and JR-0 hosting/auth) — not in this sequence._
+
+_Capability-parity (CAP-*) and the EV-charger test MCP (EVT-*) are **parallel product tracks**,
+independent of the productionization sequence above. CAP-1/CAP-2 are cheap native toggles gated
+only by **CAP-5** (GLM output quality); CAP-3 (docgen MCP) is a small self-contained build. EVT-*
+is exploratory, gated on **EVT-1** (API access) and **EVT-2** (tool-surface brainstorming)._
+
+_Autonomous RCA agent (RCA-*) is a separate exploratory track, gated on **RCA-1** (log access vs
+read-only posture) and **RCA-2** (log content usefulness); harness (Hermes vs custom) is decided
+last, after a value-proving spike._
 
 _Last updated: 2026-07-11._

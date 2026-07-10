@@ -28,6 +28,11 @@ GLM_API_KEY=your_glm_api_key_here
 NOC_BASE_URL=https://www.manthanquench.online
 NOC_EMAIL=your-readonly-noc-user@example.com
 NOC_PASSWORD=change-me
+
+# ---- Legacy CMS / old NOC (quenchcms.com) ----
+CMS_BASE_URL=https://quenchcms.com
+CMS_USER=your-cms-username
+CMS_PASS=change-me
 "@
 
 # ASCII avoids a UTF-8 BOM that would corrupt the first variable for docker compose.

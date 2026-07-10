@@ -3,10 +3,11 @@
 version: 1.2.1
 cache: true
 
-# Allow LibreChat to reach the internal MCP server container (SSRF protection allowlist).
+# Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
   allowedAddresses:
     - "mcp-server:8100"
+    - "cms-mcp-server:8101"
 
 endpoints:
   custom:
@@ -44,3 +45,8 @@ mcpServers:
     url: "http://mcp-server:8100/mcp"
     # timeout for tool calls (ms); NOC reports/telemetry can be slow.
     timeout: 60000
+  cms:
+    type: streamable-http
+    url: "http://cms-mcp-server:8101/mcp"
+    # legacy CMS actions return large payloads; allow more time.
+    timeout: 90000

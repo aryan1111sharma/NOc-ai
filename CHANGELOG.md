@@ -5,6 +5,16 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.1.1] - 2026-07-10
+
+### Features
+
+- **chat:** Rename app to Adore Manthan.AI ([`560c7f9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/560c7f9f90d954ce5973c70be621e636fbfc5c2b))
+
+### Documentation
+
+- Add production-readiness & access-control backlog ([`090cd82`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/090cd82919a6b353fdbddd0a697baed790abb721))
+
 ## [0.1.0] - 2026-07-10
 
 ### Features

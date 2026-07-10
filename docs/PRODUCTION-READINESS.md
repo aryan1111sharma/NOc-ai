@@ -166,9 +166,14 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
 
 ### Layer 1 — native LibreChat RBAC (config, no code)
 
-- [ ] **AC-1 — Admin Panel + custom roles/groups.** Stand up the LibreChat Admin Panel;
+- [x] **AC-1 — Admin Panel + custom roles/groups.** Stand up the LibreChat Admin Panel;
   define `noc-l1`, `noc-engineer`, `noc-legacy` roles and matching groups.
   *Accept:* roles exist; a test user can be assigned a role.
+  *Status:* `admin-panel` service added (`:3091`); the three `noc-*` roles created + verified in
+  Mongo; test user `noc-tester@quench.local` assigned `noc-l1` (persisted across reload).
+  Matching **groups** deferred to AC-2 (same panel; created when agents/config attach to them).
+  Caveats: roles live in Mongo only — reproducible-from-source is **P3-4**; a local test admin
+  `noc-admin@quench.local` was created + promoted (ADMIN) to bootstrap the panel.
 - [ ] **AC-2 — Curated agents + ACLs.** Build one agent per role bundling only its tool
   subset; share each agent's ACL with the matching role/group.
   *Accept:* an `noc-l1` user sees only the L1 agent and its tools; not the proxy tool.

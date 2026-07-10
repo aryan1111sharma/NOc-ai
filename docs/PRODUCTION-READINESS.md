@@ -264,6 +264,24 @@ chats** need a purge job. Must cascade (Mongo + Meili + files) and stay in sync 
 > Caveat: retention governs **our** store only. Data sent to GLM/z.ai for inference is subject
 > to the provider's retention — outside our control (reinforces **D1**).
 
+## EPIC — Epicor ERP MCP (exploratory, BLOCKED)
+
+Potential **read-only MCP for Epicor ERP**, mirroring `noc_mcp`/`cms_mcp`. Separate from the
+NOC-stack productionization above. **Blocked on API access** — full analysis, decision tree,
+self-check, and colleague questions in [`EPICOR-MCP-FEASIBILITY.md`](./EPICOR-MCP-FEASIBILITY.md).
+Current constraints: UI login only, no admin, version unknown, colleague-installed (possible
+local/admin instance — most promising lead).
+
+- [ ] **EP-1 — Confirm version + REST reachability** (Help→About; probe `/api/help` &
+  `/api/v2/odata/`). *Accept:* version known and we know whether a REST API exists/responds.
+- [ ] **EP-2 — Establish API access** — existing creds against REST, or admin-provisioned API
+  key + read-only service account. *Accept:* an authenticated REST call returns data.
+- [ ] **EP-3 — Decide data scope** the assistant answers over (orders/inventory/jobs/AR-AP…).
+  *Accept:* scoped tool list agreed before generation.
+- [ ] **EP-4 — Scaffold `epicor-mcp-server/`** mirroring `noc_mcp` (GET-only route map), only
+  after EP-1/EP-2 clear. *Accept:* server exposes read-only Epicor tools; tests pass.
+  > Decision **D-EP1:** no UI-automation fallback — REST API is the only supported path.
+
 ## Suggested sequencing
 
 1. **Decisions:** D1 (residency), D2 (identity/scope), D4 (capacity/retention scope).
@@ -274,5 +292,7 @@ chats** need a purge job. Must cascade (Mongo + Meili + files) and stay in sync 
 5. **AC Layer 1 → Layer 2** → per-role tools, then real enforcement.
 6. **DR** (retention) alongside P1.
 7. **P2 / P3** → operational maturity, ongoing.
+
+_Epicor MCP (EP-*) is a separate exploratory track, gated on API access — not in this sequence._
 
 _Last updated: 2026-07-11._

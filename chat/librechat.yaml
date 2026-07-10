@@ -3,6 +3,13 @@
 version: 1.2.1
 cache: true
 
+# UI branding. The footer (version + commit id) is set via CUSTOM_FOOTER in
+# docker-compose.yml — that's the mechanism this LibreChat version renders;
+# interface.customFooter is ignored. This welcome greets the new-chat screen
+# with the release version; the version token is bumped by scripts/bump-version.
+interface:
+  customWelcome: "Welcome to Manthan AI v0.1.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
+
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
   allowedAddresses:

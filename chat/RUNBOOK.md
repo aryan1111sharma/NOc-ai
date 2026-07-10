@@ -1,6 +1,6 @@
 # RUNBOOK — Run the chat stack locally (Windows)
 
-The NOC AI Assistant: **LibreChat** (web UI :3080) → **GLM** → read-only
+**Manthan AI** — the NOC assistant: **LibreChat** (web UI :3080) → **GLM** → read-only
 **NOC MCP server** (:8100) and legacy **CMS MCP server** (:8101), all via Docker Compose.
 
 ```
@@ -33,9 +33,12 @@ LibreChat (:3080)  →  GLM (z.ai)  →  mcp-server (:8100)   →  NOC backend
 #    wait ~30-60s, then confirm it's up:
 docker version --format '{{.Server.Version}}'
 
-# 2. From the chat folder, build + start everything
+# 2. From the chat folder, start via the wrapper (RECOMMENDED). It injects the
+#    version + commit id into the app footer so you can see exactly what's running.
 cd E:\cjain\noc-mcp-agent\chat
-docker compose up -d --build      # first run builds the two MCP images (a few min)
+.\up.ps1                           # first run builds the two MCP images (a few min)
+#    (bash/macOS/Linux: ./up.sh   |   plain `docker compose up -d --build` also works,
+#     but the footer then shows "vdev (local)" instead of the real version/commit)
 
 # 3. Verify all 5 services are Up
 docker compose ps
@@ -45,6 +48,8 @@ docker compose logs mcp-server
 ```
 
 Then open **http://localhost:3080** and **register an account** (registration is open).
+The footer shows the running build, e.g. **Manthan AI v0.1.0 (377a150)**, and the
+new-chat screen greets you with the version.
 
 ## Wire up the tools (one-time, in the LibreChat UI)
 
@@ -69,6 +74,32 @@ MCP tools only work through a LibreChat **Agent**, not the bare GLM endpoint:
 | Stop (keeps data) | `docker compose down` |
 | Stop + wipe chats/search data | `docker compose down -v` |
 | Rebuild after MCP code changes | `docker compose up -d --build mcp-server` |
+
+## Versioning & releases
+
+The version shown in the app footer comes from the repo's **`VERSION`** file plus the
+current **git commit** (short SHA), injected at start by `up.ps1` / `up.sh`. Git tags
+`vX.Y.Z` are the source of truth for the **`CHANGELOG.md`** (generated from Conventional
+Commits by git-cliff; CI regenerates it on merge to `main`).
+
+To cut a new version (from the repo root):
+
+```powershell
+# bump the semver, tag it, and regenerate the changelog section
+.\scripts\bump-version.ps1 patch     # 0.1.0 -> 0.1.1   (or: minor | major | 1.2.3)
+#   (bash: ./scripts/bump-version.sh patch)
+
+# review, then publish the commit + tag
+git push
+git push origin v0.1.1
+
+# redeploy so the footer shows the new version
+cd chat; .\up.ps1
+```
+
+The bump script updates `VERSION` + the LibreChat welcome message, regenerates
+`CHANGELOG.md` (each entry links to its commit id), commits as `chore(release): vX.Y.Z`,
+and tags it. It does **not** push — you review first.
 
 ## Troubleshooting
 

@@ -1,0 +1,38 @@
+name: Tests
+
+# Run both MCP servers' pytest suites on PRs (the merge gate) and on pushes.
+on:
+  push:
+  pull_request:
+
+# Latest run per ref wins; cancel superseded runs.
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        server: [mcp-server, cms-mcp-server]
+    name: pytest (${{ matrix.server }})
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.server }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-asyncio
+
+      - name: Run tests
+        working-directory: ${{ matrix.server }}
+        run: pytest -v

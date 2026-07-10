@@ -50,7 +50,7 @@ plus the **role-based access-control** workstream.
 - [ ] **P0-3 — Keep MCP ports internal.** Never publish `:8100`/`:8101`; they have **no
   inbound auth**. Confirm only `3080` (via proxy) is exposed.
   *Accept:* `curl http://<host>:8100/mcp` from outside the Docker network fails/refused.
-- [ ] **P0-4 — Lock charger proxy to GET.** Enforce `method=GET` in code on
+- [x] **P0-4 — Lock charger proxy to GET.** Enforce `method=GET` in code on
   `proxy_api_call_path_based_...`; the catalog is descriptive only
   (`mcp-server/README.md:75-77`).
   *Accept:* a non-GET call through the proxy tool is rejected server-side (unit test).

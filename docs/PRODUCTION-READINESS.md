@@ -117,9 +117,13 @@ plus the **role-based access-control** workstream.
 
 ## P3 — Quality & maintainability
 
-- [ ] **P3-1 — CI test gate.** Run `pytest` for both MCP servers on PR (tests already exist:
+- [~] **P3-1 — CI test gate.** Run `pytest` for both MCP servers on PR (tests already exist:
   `mcp-server/tests`, `cms-mcp-server/tests`); today only the changelog workflow runs.
   *Accept:* PRs run both test suites and block on failure.
+  *Status:* workflow `.github/workflows/tests.yml` added (matrix over both servers, Python 3.12)
+  and green locally; **remaining (manual):** push the branch to see it run on GitHub, then
+  enable branch protection → required checks `pytest (mcp-server)` / `pytest (cms-mcp-server)`
+  to make red checks merge-blocking.
 - [ ] **P3-2 — Tool-name cleanup.** Apply `mcp_names`/`mcp_component_fn` to the 153 verbose
   auto-names (`mcp-server/README.md:81-83`) for better LLM tool selection.
   *Accept:* tools expose concise names; tests updated; agent still selects correctly.

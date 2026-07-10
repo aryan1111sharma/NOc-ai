@@ -28,3 +28,52 @@ def test_allows_explicit_none_method_on_proxy():
 
 def test_ignores_non_proxy_tools_even_with_method():
     assert _blocked_method("dashboard_summary_api_v1_dashboard_summary_get", {"method": "POST"}) is None
+
+
+from types import SimpleNamespace
+
+from fastmcp.exceptions import ToolError
+
+from noc_mcp.readonly import ReadOnlyProxyMiddleware
+
+
+def _ctx(name, arguments):
+    """Minimal stand-in for a MiddlewareContext[CallToolRequestParams]."""
+    return SimpleNamespace(message=SimpleNamespace(name=name, arguments=arguments))
+
+
+@pytest.mark.asyncio
+async def test_middleware_rejects_non_get_proxy_call():
+    mw = ReadOnlyProxyMiddleware()
+    called = False
+
+    async def call_next(ctx):
+        nonlocal called
+        called = True
+        return "ok"
+
+    with pytest.raises(ToolError):
+        await mw.on_call_tool(_ctx(PROXY, {"method": "POST"}), call_next)
+    assert called is False  # NOC is never contacted for a blocked call
+
+
+@pytest.mark.asyncio
+async def test_middleware_allows_get_proxy_call():
+    mw = ReadOnlyProxyMiddleware()
+
+    async def call_next(ctx):
+        return "ok"
+
+    result = await mw.on_call_tool(_ctx(PROXY, {"method": "GET"}), call_next)
+    assert result == "ok"
+
+
+@pytest.mark.asyncio
+async def test_middleware_allows_absent_method():
+    mw = ReadOnlyProxyMiddleware()
+
+    async def call_next(ctx):
+        return "ok"
+
+    result = await mw.on_call_tool(_ctx(PROXY, {"charger_id": "CHG-1"}), call_next)
+    assert result == "ok"

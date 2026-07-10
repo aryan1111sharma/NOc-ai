@@ -1,0 +1,58 @@
+# git-cliff configuration — https://git-cliff.org
+# Generates CHANGELOG.md from the repo's Conventional Commit history.
+# Regenerate locally with:  npx git-cliff -o CHANGELOG.md
+# CI regenerates it on every push to main (.github/workflows/changelog.yml).
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project are documented here.
+This file is generated from [Conventional Commits](https://www.conventionalcommits.org)
+by [git-cliff](https://git-cliff.org) — do not edit by hand.
+\n
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+# Map commit types to changelog sections. The <!-- N --> prefixes only order
+# the groups; `striptags` in the body template removes them from the heading.
+commit_parsers = [
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Bug Fixes" },
+  { message = "^perf", group = "<!-- 2 -->Performance" },
+  { message = "^refactor", group = "<!-- 3 -->Refactoring" },
+  { message = "^docs\\(changelog\\)", skip = true },
+  { message = "^docs", group = "<!-- 4 -->Documentation" },
+  { message = "^test", group = "<!-- 5 -->Testing" },
+  { message = "^build", group = "<!-- 6 -->Build System" },
+  { message = "^ci", group = "<!-- 7 -->CI/CD" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore\\(changelog\\)", skip = true },
+  { message = "^chore", group = "<!-- 8 -->Chores" },
+  { message = "^style", group = "<!-- 9 -->Styling" },
+  { message = "^revert", group = "<!-- 10 -->Reverts" },
+  { message = ".*", group = "<!-- 11 -->Other" },
+]
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v[0-9].*"
+topo_order = false
+sort_commits = "oldest"

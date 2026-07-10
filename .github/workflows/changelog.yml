@@ -1,0 +1,48 @@
+name: Changelog
+
+# Regenerate CHANGELOG.md from Conventional Commit history whenever commits
+# land on main, then commit the result back. Config lives in cliff.toml.
+
+on:
+  push:
+    branches: [main]
+    # Don't re-trigger on the bot's own CHANGELOG commit.
+    paths-ignore:
+      - CHANGELOG.md
+
+permissions:
+  contents: write
+
+# If several pushes land close together, let the latest win.
+concurrency:
+  group: changelog-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for git-cliff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate CHANGELOG.md
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --verbose
+        env:
+          OUTPUT: CHANGELOG.md
+
+      - name: Commit changelog if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          if git diff --staged --quiet; then
+            echo "CHANGELOG.md already up to date."
+          else
+            git commit -m "docs(changelog): update CHANGELOG.md [skip ci]"
+            git push
+          fi

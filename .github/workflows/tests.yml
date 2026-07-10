@@ -35,4 +35,7 @@ jobs:
 
       - name: Run tests
         working-directory: ${{ matrix.server }}
-        run: pytest -v
+        # `python -m pytest` (not bare `pytest`) puts the server dir on sys.path so the
+        # `noc_mcp` / `cms_mcp` package imports without an editable install — matches the
+        # invocation the READMEs document.
+        run: python -m pytest -v

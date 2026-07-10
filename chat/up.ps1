@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Start the Manthan AI stack with the version + commit id wired into the
+# Start the Adore Manthan.AI stack with the version + commit id wired into the
 # LibreChat footer. Reads the version from ../VERSION and the commit from
 # `git rev-parse --short HEAD`, then runs `docker compose up -d --build`.
 #
@@ -13,7 +13,7 @@ $root = Split-Path -Parent $chatDir
 $env:APP_VERSION = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim()
 $env:GIT_SHA = (git -C $root rev-parse --short HEAD).Trim()
 
-Write-Host "Starting Manthan AI v$($env:APP_VERSION) ($($env:GIT_SHA))"
+Write-Host "Starting Adore Manthan.AI v$($env:APP_VERSION) ($($env:GIT_SHA))"
 Push-Location $chatDir
 try {
     docker compose up -d --build @args

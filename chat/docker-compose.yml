@@ -1,4 +1,4 @@
-# Manthan AI — LibreChat (web UI) + GLM 5.2 (brain) + NOC read-only MCP server.
+# Adore Manthan.AI — LibreChat (web UI) + GLM 5.2 (brain) + NOC read-only MCP server.
 #
 # Usage:
 #   cd chat
@@ -30,10 +30,10 @@ services:
       # chat/up.ps1 (or up.sh) from the VERSION file and `git rev-parse --short HEAD`,
       # so the footer always names the exact running build. A raw `docker compose up`
       # without the wrapper falls back to "dev (local)".
-      - APP_TITLE=Manthan AI
+      - APP_TITLE=Adore Manthan.AI
       - "APP_VERSION=${APP_VERSION:-dev}"
       - "GIT_SHA=${GIT_SHA:-local}"
-      - "CUSTOM_FOOTER=Manthan AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/main/CHANGELOG.md)"
+      - "CUSTOM_FOOTER=Adore Manthan.AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/main/CHANGELOG.md)"
     volumes:
       - ./librechat.yaml:/app/librechat.yaml:ro
       - librechat-images:/app/client/public/images

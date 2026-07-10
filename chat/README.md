@@ -1,6 +1,6 @@
 # noc-mcp-agent · chat
 
-The Manthan AI web app: **LibreChat** (ChatGPT-like UI with saved chats + shareable
+The Adore Manthan.AI web app: **LibreChat** (ChatGPT-like UI with saved chats + shareable
 links) driven by **GLM 5.2**, using the read-only **NOC MCP server** (`../mcp-server`) for
 live NOC data.
 

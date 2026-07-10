@@ -13,3 +13,4 @@ __pycache__/
 # Logs / scratch
 *.log
 .DS_Store
+.playwright-mcp/

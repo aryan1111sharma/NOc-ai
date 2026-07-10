@@ -73,8 +73,13 @@ plus the **role-based access-control** workstream.
 - [ ] **P1-1 — Read-only service accounts.** Confirm `NOC_EMAIL` and `CMS_USER` hold
   **only** read roles (defense in depth behind the GET route map).
   *Accept:* the account is documented as read-only; a write attempt via the backend fails for it.
-- [ ] **P1-2 — Disable public conversation share-links** in LibreChat.
-  *Accept:* the "share conversation" public-link option is unavailable to non-admins.
+- [ ] **P1-2 — Govern public conversation share-links (keep the feature, gate it safely).**
+  Sharable links are a **wanted feature**, but a shared chat can contain NOC data — so control
+  it rather than disable it: restrict who can create public links via RBAC (role/group), add
+  link **expiry + revocation**, and treat shared content under the retention/residency rules
+  (ties **D1**, **DR**).
+  *Accept:* only permitted roles can create a public share-link; a link can be set to expire
+  and be revoked; who-shared-what is auditable.
 - [ ] **P1-3 — Rate limiting / abuse controls** at the proxy and in LibreChat (proxy tool
   hits live chargers).
   *Accept:* excessive requests from one user are throttled (observed 429/limit).

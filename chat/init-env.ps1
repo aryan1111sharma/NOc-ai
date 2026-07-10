@@ -22,6 +22,7 @@ CREDS_IV=$(Rand 16)
 JWT_SECRET=$(Rand 32)
 JWT_REFRESH_SECRET=$(Rand 32)
 MEILI_MASTER_KEY=$(Rand 16)
+ADMIN_PANEL_SESSION_SECRET=$(Rand 32)
 
 # ---- Fill these in ----
 GLM_API_KEY=your_glm_api_key_here

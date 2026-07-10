@@ -83,6 +83,25 @@ services:
       - MCP_PORT=8101
     restart: unless-stopped
 
+  # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
+  # (not Mongo). GUI at http://localhost:3091; the first-registered LibreChat user is admin.
+  # Needs ADMIN_PANEL_SESSION_SECRET in .env (init-env.ps1 generates it). SECURITY: in
+  # production this must sit behind the reverse proxy + auth/IP allowlist, not exposed raw.
+  admin-panel:
+    image: registry.librechat.ai/clickhouse/librechat-admin-panel:latest
+    container_name: noc-librechat-admin
+    depends_on:
+      - api
+    environment:
+      - PORT=3000
+      - SESSION_SECRET=${ADMIN_PANEL_SESSION_SECRET}
+      - API_SERVER_URL=http://api:3080          # server-to-server (in-network)
+      - VITE_API_BASE_URL=http://localhost:3080 # browser-facing LibreChat URL
+      - SESSION_COOKIE_SECURE=false             # local http; set true behind TLS in prod
+    ports:
+      - "3091:3000"
+    restart: unless-stopped
+
 volumes:
   mongo-data:
   meili-data:

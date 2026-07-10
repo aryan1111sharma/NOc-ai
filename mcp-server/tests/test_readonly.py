@@ -77,3 +77,14 @@ async def test_middleware_allows_absent_method():
 
     result = await mw.on_call_tool(_ctx(PROXY, {"charger_id": "CHG-1"}), call_next)
     assert result == "ok"
+
+
+def test_build_server_registers_readonly_middleware(monkeypatch):
+    # build_server() -> config.Settings() reads env at import; set creds first.
+    monkeypatch.setenv("NOC_EMAIL", "svc@noc.test")
+    monkeypatch.setenv("NOC_PASSWORD", "secret")
+
+    from noc_mcp.server import build_server  # deferred import (needs env above)
+
+    mcp = build_server()
+    assert any(isinstance(m, ReadOnlyProxyMiddleware) for m in mcp.middleware)

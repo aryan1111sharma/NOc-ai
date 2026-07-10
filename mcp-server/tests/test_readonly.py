@@ -1,8 +1,11 @@
 """Tests for read-only charger-proxy enforcement (noc_mcp.readonly)."""
 
-import pytest
+from types import SimpleNamespace
 
-from noc_mcp.readonly import _blocked_method
+import pytest
+from fastmcp.exceptions import ToolError
+
+from noc_mcp.readonly import ReadOnlyProxyMiddleware, _blocked_method
 
 # A representative exposed proxy tool name (path-based GET variant).
 PROXY = "proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get"
@@ -28,13 +31,6 @@ def test_allows_explicit_none_method_on_proxy():
 
 def test_ignores_non_proxy_tools_even_with_method():
     assert _blocked_method("dashboard_summary_api_v1_dashboard_summary_get", {"method": "POST"}) is None
-
-
-from types import SimpleNamespace
-
-from fastmcp.exceptions import ToolError
-
-from noc_mcp.readonly import ReadOnlyProxyMiddleware
 
 
 def _ctx(name, arguments):

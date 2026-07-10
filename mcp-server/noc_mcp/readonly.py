@@ -4,7 +4,7 @@ The NOC MCP server exposes only GET operations as tools, but the GET charger-pro
 a ``method`` query parameter that the NOC backend uses to choose which HTTP method it forwards
 to a live charger. Without this guard a *GET* proxy tool could be called with ``method=POST``
 and write to a charger. ``_blocked_method`` decides when to reject; ``ReadOnlyProxyMiddleware``
-(Task 2) enforces it on every tool call.
+enforces it on every tool call.
 """
 
 from __future__ import annotations

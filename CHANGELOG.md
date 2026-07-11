@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.3.1] - 2026-07-11
+
+### Documentation
+
+- **access:** Roles need AGENTS.USE + MCP_SERVERS.USE to use agent tools ([`3afc86d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3afc86da40c3dc1698210b60481bef9bb1a8c3b8))
+
 ## [0.3.0] - 2026-07-11
 
 ### Features

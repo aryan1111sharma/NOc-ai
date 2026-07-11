@@ -174,9 +174,16 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
   Matching **groups** deferred to AC-2 (same panel; created when agents/config attach to them).
   Caveats: roles live in Mongo only — reproducible-from-source is **P3-4**; a local test admin
   `noc-admin@quench.local` was created + promoted (ADMIN) to bootstrap the panel.
-- [ ] **AC-2 — Curated agents + ACLs.** Build one agent per role bundling only its tool
-  subset; share each agent's ACL with the matching role/group.
-  *Accept:* an `noc-l1` user sees only the L1 agent and its tools; not the proxy tool.
+- [x] **AC-2 — Curated agents + ACLs (agent visibility).** Build one agent per role and share
+  each agent's ACL with the matching role.
+  *Accept (revised):* an `noc-l1` user sees only the L1 agent; not other agents.
+  *Status:* "NOC L1 Support" (→ `noc-l1`, Viewer) and "NOC Engineer" (→ `noc-engineer`, Viewer)
+  created + shared. Verified: logged in as `noc-tester` (`noc-l1`) → agent picker shows **only**
+  "NOC L1 Support"; "NOC Engineer" absent (screenshot `ac2-noc-l1-sees-only-l1-agent.png`).
+  **Finding:** LibreChat v0.8.7 adds MCP tools at **server granularity** (whole `noc` server, no
+  per-tool selection in the agent builder), so *per-tool* exclusion of the charger-proxy from L1
+  can't be done here — **moved to AC-5** (MCP-side role filtering). The proxy is already
+  GET-locked (P0-4), so L1 seeing it is read-only. Agents live in Mongo (P3-4).
 - [ ] **AC-3 — Force users through agents.** Set `chatMenu: false` on `mcpServers` entries
   (`chat/librechat.yaml`) so raw tools aren't à-la-carte selectable.
   *Accept:* raw `noc`/`cms` servers don't appear in the chat dropdown.
@@ -197,7 +204,8 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
   *Accept:* MCP servers receive the header (logged) on each tool call.
 - [ ] **AC-5 — Role-based tool filtering (FastMCP middleware).** In
   `mcp-server/noc_mcp/server.py`, read `X-User-Role` and expose only that role's tool set
-  (e.g. charger-proxy only for engineer/admin).
+  (e.g. charger-proxy only for engineer/admin). **Now owns the proxy-exclusion for `noc-l1`**
+  (AC-2 can't do per-tool exclusion — LibreChat adds MCP tools per-server, not per-tool).
   *Accept:* unit test — an `l1` role cannot invoke the proxy tool even if requested.
 - [ ] **AC-6 — Backend data scoping (resolves D2).** Per the D2 decision, replace/augment the
   shared token with per-user tokens or a role→site/permission map so data is scoped, not just

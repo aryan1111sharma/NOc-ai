@@ -1,7 +1,14 @@
 # AC-2 — Curated agents + ACLs
 
-**Status:** approved design · **Date:** 2026-07-11 · **Backlog item:** AC-2
+**Status:** IMPLEMENTED (revised scope) · **Date:** 2026-07-11 · **Backlog item:** AC-2
 **Scope:** LibreChat agent configuration (GUI) — no repo code changes.
+
+> **Discovery (during implementation):** LibreChat v0.8.7 adds MCP tools at **server
+> granularity** — the agent builder's tool picker only does "Add `noc`" (whole server), with no
+> per-tool selection. So the original *"L1 excludes the proxy tool"* can't be met in the agent
+> builder; that per-tool exclusion is **moved to AC-5** (MCP-side role filtering). AC-2 therefore
+> delivers **per-role agent visibility** (verified: an `noc-l1` user sees only the L1 agent).
+> The proxy is already GET-locked (P0-4), so L1 seeing it is read-only.
 
 ## Problem / goal
 

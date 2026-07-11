@@ -34,3 +34,31 @@ async def test_jira_search_forwards_jql_and_trims(mock_client):
         "key": "ECOG-1", "summary": "Charger reboots", "status": "Open", "type": "Bug",
         "priority": "High", "assignee": "Asha",
         "updated": "2026-07-10T10:00:00.000+0000", "project": "ECOG"}]
+
+
+@pytest.mark.asyncio
+async def test_jira_get_issue_returns_detail(mock_client):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        return httpx.Response(200, json={
+            "key": "ECOG-2",
+            "fields": {
+                "summary": "PM fault", "status": {"name": "In Progress"},
+                "issuetype": {"name": "Bug"}, "reporter": {"displayName": "Ravi"},
+                "created": "2026-07-01T09:00:00.000+0000", "labels": ["firmware"],
+                "components": [{"name": "PowerModule"}],
+                "description": {"type": "doc", "version": 1, "content": [
+                    {"type": "paragraph", "content": [
+                        {"type": "text", "text": "Sink PM overheats."}]}]}}})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("jira_get_issue", {"key": "ECOG-2"})
+
+    assert captured["path"] == "/rest/api/3/issue/ECOG-2"
+    assert res.data["key"] == "ECOG-2"
+    assert res.data["reporter"] == "Ravi"
+    assert res.data["components"] == ["PowerModule"]
+    assert "Sink PM overheats." in res.data["description"]

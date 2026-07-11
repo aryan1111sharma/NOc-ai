@@ -125,3 +125,18 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,
         })
         return [_issue_summary(i) for i in data.get("issues", [])]
+
+    _DETAIL_FIELDS = (
+        "summary,status,issuetype,priority,assignee,reporter,created,updated,"
+        "labels,components,description"
+    )
+
+    @mcp.tool
+    async def jira_get_issue(key: str) -> dict:
+        """Full detail of one Ecog Jira issue by key (e.g. 'ECOG-123'): summary, status,
+        type, priority, reporter/assignee, dates, labels, components, and the description
+        (flattened to text). Read-only."""
+        data = await _get_json(client, f"/rest/api/3/issue/{key}", params={
+            "fields": _DETAIL_FIELDS,
+        })
+        return _issue_detail(data)

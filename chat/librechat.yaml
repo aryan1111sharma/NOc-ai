@@ -15,6 +15,7 @@ mcpSettings:
   allowedAddresses:
     - "mcp-server:8100"
     - "cms-mcp-server:8101"
+    - "jira-mcp-server:8102"
 
 endpoints:
   custom:
@@ -57,3 +58,8 @@ mcpServers:
     url: "http://cms-mcp-server:8101/mcp"
     # legacy CMS actions return large payloads; allow more time.
     timeout: 90000
+  jira:
+    type: streamable-http
+    url: "http://jira-mcp-server:8102/mcp"
+    # Jira Cloud REST is fast; a modest timeout is fine.
+    timeout: 60000

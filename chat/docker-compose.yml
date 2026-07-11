@@ -83,6 +83,19 @@ services:
       - MCP_PORT=8101
     restart: unless-stopped
 
+  # Read-only MCP server for Ecog's Atlassian Cloud Jira (vendor tracker).
+  jira-mcp-server:
+    build: ../jira-mcp-server
+    container_name: jira-mcp-server
+    environment:
+      - JIRA_BASE_URL=${JIRA_BASE_URL}
+      - JIRA_EMAIL=${JIRA_EMAIL}
+      - JIRA_API_TOKEN=${JIRA_API_TOKEN}
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8102
+    restart: unless-stopped
+
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
   # (not Mongo). GUI at http://localhost:3091; the first-registered LibreChat user is admin.
   # Needs ADMIN_PANEL_SESSION_SECRET in .env (init-env.ps1 generates it). SECURITY: in

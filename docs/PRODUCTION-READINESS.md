@@ -155,6 +155,15 @@ plus the **role-based access-control** workstream.
 Goal: **org role → which tools + which data.** Layer 1 (native LibreChat) gates *visibility*;
 Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**.
 
+> **Decision (2026-07-11): single full-access user for now → per-role enforcement deferred.**
+> The portal will be used by the **service manager only**, who needs **full access** (new NOC +
+> legacy CMS + charger-proxy). So **AC-3, AC-4, AC-5, AC-6 are deferred** — per-role gating is
+> speculative for one full-access user. **Current setup:** the **`noc-engineer`** role = the
+> service-manager role; the **"NOC Engineer"** agent carries all 162 tools (155 noc incl. proxy
+> + 7 cms) and is shared to it; the test account `noc-tester` holds `noc-engineer`. AC-1/AC-2
+> groundwork stays as the base; revisit AC-3..AC-6 when multiple user types are onboarded.
+> (Config lives in Mongo → not yet reproducible: **P3-4**.)
+
 **Target role matrix (draft — refine during brainstorming):**
 
 | Org role | LibreChat role | Agent (curated tools) | Backend scope |

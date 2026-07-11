@@ -17,6 +17,9 @@ async def test_get_charger_details_merges_and_trims():
     assert d["Description"] == "Dual CCS"
     assert d["OCPPID"] == "noc_sim"
     assert d["Gun_A"] == 2
+    # last-event timestamp survives via the raw key (str-prefixed is null here)
+    assert d["Event_Timestamp"] == "/Date(1781076309716)/"
+    assert "strEvent_Timestamp" not in d   # null variant dropped
     # server filesystem-path noise trimmed out
     assert "StateLogPath" not in d
 

@@ -35,7 +35,10 @@ _CHG_DETAIL_FIELDS = [
 ]
 _CHG_STATUS_FIELDS = [
     "QChargerID", "OCPPID", "Latitude", "Longitude", "Gun_A", "Gun_B",
-    "strEvent_Timestamp", "strPing_Timestamp",
+    # The live status action populates the raw /Date(ms)/ keys; the str-prefixed
+    # variants are usually null there. Whitelist both so last-event/ping always
+    # surfaces regardless of which the endpoint fills.
+    "Event_Timestamp", "Ping_Timestamp", "strEvent_Timestamp", "strPing_Timestamp",
 ]
 _SESSION_FIELDS = [
     "SessionEventID", "Description", "Outlet", "ChargerIDGun", "strStartTime",
@@ -270,11 +273,6 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
     async def cms_get_recent_alerts(limit: int = 50) -> list[dict]:
         """Most recent charger alerts/faults from the old CMS (error codes + timestamps)."""
         return _trim(await _get_json("/ChargerDetails/GetAlertsForBellNotification"), _ALERT_FIELDS)[:limit]
-
-    # NOTE: per-charger session/error tools (GetSessionDetailByChargerID,
-    # GetErrorCountByChargerID) are deferred — they require a numeric ChargerID and an
-    # undocumented param contract the legacy actions expect; the map action exposes only
-    # QChargerID. Revisit by capturing the exact AJAX payload from the CMS frontend.
 
     # ── Customers / reference ────────────────────────────────────────────────────────────
     @mcp.tool

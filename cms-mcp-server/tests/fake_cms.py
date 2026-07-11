@@ -27,7 +27,11 @@ _DETAILS = {
 _STATUS = {
     "QChargerID": "ab-sam-sim", "OCPPID": "noc_sim", "Latitude": "18.64",
     "Longitude": "73.79", "Gun_A": 2, "Gun_B": 2,
-    "strEvent_Timestamp": "10/06/2026 12:55:09", "Name": "Ador",
+    # Mirrors the live capture: the raw /Date(ms)/ keys are populated while the
+    # str-prefixed variants come back null on the status action.
+    "Event_Timestamp": "/Date(1781076309716)/", "strEvent_Timestamp": None,
+    "Ping_Timestamp": "/Date(1781076330550)/", "strPing_Timestamp": None,
+    "Name": "Ador",
 }
 _SESSIONS = {"draw": 1, "iTotalRecords": 22, "iTotalDisplayRecords": 22, "data": [
     {"SessionEventID": 2, "Description": "SESSION_STOP", "Outlet": 1,

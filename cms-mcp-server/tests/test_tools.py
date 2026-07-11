@@ -46,3 +46,18 @@ async def test_get_charger_alerts_trims():
     assert row["ErrorDesc"] == "NoError"
     assert row["Src"] == "stack"
     assert "FullStatePath" not in row
+
+
+@pytest.mark.asyncio
+async def test_get_charger_action_history_trims():
+    async with Client(build_test_server()) as client:
+        res = await client.call_tool(
+            "cms_get_charger_action_history", {"qcharger_id": "ab-sam-sim"})
+    rows = res.data
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["API"] == "id"
+    assert row["ApiType"] == "GET"
+    assert row["Description"] == "Executed"
+    assert row["ExecutionID"] == 414827
+    assert "Output" not in row   # server filesystem path dropped

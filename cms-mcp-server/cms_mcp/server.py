@@ -46,6 +46,10 @@ _CHG_ALERT_FIELDS = [
     "SessionEventID", "Description", "Outlet", "ChargerIDGun", "Src",
     "SessionErrorID", "ErrorDesc", "strTimestamp",
 ]
+_ACTION_HIST_FIELDS = [
+    "Name", "API", "ApiType", "Description", "StatusID", "strExecutedTime",
+    "ExecutionID", "strTimestamp",
+]
 
 
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
@@ -189,6 +193,20 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
             json=_datatables_body(cid, limit))
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _CHG_ALERT_FIELDS)[:limit]
+
+    @mcp.tool
+    async def cms_get_charger_action_history(
+        qcharger_id: str, limit: int = 10
+    ) -> list[dict]:
+        """Recent remote-command execution history for ONE charger (by QChargerID)
+        from the old CMS: which device API was run, its type, execution status,
+        and when. Read-only history — this does NOT run any command."""
+        cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
+        resp = await _post_json(
+            client, "/ChargerDetails/GetApiExecutionDetailsByID",
+            json=_datatables_body(cid, limit))
+        rows = resp.get("data", []) if isinstance(resp, dict) else []
+        return _trim(rows, _ACTION_HIST_FIELDS)[:limit]
 
     # ── Chargers ─────────────────────────────────────────────────────────────────────────
     @mcp.tool

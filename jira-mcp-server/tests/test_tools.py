@@ -112,3 +112,19 @@ async def test_jira_get_issue_transitions_reads_status_and_targets(mock_client):
         "status": "In Progress",
         "transitions": [{"id": "41", "name": "Done", "to": "Done"},
                         {"id": "21", "name": "Reopen", "to": "To Do"}]}
+
+
+@pytest.mark.asyncio
+async def test_server_registers_only_read_tools(mock_client):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    mcp = build_server(client=mock_client(handler))
+    tools = await mcp.list_tools()         # list[Tool] (installed FastMCP has no get_tools())
+    names = {t.name for t in tools}
+
+    assert names == {
+        "jira_search", "jira_get_issue", "jira_get_comments", "jira_get_issue_transitions",
+    }
+    forbidden = ("create", "update", "delete", "add", "edit", "post", "assign", "move")
+    assert not [n for n in names if any(f in n for f in forbidden)]

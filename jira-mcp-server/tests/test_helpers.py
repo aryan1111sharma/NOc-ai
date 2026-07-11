@@ -89,3 +89,32 @@ async def test_get_json_raises_on_401():
                               transport=httpx.MockTransport(handler)) as c:
         with pytest.raises(RuntimeError, match="auth failed"):
             await _get_json(c, "/rest/api/3/myself")
+
+
+@pytest.mark.asyncio
+async def test_get_json_raises_on_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"errorMessages": ["Issue does not exist"]})
+
+    async with JiraAuthClient(base_url="https://ecog.test", email="e", api_token="t",
+                              transport=httpx.MockTransport(handler)) as c:
+        with pytest.raises(RuntimeError, match="404"):
+            await _get_json(c, "/rest/api/3/issue/ECOG-999")
+
+
+def test_adf_to_text_reads_mention_and_emoji_attrs():
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "cc "},
+                {"type": "mention", "attrs": {"id": "1", "text": "@Asha"}},
+            ]},
+        ],
+    }
+    out = _adf_to_text(doc)
+    assert "@Asha" in out
+
+    emoji_node = {"type": "emoji", "attrs": {"shortName": ":warning:", "text": "⚠️"}}
+    assert _adf_to_text(emoji_node) == "⚠️"

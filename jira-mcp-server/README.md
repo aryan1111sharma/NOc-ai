@@ -7,7 +7,8 @@ Cloud Jira** (REST API v3) as read-only tools, mirroring `cms-mcp-server`.
 - `jira_search(jql, limit=50)` — search issues by JQL.
 - `jira_get_issue(key)` — full detail of one issue (description flattened from ADF).
 - `jira_get_comments(key, limit=50)` — comments (author, created, body text).
-- `jira_get_issue_transitions(key)` — current status + *available* transitions (read only).
+- `jira_get_issue_transitions(key)` — current status + *available* transitions, via
+  `GET /rest/api/3/issue/{key}?fields=status&expand=transitions` (read only).
 
 Read-only by construction: there is no write tool.
 

@@ -33,6 +33,11 @@ def _adf_to_text(node: Any) -> str:
         return node.get("text", "")
     if ntype == "hardBreak":
         return "\n"
+    attrs = node.get("attrs") or {}
+    if "content" not in node:
+        leaf = attrs.get("text") or attrs.get("url")
+        if leaf:
+            return leaf
     text = _adf_to_text(node.get("content"))
     if ntype in _BLOCK_TYPES:
         return text + "\n"
@@ -89,6 +94,10 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
             f"Jira auth failed ({resp.status_code}) — check JIRA_EMAIL / JIRA_API_TOKEN "
             "and that the account has read access."
         )
+    if resp.status_code == 404:
+        raise RuntimeError(
+            f"Jira returned 404 for {path} — no such issue/resource or not visible to this account."
+        )
     resp.raise_for_status()
     return resp.json() if resp.text.strip() else {}
 
@@ -120,7 +129,11 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
     async def jira_search(jql: str, limit: int = 50) -> list[dict]:
         """Search Ecog Jira issues with a JQL query (e.g.
         'project = ECOG AND status = Open ORDER BY updated DESC'). Returns a compact list:
-        key, summary, status, type, priority, assignee, updated, project. Read-only."""
+        key, summary, status, type, priority, assignee, updated, project. Read-only.
+
+        Returns a single page of results (no pagination/cursor follow-up); Jira Cloud caps
+        maxResults server-side (~100), so a `limit` above that is silently truncated without
+        error."""
         data = await _get_json(client, "/rest/api/3/search/jql", params={
             "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,
         })

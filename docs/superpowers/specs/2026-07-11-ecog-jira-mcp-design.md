@@ -84,7 +84,11 @@ trims the response to a small, LLM-friendly field set (parallel to CMS's `_trim`
 | `jira_search(jql, limit=50)` | `GET /rest/api/3/search/jql` | per issue: `key, summary, status, type, priority, assignee, updated, project` |
 | `jira_get_issue(key)` | `GET /rest/api/3/issue/{key}` | `key, summary, status, type, priority, reporter, assignee, created, updated, labels, components, description` |
 | `jira_get_comments(key, limit=50)` | `GET /rest/api/3/issue/{key}/comment` | per comment: `author, created, body` |
-| `jira_get_issue_transitions(key)` | `GET /rest/api/3/issue/{key}/transitions` | current `status` + available transitions `[{id, name, to}]` (**read only — never POSTs**) |
+| `jira_get_issue_transitions(key)` | `GET /rest/api/3/issue/{key}?fields=status&expand=transitions` | current `status` + available transitions `[{id, name, to}]` (**read only — never POSTs**) |
+
+Note: `jira_get_issue_transitions` uses a single `GET` with `expand=transitions` (no separate
+`/transitions` endpoint call) and returns only the transitions the authenticated (read-only)
+account is permitted to execute — so the list may be empty for a browse-only account.
 
 **ADF flattener (`_adf_to_text`)** — the one nontrivial helper. Jira Cloud v3 returns
 `description` and comment `body` as **Atlassian Document Format** (nested JSON), not plain text.

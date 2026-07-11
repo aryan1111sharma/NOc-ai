@@ -68,6 +68,42 @@ def _datatables_body(charger_id: int, limit: int) -> dict:
     }
 
 
+async def _load_charger_map(client) -> dict[str, int]:
+    """Fetch the fleet-wide QChargerID(lower) -> numeric ChargerID map."""
+    rows = await _post_json(
+        client, "/ChargerDetails/GetChargerByCustomerIDForDD",
+        data={"CustomerID": "0"},
+    )
+    out = {}
+    for r in rows:
+        qid, cid = r.get("QChargerID"), r.get("ChargerID")
+        if qid and cid:
+            out[str(qid).lower()] = int(cid)
+    return out
+
+
+async def _resolve_charger_id(client, qcharger_id: str, cache: dict) -> int:
+    """QChargerID -> numeric ChargerID (case-insensitive), with a cached fleet map.
+
+    Refreshes the map once on a miss (new chargers); if still absent, raises
+    ValueError listing up to 5 near matches.
+    """
+    key = str(qcharger_id).strip().lower()
+    if not cache:
+        cache.update(await _load_charger_map(client))
+    if key in cache:
+        return cache[key]
+    # miss -> refresh once (charger may have been added since last load)
+    cache.clear()
+    cache.update(await _load_charger_map(client))
+    if key in cache:
+        return cache[key]
+    stem = key.rsplit("-", 1)[0]
+    near = sorted(k for k in cache if stem and stem in k)[:5]
+    hint = f" Did you mean: {', '.join(near)}?" if near else ""
+    raise ValueError(f"Unknown QChargerID '{qcharger_id}'.{hint}")
+
+
 def build_client() -> CmsAuthClient:
     return CmsAuthClient(
         base_url=settings.cms_base_url.rstrip("/"),

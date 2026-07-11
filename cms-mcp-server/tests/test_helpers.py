@@ -64,3 +64,49 @@ def test_datatables_body_shape():
     assert body["columns"] == []
     assert body["order"] == []
     assert body["search"] == {"value": "", "regex": False}
+
+
+from cms_mcp.server import _resolve_charger_id
+
+
+def _resolver_handler(counter):
+    """MockTransport handler: login + GetChargerByCustomerIDForDD returns 2 chargers."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(_LOGIN):
+            return _login_ok(request)
+        if request.url.path.endswith("/GetChargerByCustomerIDForDD"):
+            counter.append(1)
+            return httpx.Response(200, json=[
+                {"ChargerID": 1187, "QChargerID": "ab-sam-00585"},
+                {"ChargerID": 1429, "QChargerID": "ab-sam-sim"},
+            ])
+        return httpx.Response(404)
+    return handler
+
+
+@pytest.mark.asyncio
+async def test_resolve_hit_and_caches():
+    calls = []
+    async with _client(_resolver_handler(calls)) as c:
+        cache = {}
+        assert await _resolve_charger_id(c, "ab-sam-00585", cache) == 1187
+        assert await _resolve_charger_id(c, "ab-sam-sim", cache) == 1429
+    assert len(calls) == 1  # map fetched once, then served from cache
+
+
+@pytest.mark.asyncio
+async def test_resolve_is_case_insensitive():
+    calls = []
+    async with _client(_resolver_handler(calls)) as c:
+        assert await _resolve_charger_id(c, "AB-SAM-SIM", {}) == 1429
+
+
+@pytest.mark.asyncio
+async def test_resolve_miss_refreshes_then_raises_with_suggestion():
+    calls = []
+    async with _client(_resolver_handler(calls)) as c:
+        with pytest.raises(ValueError) as ei:
+            await _resolve_charger_id(c, "ab-sam-9999", {})
+    assert len(calls) == 2            # initial load + one refresh on miss
+    assert "ab-sam-9999" in str(ei.value)
+    assert "ab-sam" in str(ei.value)  # near-match suggestion included

@@ -58,6 +58,16 @@ async def _post_json(client, path, *, data=None, json=None):
     return resp.json()
 
 
+def _datatables_body(charger_id: int, limit: int) -> dict:
+    """Minimal jQuery-DataTables server-side request body for the per-charger
+    session/alert/action-history actions."""
+    return {
+        "draw": 1, "start": 0, "length": limit, "columns": [], "order": [],
+        "search": {"value": "", "regex": False},
+        "lvm": {"ChargerID": str(charger_id)}, "limit": limit,
+    }
+
+
 def build_client() -> CmsAuthClient:
     return CmsAuthClient(
         base_url=settings.cms_base_url.rstrip("/"),

@@ -49,6 +49,32 @@ Log into the Admin Panel with an admin account (same credentials as the LibreCha
 Roles are created/edited under the panel's **Access → Roles** tab; membership via a role's
 **Members** tab. Roles currently live in MongoDB only (reproducible-from-source is `P3-4`).
 
+## Role permissions a role needs to actually USE agents + tools
+
+Creating a role and sharing an agent with it is **not enough** — the role's **feature
+permissions** must also allow using agents and MCP tools. Custom roles start with these **off**,
+so without them a shared agent will *appear* but reply *"no tools available"* (the model is sent
+zero tools). Every `noc-*` role needs:
+
+| Permission | Why |
+|---|---|
+| `AGENTS: USE` | may use agents at all |
+| `MCP_SERVERS: USE` | may use the MCP tools an agent carries — **else the tools are stripped before the model sees them** |
+
+Set them in the **Admin Panel → the role → permissions** (Agents → Use; MCP Servers → Use), or
+directly, then **restart the api** so the permission cache refreshes:
+
+```powershell
+docker compose exec -T mongodb mongosh LibreChat --quiet --eval `
+  'db.roles.updateOne({name:"noc-l1"},{$set:{"permissions.AGENTS.USE":true,"permissions.MCP_SERVERS.USE":true}})'
+docker compose restart api
+```
+
+> **Verified 2026-07-11:** without `MCP_SERVERS.USE`, `noc-tester` (role `noc-l1`) got an agent
+> reply saying the tools weren't available; after granting it + restarting the api, the same
+> agent ran `dashboard_summary` and returned live charger counts (22 online / 22 offline / 44).
+> Applied to all three `noc-*` roles. (These live in Mongo → reproducible-from-source is P3-4.)
+
 ## Manage accounts (run from `chat/`)
 
 ```powershell

@@ -85,3 +85,30 @@ async def test_jira_get_comments_flattens_bodies(mock_client):
     assert captured["max"] == "25"
     assert res.data == [{"author": "Asha", "created": "2026-07-02T08:00:00.000+0000",
                          "body": "Replaced the module."}]
+
+
+@pytest.mark.asyncio
+async def test_jira_get_issue_transitions_reads_status_and_targets(mock_client):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["method"] = request.method
+        captured["expand"] = request.url.params.get("expand")
+        return httpx.Response(200, json={
+            "fields": {"status": {"name": "In Progress"}},
+            "transitions": [
+                {"id": "41", "name": "Done", "to": {"name": "Done"}},
+                {"id": "21", "name": "Reopen", "to": {"name": "To Do"}}]})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("jira_get_issue_transitions", {"key": "ECOG-2"})
+
+    assert captured["method"] == "GET"                      # read-only, never POST
+    assert captured["path"] == "/rest/api/3/issue/ECOG-2"
+    assert captured["expand"] == "transitions"
+    assert res.data == {
+        "status": "In Progress",
+        "transitions": [{"id": "41", "name": "Done", "to": "Done"},
+                        {"id": "21", "name": "Reopen", "to": "To Do"}]}

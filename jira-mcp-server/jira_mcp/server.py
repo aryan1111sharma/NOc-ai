@@ -149,3 +149,18 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "maxResults": limit,
         })
         return [_comment(c) for c in data.get("comments", [])]
+
+    @mcp.tool
+    async def jira_get_issue_transitions(key: str) -> dict:
+        """Current status of an Ecog Jira issue plus the transitions that are *available*
+        from it — {status, transitions:[{id, name, to}]}. This only READS workflow options;
+        it never performs a transition. Read-only."""
+        data = await _get_json(client, f"/rest/api/3/issue/{key}", params={
+            "fields": "status", "expand": "transitions",
+        })
+        status = ((data.get("fields") or {}).get("status") or {}).get("name")
+        transitions = [
+            {"id": t.get("id"), "name": t.get("name"), "to": (t.get("to") or {}).get("name")}
+            for t in data.get("transitions", [])
+        ]
+        return _drop_empty({"status": status, "transitions": transitions})

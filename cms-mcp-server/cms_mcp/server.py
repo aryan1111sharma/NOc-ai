@@ -28,6 +28,15 @@ _CUSTOMER_FIELDS = [
     "CustomerID", "Name", "EmailID", "ContactDetails", "Address", "CountryID", "CountryName",
     "RegionID",
 ]
+_CHG_DETAIL_FIELDS = [
+    "QChargerID", "ChargerTypeID", "Description", "CapacityKW", "SerialNumber",
+    "ControllerADescription", "ControllerBDescription", "Address", "StateName",
+    "CountryName", "Name", "IsActive",
+]
+_CHG_STATUS_FIELDS = [
+    "QChargerID", "OCPPID", "Latitude", "Longitude", "Gun_A", "Gun_B",
+    "strEvent_Timestamp", "strPing_Timestamp",
+]
 
 
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
@@ -123,6 +132,29 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         if not resp.text.strip():
             return []
         return resp.json()
+
+    _charger_map: dict[str, int] = {}  # QChargerID(lower) -> numeric ChargerID
+
+    @mcp.tool
+    async def cms_get_charger_details(qcharger_id: str) -> dict:
+        """Full profile for ONE charger in the old CMS, by its QChargerID
+        (e.g. "ab-sam-00585"): static metadata (type, controllers, capacity,
+        serial, address) merged with live status (OCPP id, location, gun states,
+        last event/ping)."""
+        cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
+        body = {"ChargerID": str(cid)}
+        details = await _post_json(
+            client, "/ChargerDetails/GetChargerDetailsByChargerID", data=body)
+        status = await _post_json(
+            client, "/ChargerDetails/GetChargerStatusByChargerID", data=body)
+        d = _trim(details, _CHG_DETAIL_FIELDS)
+        s = _trim(status, _CHG_STATUS_FIELDS)
+        merged = {}
+        if d:
+            merged.update(d[0])
+        if s:
+            merged.update(s[0])
+        return merged
 
     # ── Chargers ─────────────────────────────────────────────────────────────────────────
     @mcp.tool

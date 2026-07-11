@@ -5,6 +5,17 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.3.0] - 2026-07-11
+
+### Features
+
+- **chat:** AC-2 per-role agents + ACLs (L1/Engineer) ([`8961786`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/896178639a905d8908ee758f2661a58a4c8d3fd7))
+
+### Documentation
+
+- Add Admin Panel & access reference (accounts, roles, testing) ([`56fd6a1`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/56fd6a1038de03454da7afa61396c70e36cc8554))
+- **spec+plan:** AC-2 curated agents + ACLs ([`ad3c578`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ad3c578e782b6a281f08b573ee1ec20cb862f8da))
+
 ## [0.2.0] - 2026-07-11
 
 ### Features

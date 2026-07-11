@@ -37,6 +37,11 @@ _CHG_STATUS_FIELDS = [
     "QChargerID", "OCPPID", "Latitude", "Longitude", "Gun_A", "Gun_B",
     "strEvent_Timestamp", "strPing_Timestamp",
 ]
+_SESSION_FIELDS = [
+    "SessionEventID", "Description", "Outlet", "ChargerIDGun", "strStartTime",
+    "Duration", "Energy", "SessionUserID", "SessionErrorID", "ErrorDesc",
+    "strTimestamp",
+]
 
 
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
@@ -155,6 +160,18 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         if s:
             merged.update(s[0])
         return merged
+
+    @mcp.tool
+    async def cms_get_charger_sessions(qcharger_id: str, limit: int = 10) -> list[dict]:
+        """Recent charging-session logs for ONE charger (by QChargerID) from the
+        old CMS: session events, outlet/gun, start time, duration, energy, and any
+        session error. Returned in the CMS default order (newest first)."""
+        cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
+        resp = await _post_json(
+            client, "/ChargerDetails/GetSessionLogsByChargerID",
+            json=_datatables_body(cid, limit))
+        rows = resp.get("data", []) if isinstance(resp, dict) else []
+        return _trim(rows, _SESSION_FIELDS)[:limit]
 
     # ── Chargers ─────────────────────────────────────────────────────────────────────────
     @mcp.tool

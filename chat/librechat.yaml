@@ -1,14 +1,14 @@
-# LibreChat configuration — GLM 5.2 endpoint + NOC read-only MCP server.
+# LibreChat configuration ??? GLM 5.2 endpoint + NOC read-only MCP server.
 # Docs: https://www.librechat.ai/docs/configuration/librechat_yaml
 version: 1.2.1
 cache: true
 
 # UI branding. The footer (version + commit id) is set via CUSTOM_FOOTER in
-# docker-compose.yml — that's the mechanism this LibreChat version renders;
+# docker-compose.yml ??? that's the mechanism this LibreChat version renders;
 # interface.customFooter is ignored. This welcome greets the new-chat screen
 # with the release version; the version token is bumped by scripts/bump-version.
 interface:
-  customWelcome: "Welcome to Adore Manthan.AI v0.1.1 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
+  customWelcome: "Welcome to Adore Manthan.AI v0.2.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
 
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
@@ -18,7 +18,7 @@ mcpSettings:
 
 endpoints:
   custom:
-    # GLM (Zhipu / z.ai) — OpenAI-compatible API. Key comes from chat/.env (GLM_API_KEY).
+    # GLM (Zhipu / z.ai) ??? OpenAI-compatible API. Key comes from chat/.env (GLM_API_KEY).
     - name: "GLM"
       apiKey: "${GLM_API_KEY}"
       # GLM Coding Plan endpoint (OpenAI-compatible). NOT the general /api/paas/v4 endpoint,

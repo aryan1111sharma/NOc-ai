@@ -5,6 +5,39 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.2.0] - 2026-07-11
+
+### Features
+
+- **mcp-server:** Add _blocked_method read-only proxy decision helper ([`615974a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/615974a32d7a13c2c9b208b93c812dc438da4ae6))
+- **mcp-server:** Reject non-GET proxy calls via ReadOnlyProxyMiddleware ([`3080d67`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3080d67dd0352084fd8093400298331e5a03b83d))
+- **mcp-server:** Register ReadOnlyProxyMiddleware in build_server ([`8f420c3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8f420c357eb4935fb4b10a6a09122a216de51409))
+- **chat:** Add LibreChat admin-panel service (AC-1) ([`50f56e6`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/50f56e6df8177f88d7f6e31a71414ccc2718ed8f))
+
+### Refactoring
+
+- **mcp-server:** Tidy P0-4 test imports + drop plan ref per review ([`6dfa923`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6dfa923f3a37eb4de7b7368b27a9e993519b32c2))
+
+### Documentation
+
+- **spec:** P0-4 read-only charger-proxy enforcement design ([`27001c5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/27001c521ae5fb23e6659110833cf78de2c3171d))
+- **plan:** P0-4 read-only charger-proxy implementation plan ([`6be181d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6be181d6ea9315332eeadb4862d5c3e1c3d4425a))
+- **backlog:** Reframe P1-2 — govern share-links, don't disable ([`65fa512`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/65fa512fb31eaca467abeedb87a5d1b09d064dc8))
+- **spec+plan:** P3-1 CI test gate ([`693bcdc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/693bcdc57fcd4a820b4823772b85e3a36bea7516))
+- **spec+plan:** AC-1 admin panel + roles/groups ([`d69dc83`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d69dc83b933f0d94f5246fdeb7d1a77268484a14))
+
+### CI/CD
+
+- Run both MCP servers' pytest suites on PR and push ([`ac45de3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ac45de331b1bc78edda897c92af1df32d99071e6))
+- Run tests via 'python -m pytest' so the package resolves ([`34fe4d0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/34fe4d03bd0ab8c87d70ad93bf6058790294d526))
+
+### Chores
+
+- Mark P0-4 (read-only charger proxy) done ([`3946902`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3946902591587247308a668f44eb310fb819ff43))
+- P3-1 CI test gate implemented (pending push + branch protection) ([`98dda93`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/98dda937350eae279502d3a638ad00f9f27baa69))
+- P3-1 CI green on GitHub; only branch protection remains ([`9456b70`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9456b70844d286f0ef23acae0a133d6c91119d51))
+- Mark AC-1 done (admin panel up; noc-* roles created + assigned) ([`326dc14`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/326dc148e563ac39ad05575317053e47182da62a))
+
 ## [0.1.1] - 2026-07-10
 
 ### Features

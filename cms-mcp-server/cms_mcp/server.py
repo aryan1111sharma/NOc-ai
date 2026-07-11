@@ -56,6 +56,19 @@ _ACTION_CATALOG_FIELDS = [
 ]
 
 
+def _keep(v: Any) -> bool:
+    """Whether a field value is meaningful enough to keep.
+
+    Booleans are always kept (``False`` is meaningful — e.g. an inactive charger's
+    ``IsActive: False``); everything else drops the null/empty/zero noise the
+    legacy god-DTO is padded with. Note ``bool`` must be checked before the
+    membership test because ``False == 0`` in Python.
+    """
+    if isinstance(v, bool):
+        return True
+    return v not in (None, "", 0, "0")
+
+
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
     """Keep only whitelisted, non-empty fields from each row."""
     if not isinstance(rows, list):
@@ -64,7 +77,7 @@ def _trim(rows: Any, fields: list[str]) -> list[dict]:
     for r in rows:
         if not isinstance(r, dict):
             continue
-        out.append({k: r[k] for k in fields if r.get(k) not in (None, "", 0, "0")})
+        out.append({k: r[k] for k in fields if _keep(r.get(k))})
     return out
 
 

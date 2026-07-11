@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from cms_mcp.auth import CmsAuthClient
-from cms_mcp.server import _post_json, _datatables_body
+from cms_mcp.server import _post_json, _datatables_body, _trim
 
 _LOGIN = "/Home/GetUsersByEmailAndPassword"
 
@@ -52,6 +52,17 @@ async def test_post_json_empty_body_returns_empty_list():
     async with _client(handler) as c:
         out = await _post_json(c, "/x", json={"a": 1})
     assert out == []
+
+
+def test_trim_keeps_boolean_false_but_drops_zero_and_null():
+    # False is meaningful (e.g. an inactive charger) and must survive; the
+    # null/empty/zero god-DTO noise must be dropped. False == 0 in Python, so
+    # this guards the bool-before-membership check in _trim.
+    rows = [{"IsActive": False, "IsInputRequired": True, "Count": 0,
+             "Blank": "", "Missing": None, "Name": "x"}]
+    out = _trim(rows, ["IsActive", "IsInputRequired", "Count", "Blank",
+                       "Missing", "Name", "Absent"])
+    assert out == [{"IsActive": False, "IsInputRequired": True, "Name": "x"}]
 
 
 def test_datatables_body_shape():

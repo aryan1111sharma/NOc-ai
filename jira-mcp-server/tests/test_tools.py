@@ -62,3 +62,26 @@ async def test_jira_get_issue_returns_detail(mock_client):
     assert res.data["reporter"] == "Ravi"
     assert res.data["components"] == ["PowerModule"]
     assert "Sink PM overheats." in res.data["description"]
+
+
+@pytest.mark.asyncio
+async def test_jira_get_comments_flattens_bodies(mock_client):
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["max"] = request.url.params.get("maxResults")
+        return httpx.Response(200, json={"comments": [
+            {"author": {"displayName": "Asha"}, "created": "2026-07-02T08:00:00.000+0000",
+             "body": {"type": "doc", "version": 1, "content": [
+                 {"type": "paragraph", "content": [
+                     {"type": "text", "text": "Replaced the module."}]}]}}]})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("jira_get_comments", {"key": "ECOG-2", "limit": 25})
+
+    assert captured["path"] == "/rest/api/3/issue/ECOG-2/comment"
+    assert captured["max"] == "25"
+    assert res.data == [{"author": "Asha", "created": "2026-07-02T08:00:00.000+0000",
+                         "body": "Replaced the module."}]

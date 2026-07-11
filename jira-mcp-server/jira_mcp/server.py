@@ -140,3 +140,12 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "fields": _DETAIL_FIELDS,
         })
         return _issue_detail(data)
+
+    @mcp.tool
+    async def jira_get_comments(key: str, limit: int = 50) -> list[dict]:
+        """Comments on an Ecog Jira issue by key: author, created, and body text (ADF
+        flattened). Useful for RCA discussion history. Read-only."""
+        data = await _get_json(client, f"/rest/api/3/issue/{key}/comment", params={
+            "maxResults": limit,
+        })
+        return [_comment(c) for c in data.get("comments", [])]

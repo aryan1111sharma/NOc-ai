@@ -42,6 +42,22 @@ def _trim(rows: Any, fields: list[str]) -> list[dict]:
     return out
 
 
+async def _post_json(client, path, *, data=None, json=None):
+    """POST to a legacy MVC action (form or JSON body) and return parsed JSON.
+
+    Sends the ``X-Requested-With`` header the legacy AJAX actions require.
+    Returns ``[]`` for an empty response body.
+    """
+    resp = await client.post(
+        path, data=data, json=json,
+        headers={"X-Requested-With": "XMLHttpRequest"},
+    )
+    resp.raise_for_status()
+    if not resp.text.strip():
+        return []
+    return resp.json()
+
+
 def build_client() -> CmsAuthClient:
     return CmsAuthClient(
         base_url=settings.cms_base_url.rstrip("/"),

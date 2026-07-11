@@ -26,6 +26,21 @@ useful MVC JSON actions as **curated, field-trimmed tools** (the legacy actions 
 | `cms_list_customers` | Customer/GetCustomersForDD | customers (id, name, contact, country) |
 | `cms_list_service_engineers` | Customer/GetServiceEngineerList | service engineers |
 
+### Per-charger tools (by `QChargerID`, e.g. `ab-sam-00585`)
+
+These take the human-facing `QChargerID` and resolve it internally to the numeric
+`ChargerID` (one cached call to `GetChargerByCustomerIDForDD` with `CustomerID=0`
+maps the whole fleet). They back the CMS `ChargerSession` page's Info / Sessions /
+Alerts / Actions tabs.
+
+| Tool | Old-CMS action(s) | Returns |
+|---|---|---|
+| `cms_get_charger_details` | GetChargerDetailsByChargerID + GetChargerStatusByChargerID | one charger's metadata (type, controllers, capacity, serial, address) merged with live status (OCPP id, location, gun states, last event/ping) |
+| `cms_get_charger_sessions` | GetSessionLogsByChargerID | recent charging-session logs (event, outlet/gun, start, duration, energy, session error); `limit` default 10 |
+| `cms_get_charger_alerts` | GetAlertLogsByChargerID | recent alert/fault logs for the charger (source, outlet/gun, error id + desc, timestamp); `limit` default 10 |
+| `cms_get_charger_action_history` | GetApiExecutionDetailsByID | recent remote-command execution history (which API ran, type, status, when); read-only; `limit` default 10 |
+| `cms_list_charger_actions` | GetAllApisByChargerID | catalog of device API commands available for the charger (name, verb, description); read-only reference — never executes |
+
 ## Setup / run
 
 ```bash
@@ -38,10 +53,10 @@ python -m pip install pytest pytest-asyncio && python -m pytest
 
 ## Deferred / follow-ups
 
-- **Per-charger session & error tools** (`GetSessionDetailByChargerID`,
-  `GetErrorCountByChargerID`) need a numeric `ChargerID` and an undocumented param contract
-  the legacy actions expect (the map action exposes only `QChargerID`). The alerts action
-  does return numeric `ChargerID`, giving a QChargerID→ChargerID bridge to build these later —
-  capture the exact AJAX payload from the CMS frontend to finish them.
-- Live per-charger status isn't available from a no-param action; fleet status comes from
-  `cms_get_noc_summary`.
+- **Per-charger session/error/status tools — done.** The parked work is now shipped as the
+  per-charger tools above; the numeric-`ChargerID` blocker was solved by resolving
+  `QChargerID` via `GetChargerByCustomerIDForDD` (`CustomerID=0` returns the full fleet with
+  both ids). Endpoint contracts were captured from the CMS `ChargerSession` frontend.
+- **Read-only by design:** the action *catalog* and *history* are exposed, but no tool wraps a
+  device-command execute endpoint (`reset`, `unplug`, `restartStack`, …). Adding write actions
+  would be a deliberate, separately-reviewed change.

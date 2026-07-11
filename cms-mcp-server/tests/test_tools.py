@@ -32,3 +32,17 @@ async def test_get_charger_sessions_trims_and_limits():
     assert row["Description"] == "SESSION_STOP"
     assert row["ChargerIDGun"] == "secc2300-21641"
     assert "StateLogPath" not in row   # filesystem-path noise dropped
+
+
+@pytest.mark.asyncio
+async def test_get_charger_alerts_trims():
+    async with Client(build_test_server()) as client:
+        res = await client.call_tool(
+            "cms_get_charger_alerts", {"qcharger_id": "ab-sam-sim"})
+    rows = res.data
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["Description"] == "ALERT"
+    assert row["ErrorDesc"] == "NoError"
+    assert row["Src"] == "stack"
+    assert "FullStatePath" not in row

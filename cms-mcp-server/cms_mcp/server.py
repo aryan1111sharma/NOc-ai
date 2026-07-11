@@ -42,6 +42,10 @@ _SESSION_FIELDS = [
     "Duration", "Energy", "SessionUserID", "SessionErrorID", "ErrorDesc",
     "strTimestamp",
 ]
+_CHG_ALERT_FIELDS = [
+    "SessionEventID", "Description", "Outlet", "ChargerIDGun", "Src",
+    "SessionErrorID", "ErrorDesc", "strTimestamp",
+]
 
 
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
@@ -172,6 +176,19 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
             json=_datatables_body(cid, limit))
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _SESSION_FIELDS)[:limit]
+
+    @mcp.tool
+    async def cms_get_charger_alerts(qcharger_id: str, limit: int = 10) -> list[dict]:
+        """Recent alert/fault logs for ONE charger (by QChargerID) from the old
+        CMS: alert events with source, outlet/gun, error id + description, and
+        timestamp. Newest first. (For a fleet-wide alert feed use
+        cms_get_recent_alerts instead.)"""
+        cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
+        resp = await _post_json(
+            client, "/ChargerDetails/GetAlertLogsByChargerID",
+            json=_datatables_body(cid, limit))
+        rows = resp.get("data", []) if isinstance(resp, dict) else []
+        return _trim(rows, _CHG_ALERT_FIELDS)[:limit]
 
     # ── Chargers ─────────────────────────────────────────────────────────────────────────
     @mcp.tool

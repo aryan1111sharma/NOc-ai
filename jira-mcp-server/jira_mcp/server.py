@@ -113,4 +113,15 @@ def build_server(client: Optional[JiraAuthClient] = None) -> FastMCP:
 
 
 def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
-    pass  # filled in Tasks 4–7
+
+    _SEARCH_FIELDS = "summary,status,issuetype,priority,assignee,updated,project"
+
+    @mcp.tool
+    async def jira_search(jql: str, limit: int = 50) -> list[dict]:
+        """Search Ecog Jira issues with a JQL query (e.g.
+        'project = ECOG AND status = Open ORDER BY updated DESC'). Returns a compact list:
+        key, summary, status, type, priority, assignee, updated, project. Read-only."""
+        data = await _get_json(client, "/rest/api/3/search/jql", params={
+            "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,
+        })
+        return [_issue_summary(i) for i in data.get("issues", [])]

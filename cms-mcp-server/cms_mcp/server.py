@@ -50,6 +50,10 @@ _ACTION_HIST_FIELDS = [
     "Name", "API", "ApiType", "Description", "StatusID", "strExecutedTime",
     "ExecutionID", "strTimestamp",
 ]
+_ACTION_CATALOG_FIELDS = [
+    "ApiID", "Name", "API", "ApiType", "ApiTypeID", "ApiDescription",
+    "CategoryID", "IsInputRequired", "IsActive",
+]
 
 
 def _trim(rows: Any, fields: list[str]) -> list[dict]:
@@ -207,6 +211,18 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
             json=_datatables_body(cid, limit))
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _ACTION_HIST_FIELDS)[:limit]
+
+    @mcp.tool
+    async def cms_list_charger_actions(qcharger_id: str) -> list[dict]:
+        """Catalog of device API commands available for ONE charger (by
+        QChargerID) in the old CMS: command name, HTTP verb, and description.
+        Read-only reference (what CAN be run) — these tools never execute a
+        command."""
+        cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
+        rows = await _post_json(
+            client, "/ChargerDetails/GetAllApisByChargerID",
+            data={"ChargerID": str(cid)})
+        return _trim(rows, _ACTION_CATALOG_FIELDS)
 
     # ── Chargers ─────────────────────────────────────────────────────────────────────────
     @mcp.tool

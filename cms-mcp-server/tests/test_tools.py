@@ -61,3 +61,17 @@ async def test_get_charger_action_history_trims():
     assert row["Description"] == "Executed"
     assert row["ExecutionID"] == 414827
     assert "Output" not in row   # server filesystem path dropped
+
+
+@pytest.mark.asyncio
+async def test_list_charger_actions_catalog():
+    async with Client(build_test_server()) as client:
+        res = await client.call_tool(
+            "cms_list_charger_actions", {"qcharger_id": "ab-sam-sim"})
+    rows = res.data
+    assert len(rows) == 2
+    names = {r["API"] for r in rows}
+    assert {"id", "reset"} <= names
+    reset = next(r for r in rows if r["API"] == "reset")
+    assert reset["ApiType"] == "POST"
+    assert reset["ApiDescription"] == "Reset"

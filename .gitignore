@@ -10,6 +10,9 @@ __pycache__/
 .env.*
 !.env.example
 
+# Local-only notes (credentials, throwaway test accounts) — never commit
+*.local.md
+
 # Logs / scratch
 *.log
 .DS_Store

@@ -51,9 +51,9 @@ def build_client() -> CmsAuthClient:
     )
 
 
-def build_server() -> FastMCP:
+def build_server(client: CmsAuthClient | None = None) -> FastMCP:
     mcp = FastMCP(name="Legacy CMS (old NOC, read-only)")
-    client = build_client()
+    client = client or build_client()
 
     async def _get_json(path: str, params: Optional[dict] = None) -> Any:
         resp = await client.get(path, params=params or {})

@@ -87,3 +87,19 @@ async def test_sd_get_request_comments_public_and_stripped():
     assert cap["public"] == "true"
     assert res.data == [{"author": "Asha", "created": "2026-07-02T08:00:00.000+0000",
                          "body": "Replaced the meter"}]
+
+
+@pytest.mark.asyncio
+async def test_sd_list_servicedesks():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/rest/servicedeskapi/servicedesk"
+        return httpx.Response(200, json={"values": [
+            {"id": "1", "projectKey": "SASW", "projectName": "Support"},
+            {"id": "2", "projectKey": "HW", "projectName": "Hardware"}]})
+
+    mcp = build_server(client=_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("sd_list_servicedesks", {})
+
+    assert res.data == [{"id": "1", "projectKey": "SASW", "projectName": "Support"},
+                        {"id": "2", "projectKey": "HW", "projectName": "Hardware"}]

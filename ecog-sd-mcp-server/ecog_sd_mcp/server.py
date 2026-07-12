@@ -127,3 +127,11 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
         data = await _get_json(client, f"/rest/servicedeskapi/request/{key}/comment",
                                params={"public": "true", "limit": limit})
         return [_comment(c) for c in data.get("values", [])]
+
+    @mcp.tool
+    async def sd_list_servicedesks() -> list[dict]:
+        """List the Ecog service desks you can access (id, projectKey, projectName).
+        Read-only."""
+        data = await _get_json(client, "/rest/servicedeskapi/servicedesk")
+        return [{"id": d.get("id"), "projectKey": d.get("projectKey"),
+                 "projectName": d.get("projectName")} for d in data.get("values", [])]

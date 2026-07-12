@@ -102,6 +102,23 @@ The long tail (~110 other on-charger GET endpoints) stays reachable via
 `get_control_center_api_catalog` + the GET-locked generic proxy. The `logs`/`metrics` tools need
 an admin-level service account; others are customer/operator level.
 
+## SSH command execution (the one non-read-only capability)
+
+Two tools run arbitrary shell commands on a **live** charger over its WebSocket PTY, behind a
+mandatory two-step guardrail:
+
+1. `charger_ssh_prepare(charger_id, command, ssh_username, ssh_password)` — does **not** execute;
+   returns a one-time `confirmation_token` + preview. The assistant must show you the command and
+   get explicit approval.
+2. `charger_ssh_execute(confirmation_token)` — runs the command (single-use token, ~2 min TTL),
+   returns `{output, exit_code, truncated}`, and writes an audit record (`noc_mcp.ssh_audit`).
+
+The SSH password is passed only to `prepare`, held in memory keyed to the token, used once, and
+never logged, returned, or persisted. Arbitrary commands are permitted once confirmed (no
+denylist). The WebSocket auth uses the server's NOC token, which must have `tools:ssh_terminal`
++ `chargers:control`. Config: `SSH_COMMAND_TIMEOUT`, `SSH_CONNECT_TIMEOUT`,
+`SSH_MAX_OUTPUT_BYTES`, `SSH_PENDING_TTL_SECONDS`.
+
 ## Notes / follow-ups
 
 - All **153** GET operations are exposed (+1 catalog tool = 154). Auto-generated tool names are

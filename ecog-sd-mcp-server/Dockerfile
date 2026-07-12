@@ -9,10 +9,10 @@ COPY ecog_sd_mcp ./ecog_sd_mcp
 
 ENV MCP_TRANSPORT=http \
     MCP_HOST=0.0.0.0 \
-    MCP_PORT=8103 \
+    MCP_PORT=8104 \
     ECOG_COOKIE_FILE=/data/ecog_cookies.json
 
-EXPOSE 8103
+EXPOSE 8104
 VOLUME ["/data"]
 
 # ECOG_EMAIL / ECOG_PASSWORD / ECOG_COOKIE provided at runtime (env / compose).

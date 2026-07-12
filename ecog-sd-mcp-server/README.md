@@ -29,7 +29,7 @@ a fresh `ECOG_COOKIE` (copy the `cookie:` request header from a logged-in browse
 | `ECOG_COOKIE_FILE` | `/data/ecog_cookies.json` | refreshed-cookie cache |
 | `ECOG_LOGIN_ENABLED` | `true` | false ⇒ cookie-only |
 | `ECOG_HEADLESS` | `true` | set false to solve a one-off challenge |
-| `MCP_TRANSPORT`/`MCP_HOST`/`MCP_PORT` | `stdio`/`127.0.0.1`/`8103` | keep internal |
+| `MCP_TRANSPORT`/`MCP_HOST`/`MCP_PORT` | `stdio`/`127.0.0.1`/`8104` | keep internal |
 
 ## Test
 `python -m pytest -v`  (fully offline; Playwright login is integration-verified separately)

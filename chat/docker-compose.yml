@@ -108,7 +108,7 @@ services:
       - ECOG_HEADLESS=${ECOG_HEADLESS:-true}
       - MCP_TRANSPORT=http
       - MCP_HOST=0.0.0.0
-      - MCP_PORT=8103
+      - MCP_PORT=8104
     volumes:
       - ecog-sd-cookies:/data
     restart: unless-stopped

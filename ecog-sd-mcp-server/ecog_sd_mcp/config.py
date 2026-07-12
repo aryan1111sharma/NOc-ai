@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # MCP transport
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"
-    mcp_port: int = 8103            # noc=8100, cms=8101, jira=8102, ecog-sd=8103
+    mcp_port: int = 8104            # noc=8100, cms=8101, jira=8102, docgen=8103, ecog-sd=8104
 
 
 settings = Settings()

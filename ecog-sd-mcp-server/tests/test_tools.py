@@ -66,3 +66,24 @@ async def test_sd_get_request_returns_detail():
     assert res.data["key"] == "SASW-2911"
     assert res.data["requestType"] == "Technical support"
     assert res.data["description"] == "Meter reads low"
+
+
+@pytest.mark.asyncio
+async def test_sd_get_request_comments_public_and_stripped():
+    cap = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cap["path"] = request.url.path
+        cap["public"] = request.url.params.get("public")
+        return httpx.Response(200, json={"values": [
+            {"author": {"displayName": "Asha"}, "created": {"jira": "2026-07-02T08:00:00.000+0000"},
+             "body": "<p>Replaced the meter</p>"}]})
+
+    mcp = build_server(client=_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("sd_get_request_comments", {"key": "SASW-2911", "limit": 20})
+
+    assert cap["path"] == "/rest/servicedeskapi/request/SASW-2911/comment"
+    assert cap["public"] == "true"
+    assert res.data == [{"author": "Asha", "created": "2026-07-02T08:00:00.000+0000",
+                         "body": "Replaced the meter"}]

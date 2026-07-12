@@ -119,3 +119,11 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
         Read-only."""
         data = await _get_json(client, f"/rest/servicedeskapi/request/{key}")
         return _request_detail(data)
+
+    @mcp.tool
+    async def sd_get_request_comments(key: str, limit: int = 50) -> list[dict]:
+        """Public comments on an Ecog Service Desk ticket by key: author, created, and body
+        text (HTML stripped). Read-only."""
+        data = await _get_json(client, f"/rest/servicedeskapi/request/{key}/comment",
+                               params={"public": "true", "limit": limit})
+        return [_comment(c) for c in data.get("values", [])]

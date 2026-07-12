@@ -19,6 +19,7 @@ from fastmcp.server.providers.openapi import MCPType, RouteMap
 
 from .auth import NocAuthClient
 from .config import settings
+from .control_center import _register_control_center_tools
 from .readonly import ReadOnlyProxyMiddleware
 
 _SPEC_PATH = Path(__file__).parent / "openapi" / "noc_openapi.json"
@@ -117,5 +118,6 @@ def build_server(client: NocAuthClient | None = None) -> FastMCP:
         route_maps=_ROUTE_MAPS,
     )
     _register_control_center_catalog(mcp)
+    _register_control_center_tools(mcp, client)
     mcp.add_middleware(ReadOnlyProxyMiddleware())
     return mcp

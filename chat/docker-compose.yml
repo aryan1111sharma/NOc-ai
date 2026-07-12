@@ -96,6 +96,40 @@ services:
       - MCP_PORT=8102
     restart: unless-stopped
 
+  # Read-only MCP for Ecog's Jira Service Desk (customer API, cookie/Playwright auth).
+  ecog-sd-mcp-server:
+    build: ../ecog-sd-mcp-server
+    container_name: ecog-sd-mcp-server
+    environment:
+      - ECOG_BASE_URL=${ECOG_BASE_URL:-https://ecog.atlassian.net}
+      - ECOG_EMAIL=${ECOG_EMAIL}
+      - ECOG_PASSWORD=${ECOG_PASSWORD}
+      - ECOG_COOKIE=${ECOG_COOKIE:-}
+      - ECOG_HEADLESS=${ECOG_HEADLESS:-true}
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8103
+    volumes:
+      - ecog-sd-cookies:/data
+    restart: unless-stopped
+
+  # Document-generation MCP (this repo, docgen-mcp-server/). Turns tabular/report data into
+  # downloadable files (.xlsx now; .docx/.pdf next). Internal-only, like the other MCP servers.
+  docgen-mcp-server:
+    build: ../docgen-mcp-server
+    container_name: docgen-mcp-server
+    # NOTE: port published to the host so the browser can fetch generated-file download links
+    # (http://localhost:8103/files/<id>). DEV ONLY — in production, serve files behind the
+    # reverse proxy with auth instead of publishing this port (ties to P0-1/P0-3).
+    ports:
+      - "8103:8103"
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8103
+      - DOCGEN_PUBLIC_BASE_URL=http://localhost:8103
+    restart: unless-stopped
+
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
   # (not Mongo). GUI at http://localhost:3091; the first-registered LibreChat user is admin.
   # Needs ADMIN_PANEL_SESSION_SECRET in .env (init-env.ps1 generates it). SECURITY: in
@@ -120,3 +154,4 @@ volumes:
   meili-data:
   librechat-images:
   librechat-logs:
+  ecog-sd-cookies:

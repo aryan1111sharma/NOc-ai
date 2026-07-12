@@ -16,6 +16,8 @@ mcpSettings:
     - "mcp-server:8100"
     - "cms-mcp-server:8101"
     - "jira-mcp-server:8102"
+    - "docgen-mcp-server:8103"
+    - "ecog-sd-mcp-server:8103"
 
 endpoints:
   custom:
@@ -62,4 +64,14 @@ mcpServers:
     type: streamable-http
     url: "http://jira-mcp-server:8102/mcp"
     # Jira Cloud REST is fast; a modest timeout is fine.
+    timeout: 60000
+  ecog_sd:
+    type: streamable-http
+    url: "http://ecog-sd-mcp-server:8103/mcp"
+    timeout: 60000
+  # Document generation (docgen-mcp-server/). Exposes create_excel (→ .xlsx) as a tool;
+  # GLM calls it after fetching data to return a downloadable file.
+  docgen:
+    type: streamable-http
+    url: "http://docgen-mcp-server:8103/mcp"
     timeout: 60000

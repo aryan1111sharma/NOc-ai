@@ -20,7 +20,7 @@ _TAG_RE = re.compile(r"<[^>]+>")
 def _strip_html(s: Optional[str]) -> str:
     if not s:
         return ""
-    return re.sub(r"\s+", " ", _TAG_RE.sub("", s)).strip()
+    return re.sub(r"\s+", " ", _TAG_RE.sub("", str(s))).strip()
 
 
 def _drop_empty(d: dict) -> dict:
@@ -106,6 +106,7 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
             "requestOwnership": _OWN.get(ownership.upper(), "OWNED_REQUESTS"),
             "requestStatus": _STAT.get(status.upper(), "ALL_REQUESTS"),
             "limit": limit,
+            "expand": "serviceDesk",
         }
         if search:
             params["searchTerm"] = search
@@ -117,7 +118,8 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
         """Full detail of one Ecog Service Desk ticket by key (e.g. 'SASW-2911'):
         summary, status, request type, reporter, dates, and description (HTML stripped).
         Read-only."""
-        data = await _get_json(client, f"/rest/servicedeskapi/request/{key}")
+        data = await _get_json(client, f"/rest/servicedeskapi/request/{key}",
+                               params={"expand": "serviceDesk,requestType"})
         return _request_detail(data)
 
     @mcp.tool

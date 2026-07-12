@@ -20,6 +20,7 @@ async def test_sd_list_requests_maps_params_and_trims():
         cap["status"] = request.url.params.get("requestStatus")
         cap["search"] = request.url.params.get("searchTerm")
         cap["limit"] = request.url.params.get("limit")
+        cap["expand"] = request.url.params.get("expand")
         return httpx.Response(200, json={"values": [{
             "issueKey": "SASW-2911", "currentStatus": {"status": "Resolved"},
             "createdDate": {"jira": "2026-07-01T09:00:00.000+0000"},
@@ -37,6 +38,7 @@ async def test_sd_list_requests_maps_params_and_trims():
     assert cap["status"] == "CLOSED_REQUESTS"
     assert cap["search"] == "undervoltage"
     assert cap["limit"] == "10"
+    assert cap["expand"] == "serviceDesk"
     assert res.data == [{"key": "SASW-2911", "summary": "Invalid Undervoltage",
                          "status": "Resolved", "created": "2026-07-01T09:00:00.000+0000",
                          "reporter": "Chitransh Jain", "serviceDesk": "SASW"}]
@@ -48,6 +50,7 @@ async def test_sd_get_request_returns_detail():
 
     def handler(request: httpx.Request) -> httpx.Response:
         cap["path"] = request.url.path
+        cap["expand"] = request.url.params.get("expand")
         return httpx.Response(200, json={
             "issueKey": "SASW-2911", "currentStatus": {"status": "Resolved"},
             "createdDate": {"jira": "2026-07-01T09:00:00.000+0000"},
@@ -63,6 +66,7 @@ async def test_sd_get_request_returns_detail():
         res = await c.call_tool("sd_get_request", {"key": "SASW-2911"})
 
     assert cap["path"] == "/rest/servicedeskapi/request/SASW-2911"
+    assert cap["expand"] == "serviceDesk,requestType"
     assert res.data["key"] == "SASW-2911"
     assert res.data["requestType"] == "Technical support"
     assert res.data["description"] == "Meter reads low"

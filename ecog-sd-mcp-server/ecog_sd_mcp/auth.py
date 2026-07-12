@@ -75,16 +75,16 @@ class CookieAuthClient(httpx.AsyncClient):
             save_cookie(self._cookie_file, self._cookie)
 
     async def send(self, request: httpx.Request, **kwargs) -> httpx.Response:
-        if self._cookie:
-            request.headers["Cookie"] = self._cookie
+        sent = self._cookie
+        if sent:
+            request.headers["Cookie"] = sent
         resp = await super().send(request, **kwargs)
 
         if self._looks_logged_out(resp):
             await resp.aread()
             await resp.aclose()
-            stale = self._cookie
             async with self._lock:
-                if self._cookie == stale:          # nobody refreshed while we waited
+                if self._cookie == sent:          # cookie we sent is still current -> refresh
                     await self._do_refresh()
             request.headers["Cookie"] = self._cookie
             resp = await super().send(request, **kwargs)

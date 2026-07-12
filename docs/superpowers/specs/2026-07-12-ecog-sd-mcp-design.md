@@ -32,7 +32,7 @@ ecog-sd-mcp-server/
   README.md  Dockerfile  requirements.txt
 ```
 
-Port **8103** (noc=8100, cms=8101, jira=8102, **ecog-sd=8103**).
+Port **8104** (noc=8100, cms=8101, jira=8102, docgen=8103, **ecog-sd=8104**).
 
 ### Config (`config.py`)
 
@@ -46,7 +46,7 @@ Port **8103** (noc=8100, cms=8101, jira=8102, **ecog-sd=8103**).
 | `ecog_login_enabled` | `true` | If false → cookie-only mode (no Playwright). |
 | `ecog_headless` | `true` | Allow headed mode to dodge bot-detection when needed. |
 | `request_timeout` | `60.0` | |
-| `mcp_transport`/`mcp_host`/`mcp_port` | `stdio`/`127.0.0.1`/`8103` | Internal only (P0-3). |
+| `mcp_transport`/`mcp_host`/`mcp_port` | `stdio`/`127.0.0.1`/`8104` | Internal only (P0-3). |
 
 ### Auth (`auth.py` + `login.py`)
 
@@ -98,7 +98,7 @@ pytest mirroring `cms-mcp-server/tests`, all offline:
 
 ## Wiring
 
-Add `ecog-sd-mcp-server` service to `chat/docker-compose.yml` (env: `ECOG_EMAIL/PASSWORD/COOKIE`, cache volume), register `ecog_sd` in `chat/librechat.yaml` (`mcpServers` + `allowedAddresses`, port 8103), expose behind the **`noc-engineer`** agent only (JR-4).
+Add `ecog-sd-mcp-server` service to `chat/docker-compose.yml` (env: `ECOG_EMAIL/PASSWORD/COOKIE`, cache volume), register `ecog_sd` in `chat/librechat.yaml` (`mcpServers` + `allowedAddresses`, port 8104), expose behind the **`noc-engineer`** agent only (JR-4).
 
 ## Non-goals
 

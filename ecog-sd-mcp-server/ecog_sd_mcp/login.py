@@ -40,7 +40,15 @@ async def fetch_cookies_via_login(settings) -> str:
                 )
             await page.fill("input#password", settings.ecog_password)
             await page.click("#login-submit")
-            await page.wait_for_url("**ecog.atlassian.net/**", timeout=45000)
+            try:
+                await page.wait_for_url("**ecog.atlassian.net/**", timeout=45000)
+            except Exception:
+                if _is_captcha(await page.content()):
+                    raise RuntimeError(
+                        "Ecog login hit a CAPTCHA/verification after password — run with "
+                        "ECOG_HEADLESS=false or inject a fresh ECOG_COOKIE."
+                    )
+                raise
             header = cookies_to_header(await ctx.cookies(settings.ecog_base_url))
             if not header:
                 raise RuntimeError("Ecog login produced no cookies.")

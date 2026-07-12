@@ -27,9 +27,17 @@ _PENDING: dict[str, dict] = {}
 
 
 def _mint_pending(req: dict) -> str:
-    """Store a pending SSH request and return its single-use confirmation token."""
+    """Store a pending SSH request and return its single-use confirmation token.
+
+    Also sweeps any expired pending entries (prepares that were never executed), so the
+    in-memory store can't grow unbounded.
+    """
+    now = time.time()
+    ttl = settings.ssh_pending_ttl_seconds
+    for stale in [t for t, r in _PENDING.items() if now - r["created_at"] > ttl]:
+        _PENDING.pop(stale, None)
     token = secrets.token_urlsafe(24)
-    _PENDING[token] = {**req, "created_at": time.time()}
+    _PENDING[token] = {**req, "created_at": now}
     return token
 
 
@@ -98,6 +106,7 @@ async def _run_ssh_command(
             total = 0
             truncated = False
             scan_tail = ""
+            sentinel_exit: Optional[int] = None
             deadline = asyncio.get_event_loop().time() + command_timeout
             while True:
                 remaining = deadline - asyncio.get_event_loop().time()
@@ -112,21 +121,49 @@ async def _run_ssh_command(
                 if frame.get("type") != "data":
                     continue
                 d = frame.get("data", "")
-                total += len(d)
-                if total <= max_bytes:
-                    buf.append(d)
+                room = max_bytes - total          # keep the FIRST max_bytes of output
+                if room > 0:
+                    buf.append(d[:room])
+                    if len(d) > room:
+                        truncated = True
                 else:
                     truncated = True
-                scan_tail = (scan_tail + d)[-256:]     # detect a sentinel spanning frames
-                if _SENTINEL_RE.search(scan_tail):
+                total += len(d)
+                # Scan the rolling tail (which always sees the sentinel, even when the
+                # sentinel-bearing chunk was truncated out of buf) for end-of-command + exit code.
+                scan_tail = (scan_tail + d)[-256:]
+                m = _SENTINEL_RE.search(_strip_ansi(scan_tail))
+                if m:
+                    sentinel_exit = int(m.group(1))
                     break
-            output, exit_code = _parse_output("".join(buf), command)
-            return {"output": output, "exit_code": exit_code, "truncated": truncated}
-    except (WebSocketException, OSError, asyncio.TimeoutError) as e:
+            output, parsed_exit = _parse_output("".join(buf), command)
+            # On truncation the sentinel is dropped from buf, so fall back to the exit code
+            # captured from the always-scanned tail.
+            exit_code = parsed_exit if parsed_exit is not None else sentinel_exit
+            return {"output": output, "exit_code": exit_code,
+                    "truncated": truncated, "bytes_received": total}
+    except (WebSocketException, OSError, asyncio.TimeoutError, json.JSONDecodeError) as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
 
 _audit = logging.getLogger("noc_mcp.ssh_audit")
+
+
+def _configure_audit_logger() -> None:
+    """Attach a handler so ssh_audit records are actually emitted (idempotent).
+
+    Without this, ``_audit.info(...)`` is dropped by default (no handler + root WARNING).
+    Audit is the compensating control for allowing arbitrary commands with no denylist, so it
+    must not be a silent no-op. ``propagate`` stays True so pytest ``caplog`` still captures.
+    Writes to ``SSH_AUDIT_LOG_FILE`` if configured, else stderr.
+    """
+    if _audit.handlers:
+        return
+    _audit.setLevel(logging.INFO)
+    path = settings.ssh_audit_log_file
+    handler = logging.FileHandler(path, encoding="utf-8") if path else logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    _audit.addHandler(handler)
 
 
 def _default_ws_url_builder(charger_id: str) -> str:
@@ -137,6 +174,7 @@ def _default_ws_url_builder(charger_id: str) -> str:
 
 def _register_ssh_tools(mcp, client, ws_url_builder=None) -> None:
     """Register the two-step SSH command tools onto ``mcp``."""
+    _configure_audit_logger()
     build_ws_url = ws_url_builder or _default_ws_url_builder
 
     @mcp.tool
@@ -180,6 +218,6 @@ def _register_ssh_tools(mcp, client, ws_url_builder=None) -> None:
         _audit.info(
             "ssh_execute charger=%s command=%r exit=%s bytes=%s",
             req["charger_id"], req["command"],
-            result.get("exit_code"), len(result.get("output", "")),
+            result.get("exit_code"), result.get("bytes_received", len(result.get("output", ""))),
         )
         return {"charger_id": req["charger_id"], "command": req["command"], **result}

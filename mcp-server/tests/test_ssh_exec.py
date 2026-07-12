@@ -96,6 +96,10 @@ async def test_run_ssh_command_truncates_huge_output():
         res = await ssh_exec._run_ssh_command(
             f"{base}/ws/ssh-terminal/HUGE", "tok", "u", "p", "cat big", **TO)
     assert res["truncated"] is True
+    # exit code must survive truncation (sentinel chunk is dropped from the body buffer)
+    assert res["exit_code"] == 0
+    assert len(res["output"]) <= TO["max_bytes"]      # kept the first max_bytes
+    assert res["bytes_received"] > TO["max_bytes"]    # actual volume, not the truncated len
 
 
 @pytest.mark.asyncio
@@ -189,3 +193,14 @@ async def test_execute_audit_logs_command_not_password(caplog):
     audit = " ".join(r.getMessage() for r in caplog.records)
     assert "uptime" in audit and "NORMAL" in audit
     assert "s3cret" not in audit                    # password never audited
+
+
+def test_audit_logger_is_configured_after_registration():
+    # Build a server (registers the SSH tools) and confirm the audit logger actually has a
+    # handler at INFO — otherwise _audit.info() is a silent no-op in production and the
+    # "confirm + audit" guardrail's audit half never records anything.
+    import logging as _logging
+    ssh_exec._configure_audit_logger()  # idempotent; build_server also calls this
+    audit = _logging.getLogger("noc_mcp.ssh_audit")
+    assert audit.handlers, "ssh_audit logger has no handler -> audit records are dropped"
+    assert audit.getEffectiveLevel() <= _logging.INFO

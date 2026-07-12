@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +23,7 @@ class Settings(BaseSettings):
     ssh_command_timeout: float = 45.0
     ssh_max_output_bytes: int = 100_000
     ssh_pending_ttl_seconds: int = 120
+    ssh_audit_log_file: Optional[str] = None  # path for the ssh_audit log; None -> stderr
 
     # MCP transport: "stdio" (local clients) or "http" (remote / LibreChat via mcpo etc.)
     mcp_transport: str = "stdio"

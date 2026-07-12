@@ -9,10 +9,15 @@ command. The password is never logged, returned, or persisted. See the design sp
 
 from __future__ import annotations
 
+import asyncio
+import json
 import re
 import secrets
 import time
 from typing import Optional
+
+from websockets.asyncio.client import connect as _ws_connect
+from websockets.exceptions import WebSocketException
 
 # token -> {charger_id, command, username, password, created_at}
 _PENDING: dict[str, dict] = {}
@@ -55,3 +60,64 @@ def _parse_output(raw: str, command: str) -> tuple[str, Optional[int]]:
     if lines and lines[0].strip() == command.strip():   # PTY echoed the typed command
         lines = lines[1:]
     return "\n".join(lines).strip(), exit_code
+
+
+async def _run_ssh_command(
+    ws_url: str, token: str, username: str, password: str, command: str,
+    *, connect_timeout: float, command_timeout: float, max_bytes: int,
+) -> dict:
+    """Open the charger SSH PTY, run one command, return {output, exit_code, truncated}.
+
+    Wraps the command with an ``__QMCP_EXIT_$?__`` sentinel to recover clean output + exit
+    code from a raw PTY stream. Any failure returns a structured ``{"error": ...}``.
+    """
+    payload = f"{command}\necho __QMCP_EXIT_$?__\n"
+    try:
+        async with _ws_connect(ws_url, open_timeout=connect_timeout) as ws:
+            await ws.send(json.dumps({
+                "action": "connect", "token": token,
+                "username": username, "password": password, "cols": 120, "rows": 30,
+            }))
+            # phase 1: await the 'connected' frame
+            deadline = asyncio.get_event_loop().time() + connect_timeout
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    return {"error": "timed out waiting for SSH connect"}
+                frame = json.loads(await asyncio.wait_for(ws.recv(), timeout=remaining))
+                if frame.get("type") == "connected":
+                    break
+                if frame.get("type") == "error":
+                    return {"error": f"SSH connect error: {frame.get('message', '')}"}
+            # phase 2: send command, accumulate output until the sentinel
+            await ws.send(json.dumps({"action": "data", "data": payload}))
+            buf: list[str] = []
+            total = 0
+            truncated = False
+            scan_tail = ""
+            deadline = asyncio.get_event_loop().time() + command_timeout
+            while True:
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 0:
+                    return {"error": f"command timed out after {command_timeout}s"}
+                try:
+                    frame = json.loads(await asyncio.wait_for(ws.recv(), timeout=remaining))
+                except asyncio.TimeoutError:
+                    return {"error": f"command timed out after {command_timeout}s"}
+                if frame.get("type") == "error":
+                    return {"error": f"SSH error: {frame.get('message', '')}"}
+                if frame.get("type") != "data":
+                    continue
+                d = frame.get("data", "")
+                total += len(d)
+                if total <= max_bytes:
+                    buf.append(d)
+                else:
+                    truncated = True
+                scan_tail = (scan_tail + d)[-256:]     # detect a sentinel spanning frames
+                if _SENTINEL_RE.search(scan_tail):
+                    break
+            output, exit_code = _parse_output("".join(buf), command)
+            return {"output": output, "exit_code": exit_code, "truncated": truncated}
+    except (WebSocketException, OSError, asyncio.TimeoutError) as e:
+        return {"error": f"{type(e).__name__}: {e}"}

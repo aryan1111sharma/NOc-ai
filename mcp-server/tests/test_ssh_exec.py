@@ -57,3 +57,59 @@ def test_parse_output_nonzero_exit_and_drops_echoed_command():
 def test_parse_output_missing_sentinel_returns_none_code():
     body, code = ssh_exec._parse_output("partial output no marker\n", command="x")
     assert code is None and "partial output" in body
+
+
+from tests.fake_ssh_ws import fake_ssh_server
+
+TO = dict(connect_timeout=5.0, command_timeout=5.0, max_bytes=100_000)
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_normal():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/NORMAL", "tok", "torizon", "p", "uptime", **TO)
+    assert res["exit_code"] == 0
+    assert res["output"] == "up 3 days, load 0.10"
+    assert res["truncated"] is False
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_nonzero_exit():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/FAIL", "tok", "u", "p", "false", **TO)
+    assert res["exit_code"] == 2 and "boom" in res["output"]
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_strips_ansi():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/ANSI", "tok", "u", "p", "uptime", **TO)
+    assert "\x1b[" not in res["output"] and "up 3 days" in res["output"]
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_truncates_huge_output():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/HUGE", "tok", "u", "p", "cat big", **TO)
+    assert res["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_error_frame():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/ERR", "tok", "u", "p", "uptime", **TO)
+    assert "error" in res
+
+
+@pytest.mark.asyncio
+async def test_run_ssh_command_times_out():
+    async with fake_ssh_server() as base:
+        res = await ssh_exec._run_ssh_command(
+            f"{base}/ws/ssh-terminal/SLOW", "tok", "u", "p", "sleep 99",
+            connect_timeout=5.0, command_timeout=1.0, max_bytes=100_000)
+    assert "error" in res and "timed out" in res["error"]

@@ -52,6 +52,9 @@ def _handler(request: httpx.Request) -> httpx.Response:
         port_str, _, device_path = rest.partition("/")
         if charger == "OFFLINE":
             return httpx.Response(502, json={"detail": "charger offline"})
+        # PARTIAL: only the OCPP config sub-call fails, so composites yield partial results.
+        if charger == "PARTIAL" and (int(port_str), device_path) == (8003, "api/v1/config/ocpp"):
+            return httpx.Response(502, json={"detail": "sub-call failed"})
         payload = _DEVICE.get((int(port_str), device_path))
         if payload is None:
             return httpx.Response(404, json={"detail": f"no route {port_str}/{device_path}"})

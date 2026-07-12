@@ -108,6 +108,16 @@ async def test_composites_merge_under_fixed_keys():
 
 
 @pytest.mark.asyncio
+async def test_composite_degrades_to_partial_on_sub_call_failure():
+    # PARTIAL charger fails only the OCPP config sub-call: status still returns data,
+    # config carries a structured error — the whole tool does not fail.
+    async with Client(build_test_server()) as c:
+        res = (await c.call_tool("charger_get_ocpp_status", {"charger_id": "PARTIAL"})).data
+    assert res["status"] == {"connected": True, "url": "wss://ocpp"}
+    assert "error" in res["config"] and res["config"]["path"] == "api/v1/config/ocpp"
+
+
+@pytest.mark.asyncio
 async def test_session_details_gun_vs_history():
     async with Client(build_test_server()) as c:
         gun = (await c.call_tool(

@@ -64,7 +64,8 @@ def _register_control_center_tools(mcp, client) -> None:
 
     @mcp.tool
     async def charger_get_ocpp_status(charger_id: str) -> dict:
-        """OCPP connection status + the charger's OCPP configuration keys. Read-only."""
+        """OCPP connection status + the charger's OCPP configuration keys. Charger must be
+        ONLINE. Read-only."""
         return {
             "status": await _proxy_get(client, charger_id, 8003, "api/v1/ocpp/status"),
             "config": await _proxy_get(client, charger_id, 8003, "api/v1/config/ocpp"),
@@ -72,7 +73,8 @@ def _register_control_center_tools(mcp, client) -> None:
 
     @mcp.tool
     async def charger_get_network_status(charger_id: str) -> dict:
-        """Connectivity triage: overall network status + GSM signal/operator detail. Read-only."""
+        """Connectivity triage: overall network status + GSM signal/operator detail. Charger
+        must be ONLINE. Read-only."""
         return {
             "overall": await _proxy_get(client, charger_id, 8000, "api/v1/network/status"),
             "gsm": await _proxy_get(client, charger_id, 8000, "api/v1/network/gsm/status"),
@@ -80,7 +82,8 @@ def _register_control_center_tools(mcp, client) -> None:
 
     @mcp.tool
     async def charger_get_system_info(charger_id: str) -> dict:
-        """Device identity: hardware, software/firmware version, and RTC clock. Read-only."""
+        """Device identity: hardware, software/firmware version, and RTC clock. Charger must be
+        ONLINE. Read-only."""
         return {
             "hardware": await _proxy_get(client, charger_id, 8000, "api/v1/system/hardware"),
             "software": await _proxy_get(client, charger_id, 8000, "api/v1/system/software"),
@@ -89,12 +92,14 @@ def _register_control_center_tools(mcp, client) -> None:
 
     @mcp.tool
     async def charger_get_allocation_state(charger_id: str) -> dict:
-        """Current power-allocation state (per-gun allocation). Read-only."""
+        """Current power-allocation state (per-gun allocation). Charger must be ONLINE.
+        Read-only."""
         return await _proxy_get(client, charger_id, 8002, "api/state")
 
     @mcp.tool
     async def charger_get_pm_power(charger_id: str) -> dict:
-        """Power-module output: module count + per-module power. Read-only."""
+        """Power-module output: module count + per-module power. Charger must be ONLINE.
+        Read-only."""
         return {
             "pm_count": await _proxy_get(client, charger_id, 8002, "api/pm_count"),
             "power": await _proxy_get(client, charger_id, 8002, "api/pm/get_all_power"),
@@ -103,7 +108,7 @@ def _register_control_center_tools(mcp, client) -> None:
     @mcp.tool
     async def charger_get_alarms(charger_id: str, gun_id: Optional[int] = None) -> dict:
         """Active faults. With gun_id: errors for that gun. Without: latched alarms + pending
-        errors across the charger. Read-only."""
+        errors across the charger. Charger must be ONLINE. Read-only."""
         if gun_id is not None:
             return {"errors_by_gun": await _proxy_get(
                 client, charger_id, 8006, f"error-generator/errors/by-gun/{gun_id}")}
@@ -114,7 +119,8 @@ def _register_control_center_tools(mcp, client) -> None:
 
     @mcp.tool
     async def charger_get_temperature(charger_id: str) -> dict:
-        """Thermal state: sensor readings + configured thresholds. Read-only."""
+        """Thermal state: sensor readings + configured thresholds. Charger must be ONLINE.
+        Read-only."""
         return {
             "sensors": await _proxy_get(client, charger_id, 8006, "temp/sensors"),
             "thresholds": await _proxy_get(client, charger_id, 8006, "temp/thresholds"),
@@ -123,17 +129,17 @@ def _register_control_center_tools(mcp, client) -> None:
     @mcp.tool
     async def charger_list_log_sources(charger_id: str) -> dict:
         """List the on-charger log sources available to fetch (use with charger_get_logs).
-        Requires an admin-level NOC service account. Read-only."""
+        Charger must be ONLINE. Requires an admin-level NOC service account. Read-only."""
         return await _proxy_get(client, charger_id, 8005, "api/v1/devtools/logs/sources")
 
     @mcp.tool
     async def charger_get_logs(charger_id: str, source: str) -> dict:
-        """Fetch on-charger logs for one source (from charger_list_log_sources). Requires an
-        admin-level NOC service account. Read-only."""
+        """Fetch on-charger logs for one source (from charger_list_log_sources). Charger must be
+        ONLINE. Requires an admin-level NOC service account. Read-only."""
         return await _proxy_get(client, charger_id, 8005, f"api/v1/devtools/logs/{source}")
 
     @mcp.tool
     async def charger_get_device_metrics(charger_id: str) -> dict:
-        """On-charger compute health: CPU / memory / disk metrics. Requires an admin-level NOC
-        service account. Read-only."""
+        """On-charger compute health: CPU / memory / disk metrics. Charger must be ONLINE.
+        Requires an admin-level NOC service account. Read-only."""
         return await _proxy_get(client, charger_id, 8005, "api/v1/devtools/metrics")

@@ -92,4 +92,22 @@ def build_server(client: Optional[CookieAuthClient] = None) -> FastMCP:
 
 
 def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
-    pass  # filled in Tasks 6–9
+
+    _OWN = {"OWNED": "OWNED_REQUESTS", "PARTICIPATED": "PARTICIPATED_REQUESTS", "ALL": "ALL_REQUESTS"}
+    _STAT = {"OPEN": "OPEN_REQUESTS", "CLOSED": "CLOSED_REQUESTS", "ALL": "ALL_REQUESTS"}
+
+    @mcp.tool
+    async def sd_list_requests(search: Optional[str] = None, status: str = "ALL",
+                               ownership: str = "OWNED", limit: int = 50) -> list[dict]:
+        """List/search your Ecog Service Desk tickets. `status` ∈ OPEN|CLOSED|ALL,
+        `ownership` ∈ OWNED|PARTICIPATED|ALL, `search` = free-text. Returns key, summary,
+        status, created, reporter, serviceDesk. Read-only."""
+        params = {
+            "requestOwnership": _OWN.get(ownership.upper(), "OWNED_REQUESTS"),
+            "requestStatus": _STAT.get(status.upper(), "ALL_REQUESTS"),
+            "limit": limit,
+        }
+        if search:
+            params["searchTerm"] = search
+        data = await _get_json(client, "/rest/servicedeskapi/request", params=params)
+        return [_request_summary(r) for r in data.get("values", [])]

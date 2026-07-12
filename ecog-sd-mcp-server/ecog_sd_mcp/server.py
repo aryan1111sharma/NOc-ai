@@ -111,3 +111,11 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
             params["searchTerm"] = search
         data = await _get_json(client, "/rest/servicedeskapi/request", params=params)
         return [_request_summary(r) for r in data.get("values", [])]
+
+    @mcp.tool
+    async def sd_get_request(key: str) -> dict:
+        """Full detail of one Ecog Service Desk ticket by key (e.g. 'SASW-2911'):
+        summary, status, request type, reporter, dates, and description (HTML stripped).
+        Read-only."""
+        data = await _get_json(client, f"/rest/servicedeskapi/request/{key}")
+        return _request_detail(data)

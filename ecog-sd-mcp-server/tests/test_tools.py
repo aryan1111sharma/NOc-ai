@@ -40,3 +40,29 @@ async def test_sd_list_requests_maps_params_and_trims():
     assert res.data == [{"key": "SASW-2911", "summary": "Invalid Undervoltage",
                          "status": "Resolved", "created": "2026-07-01T09:00:00.000+0000",
                          "reporter": "Chitransh Jain", "serviceDesk": "SASW"}]
+
+
+@pytest.mark.asyncio
+async def test_sd_get_request_returns_detail():
+    cap = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cap["path"] = request.url.path
+        return httpx.Response(200, json={
+            "issueKey": "SASW-2911", "currentStatus": {"status": "Resolved"},
+            "createdDate": {"jira": "2026-07-01T09:00:00.000+0000"},
+            "reporter": {"displayName": "Chitransh Jain"},
+            "serviceDesk": {"projectKey": "SASW"},
+            "requestType": {"name": "Technical support"},
+            "requestFieldValues": [
+                {"fieldId": "summary", "value": "Invalid Undervoltage"},
+                {"fieldId": "description", "value": "<p>Meter reads low</p>"}]})
+
+    mcp = build_server(client=_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("sd_get_request", {"key": "SASW-2911"})
+
+    assert cap["path"] == "/rest/servicedeskapi/request/SASW-2911"
+    assert res.data["key"] == "SASW-2911"
+    assert res.data["requestType"] == "Technical support"
+    assert res.data["description"] == "Meter reads low"

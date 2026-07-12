@@ -72,9 +72,35 @@ endpoint through the **generic charger proxy** tool
 (`proxy_api_call_path_based_...`) using the endpoint's port + path. To refresh the catalog,
 replace `noc_mcp/catalog/rbac-rules.csv` and rebuild.
 
-> Safety note: the generic proxy can technically forward non-GET methods to a charger. The
-> catalog only lists GET reads and instructs read-only use, but for a hard guarantee, lock the
-> proxy tool to `method=GET` (or replace it with typed GET-only wrappers).
+> Safety note: the generic proxy could technically forward non-GET methods to a charger, so
+> `ReadOnlyProxyMiddleware` (`noc_mcp/readonly.py`) **rejects any `method` other than GET** on the
+> proxy tools before the call reaches the NOC — a hard read-only guarantee.
+
+## Curated on-charger tools (Tier-1)
+
+For the highest-value on-charger reads, the server also registers **13 named, read-only tools**
+that wrap the charger proxy (so the model doesn't have to assemble port+path). All take the NOC
+`charger_id` (the charger must be online) and pass the device JSON through; composites merge a
+few related endpoints under fixed keys.
+
+| Tool | Reads |
+|---|---|
+| `charger_get_charging_status` | per-gun charging/PLC/OCPP state (`gun_id` optional) |
+| `charger_get_session_details` | per-gun active+last session, or recent history |
+| `charger_get_meters` | AC + per-gun DC meters (+ IMD when `gun_id` given) |
+| `charger_get_ocpp_status` | OCPP connection status + config keys |
+| `charger_get_network_status` | overall network + GSM signal/operator |
+| `charger_get_system_info` | hardware, software version, RTC |
+| `charger_get_allocation_state` | power-allocation state |
+| `charger_get_pm_power` | power-module count + per-module power |
+| `charger_get_alarms` | latched alarms + pending errors (or per-gun) |
+| `charger_get_temperature` | sensor readings + thresholds |
+| `charger_list_log_sources` / `charger_get_logs` | on-charger log sources + fetch (admin) |
+| `charger_get_device_metrics` | device CPU/memory/disk (admin) |
+
+The long tail (~110 other on-charger GET endpoints) stays reachable via
+`get_control_center_api_catalog` + the GET-locked generic proxy. The `logs`/`metrics` tools need
+an admin-level service account; others are customer/operator level.
 
 ## Notes / follow-ups
 

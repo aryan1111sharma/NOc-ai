@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     noc_password: str
     request_timeout: float = 30.0
 
+    # SSH command-execution tools
+    ssh_connect_timeout: float = 15.0
+    ssh_command_timeout: float = 45.0
+    ssh_max_output_bytes: int = 100_000
+    ssh_pending_ttl_seconds: int = 120
+
     # MCP transport: "stdio" (local clients) or "http" (remote / LibreChat via mcpo etc.)
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"

@@ -5,6 +5,84 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.4.0] - 2026-07-12
+
+### Features
+
+- **jira-mcp:** Scaffold package + config ([`dfde143`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dfde1431b3d450bc67167616a389129c1ffa0c17))
+- **jira-mcp:** Basic-auth httpx client ([`fe8bdab`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fe8bdaba7e621ac3891f955c81d4c25daf44fcf3))
+- **jira-mcp:** ADF flattener, trimmers, and _get_json ([`bbe5156`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bbe5156cd23ca3dc12fefc847d930267f1b15f49))
+- **jira-mcp:** Jira_search (JQL) tool ([`fff9f09`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fff9f096a2186265db7e1ab68521d8a71556b3c8))
+- **jira-mcp:** Jira_get_issue tool ([`7265af8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7265af80c07589bbe6ed70261867c15256f96442))
+- **jira-mcp:** Jira_get_comments tool ([`90dbbe0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/90dbbe0c9a9090defdeba47d6d72a70382381826))
+- **jira-mcp:** Jira_get_issue_transitions (read-only status view) ([`558906c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/558906ca42b056b5b01784db559b2ed2e7c0e18c))
+- **cms:** Add _post_json helper for legacy AJAX POST actions ([`2495178`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2495178590ef1234fee1098135e1c511254009c0))
+- **cms:** Add _datatables_body helper for per-charger log actions ([`94b1e3e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/94b1e3e9c5851815ce249927e1bce547aaf4b91e))
+- **cms:** Add cached QChargerID -> numeric ChargerID resolver ([`e25cbab`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e25cbab24e63f1da5c2cd5528e3e57c96c1f53f7))
+- **jira-mcp:** Entrypoint, Dockerfile, README ([`33d262c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/33d262cd058efd9d53f11215b07277e392267a28))
+- **jira-mcp:** Register Ecog Jira MCP in compose + librechat (port 8102) ([`d601da1`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d601da166bd1154c16a3d0cbdea39ddd25cd649d))
+- **cms:** Add cms_get_charger_details tool (metadata + live status) ([`812bfa0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/812bfa0a9e934f2ec34678955b1eb242cea0f013))
+- **cms:** Add cms_get_charger_sessions tool ([`4e96973`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4e96973e754ebac1348b69c02f6cb1ac55942c81))
+- **cms:** Add cms_get_charger_alerts tool ([`9f4462b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9f4462bee0063cae395733ed7efe29e81a202339))
+- **cms:** Add cms_get_charger_action_history tool ([`a5725b5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a5725b555ba61d3914b6a25c4116501db4fc087b))
+- **cms:** Add cms_list_charger_actions catalog tool ([`d992b62`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d992b622e93085e6da2516fecfc1616fa5a46c1e))
+- **ecog-sd:** Scaffold package + config ([`d20bb0c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d20bb0cc826d6b1c819b6bd6c1bb0ca6152ef57a))
+- **ecog-sd:** Cookie serialization + cache helpers ([`5ffb224`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5ffb22446d63c72eebcedfc1b716e895315675b7))
+- **ecog-sd:** CookieAuthClient with refresh-on-logout + single-login concurrency ([`536a99a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/536a99a62fce4322b2d082449455a36d7f35b8d8))
+- **ecog-sd:** Playwright password login + CAPTCHA guard ([`6913c7a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6913c7ae1f4d4f77e202764aad4b3f2a74e7249f))
+- **ecog-sd:** Service-desk trim/HTML helpers + client/server factories ([`bc32aef`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bc32aefa5bc06f5ff56f374fb699fa792c9c34dd))
+- **ecog-sd:** Sd_list_requests tool ([`8b5a22c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8b5a22cea778569e3fa52e3aec43210d978f8cfe))
+- **ecog-sd:** Sd_get_request tool ([`4841129`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/484112945420052f4c9533b042984aa844fd621e))
+- **ecog-sd:** Sd_get_request_comments tool ([`3b74334`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3b74334e82f6d2a826c6603b4439f9d0bb52117f))
+- **ecog-sd:** Sd_list_servicedesks tool ([`619ed18`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/619ed180769102f9c07e512a9c3db1ea98243f44))
+- **ecog-sd:** Entrypoint, Playwright Dockerfile, README ([`2376141`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2376141edd40d39ee06af8e73e7a741b066f59bd))
+- **ecog-sd:** Register Ecog Service Desk MCP in compose + librechat (port 8103) ([`5d327c9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5d327c961c65769eee48ce6e7b522fe01e975c83))
+- **noc:** Add control_center module with proxy-GET helper, wired into build_server ([`142754a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/142754a1d9987b9fe97bcd3e109ec27f091ce8fd))
+- **noc:** Add charger_get_charging_status tool + shared fake NOC harness ([`b3a1c05`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b3a1c05ead2aa7e602dd573b87fa4f497538cac9))
+- **noc:** Add the remaining 12 Tier-1 control-center tools ([`0b6ea17`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/0b6ea1700c9d4d9a979c2729aec3bbba28cf7123))
+- **docgen:** Add document-generation MCP server (Excel/Word/PDF downloads) ([`1fa6e7b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1fa6e7becfae76a605c1726f57d9f66dd0686811))
+
+### Bug Fixes
+
+- **jira-mcp:** Friendly 404, ADF mention/emoji text, doc fixes ([`d2c0916`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d2c091670a2ac9b9ede47cd84356cc9234c122ef))
+- **cms:** _trim preserves boolean False (inactive charger, input-required) ([`e8afaef`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e8afaefc09f81bfe69babe78ae0e9a13b865450d))
+- **cms:** Surface last event/ping timestamp; drop stale deferred note ([`e3a1c0b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e3a1c0bf1f0ee3bcb518865ce1ba352207ca016c))
+- **ecog-sd:** Use port 8104 (8103 already taken by docgen-mcp-server) ([`1b2ea77`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1b2ea7716266fa34ccd7afe9a98b32aa910ba5ae))
+- **ecog-sd:** Expand serviceDesk/requestType, cookie-send robustness, captcha+html-strip hardening ([`45707bf`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/45707bf506fb366ba03bba1d860a1082637f554a))
+- **ecog-sd:** Pin playwright==1.48.0 to match Docker base image browsers ([`bb641f0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bb641f0fedf5c36652f583868da88474a914b34a))
+- **ecog-sd:** Correct Atlassian login selectors + clear verification-challenge error ([`9c6cfd2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9c6cfd2f76ea84364ae88e1c2b13dce5dca981c6))
+
+### Refactoring
+
+- **cms:** Allow injecting an httpx client into build_server for tests ([`35ea6fc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/35ea6fc914ad1b871be35cd73dbff03314f4d3f9))
+- **noc:** Allow injecting a client into build_server for tests ([`345fbb2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/345fbb2b2c345f36e19a3b65256013aa16ef625d))
+
+### Documentation
+
+- **backlog:** Service-manager-only access model; defer per-role enforcement (AC-3..AC-6) ([`c688774`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c688774016f4852c91c7e1878ac115f43b01949e))
+- **spec:** Ecog Jira read-only MCP pilot design ([`131f3b5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/131f3b5bc6939fd2659ef51174db6ed45e315600))
+- **plan:** Ecog Jira read-only MCP implementation plan ([`fd7c893`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fd7c893567cce5cd2fb2b5163376ea89c60c9c97))
+- **spec:** CMS ChargerSession per-charger tools (sessions/alerts/actions) ([`7ba3739`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7ba3739454fd0e037ef2cb7e5c86746aa831e777))
+- **plan:** Implementation plan for CMS ChargerSession per-charger tools ([`a658eab`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a658eab640587162e7a44d00aa66e602f26f8408))
+- **cms:** Document the 5 new per-charger tools ([`6554275`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6554275a17d1f8ff0095785d17e2ab02c4002a00))
+- **spec:** Ecog Service Desk MCP (session-cookie + Playwright auto-reauth) ([`f6b79d4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f6b79d45932e3a60cfc52098df336c61b71dfe02))
+- **plan:** Ecog Service Desk MCP implementation plan ([`ef5eb84`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ef5eb84253ceed084522e3f9e87af5f8e68d6b49))
+- **spec:** NOC on-charger control-center Tier-1 tools ([`75b3909`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/75b3909d39aed9c58fdcc42b05a07a9d27aaf404))
+- **plan:** Implementation plan for NOC control-center Tier-1 tools ([`922068b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/922068bd05064fbf63f4a02b0df7a0e166be4b1d))
+- **noc:** Document the 13 Tier-1 on-charger tools ([`a2ab404`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a2ab404861f3ccf73e9f160f4d7676f6a6b03cb7))
+
+### Testing
+
+- **jira-mcp:** Assert the server is read-only (no write tools) ([`3fa66b4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3fa66b429a135530ea7a669227ac67f21379156d))
+- **ecog-sd:** Assert server is read-only (no write tools) ([`5f4ca5d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5f4ca5d38f64ae1001fb2ce19ef47113c66a13d3))
+- **ecog-sd:** Update port assertion to 8104 ([`9795fb8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9795fb89aeb1653487ed7d460ccb6645c348494f))
+- **noc:** Assert composite partial-failure; add 'online' to tool docstrings ([`92a0fbd`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/92a0fbd92fee6400eab3621111878194e7a6177e))
+
+### CI/CD
+
+- **jira-mcp:** Add jira-mcp-server to the pytest matrix ([`ee7ba23`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ee7ba23bf73a12087b751dc2dcfe3104b196e297))
+- **ecog-sd:** Add ecog-sd-mcp-server to the pytest matrix ([`e8adb9f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e8adb9f06847b148a981e3a6b7d8a07d2618ab43))
+
 ## [0.3.1] - 2026-07-11
 
 ### Documentation

@@ -8,7 +8,7 @@ cache: true
 # interface.customFooter is ignored. This welcome greets the new-chat screen
 # with the release version; the version token is bumped by scripts/bump-version.
 interface:
-  customWelcome: "Welcome to Adore Manthan.AI v0.3.1 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
+  customWelcome: "Welcome to Adore Manthan.AI v0.4.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
 
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
@@ -69,7 +69,7 @@ mcpServers:
     type: streamable-http
     url: "http://ecog-sd-mcp-server:8104/mcp"
     timeout: 60000
-  # Document generation (docgen-mcp-server/). Exposes create_excel (→ .xlsx) as a tool;
+  # Document generation (docgen-mcp-server/). Exposes create_excel (??? .xlsx) as a tool;
   # GLM calls it after fetching data to return a downloadable file.
   docgen:
     type: streamable-http

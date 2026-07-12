@@ -5,15 +5,21 @@ the given data into a real file, stores it, and returns a browser-reachable **do
 (LibreChat does not surface MCP-returned binary resources as downloads, so we serve them over
 a plain HTTP route and hand back a link). GLM presents the link to the user as a Markdown link.
 
+Storage: files are written to disk under ``DOCGEN_DATA_DIR`` (a Docker volume) so links survive
+container restarts, bounded by ``DOCGEN_MAX_FILES`` (oldest evicted first).
+
 Delivery route: ``/files/{id}/{filename}`` — the filename is in the URL path so the browser
-always saves the file with the correct extension, even if it ignores Content-Disposition.
+always saves the file with the correct extension. PDFs are served ``inline`` (viewable in the
+browser); spreadsheets/documents are served as ``attachment`` downloads (browsers can't render
+them).
 """
 
 from __future__ import annotations
 
 import io
+import shutil
 import uuid
-from collections import OrderedDict
+from pathlib import Path
 from typing import Any
 
 from docx import Document
@@ -34,19 +40,24 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MIME = "application/pdf"
 
-# In-memory store of generated files: id -> (filename, bytes, mime). Bounded so a long-running
-# server doesn't grow without limit; oldest entries are evicted first. Files are ephemeral
-# (lost on restart) — fine for on-demand exports; a shared volume/object store is the
-# production upgrade.
-_MAX_FILES = 100
-_FILES: "OrderedDict[str, tuple[str, bytes, str]]" = OrderedDict()
+_MIME_BY_EXT = {".xlsx": XLSX_MIME, ".docx": DOCX_MIME, ".pdf": PDF_MIME}
+
+_DATA_DIR = Path(settings.docgen_data_dir)
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _store_file(filename: str, data: bytes, mime: str) -> str:
+    """Persist the file under DATA_DIR/<id>/<filename> and return the id. Evicts oldest
+    files once the count exceeds the configured cap."""
     file_id = uuid.uuid4().hex
-    _FILES[file_id] = (filename, data, mime)
-    while len(_FILES) > _MAX_FILES:
-        _FILES.popitem(last=False)
+    dest = _DATA_DIR / file_id
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / filename).write_bytes(data)
+
+    dirs = [p for p in _DATA_DIR.iterdir() if p.is_dir()]
+    if len(dirs) > settings.docgen_max_files:
+        for old in sorted(dirs, key=lambda p: p.stat().st_mtime)[: -settings.docgen_max_files]:
+            shutil.rmtree(old, ignore_errors=True)
     return file_id
 
 
@@ -67,22 +78,29 @@ def _deliver(filename: str, data: bytes, mime: str, ext: str) -> str:
 def build_server() -> FastMCP:
     mcp = FastMCP(name="docgen")
 
-    # Two routes to the same handler. The filename is carried in the URL path (…/{id}/{name})
-    # so the browser saves the file WITH its extension even if it ignores the
-    # Content-Disposition header on direct navigation. The bare …/{id} route is kept for
-    # compatibility. Lookup uses only file_id; the {filename} path segment is cosmetic.
+    # Two routes to the same handler. The filename is in the URL path (…/{id}/{name}) so the
+    # browser keeps the extension even if it ignores Content-Disposition. Lookup uses only
+    # file_id; the {filename} segment is cosmetic.
     @mcp.custom_route("/files/{file_id}", methods=["GET"])
     @mcp.custom_route("/files/{file_id}/{filename}", methods=["GET"])
     async def download_file(request: Request) -> Response:
         file_id = request.path_params["file_id"]
-        entry = _FILES.get(file_id)
-        if entry is None:
+        if not file_id.isalnum():  # ids are uuid4 hex; reject anything else (path-traversal guard)
+            return JSONResponse({"error": "invalid file id"}, status_code=400)
+
+        folder = _DATA_DIR / file_id
+        files = [p for p in folder.iterdir() if p.is_file()] if folder.is_dir() else []
+        if not files:
             return JSONResponse({"error": "file not found or expired"}, status_code=404)
-        filename, data, mime = entry
+
+        fp = files[0]
+        mime = _MIME_BY_EXT.get(fp.suffix.lower(), "application/octet-stream")
+        # PDFs are viewable in-browser (inline); spreadsheets/docs must download (attachment).
+        disposition = "inline" if mime == PDF_MIME else "attachment"
         return Response(
-            content=data,
+            content=fp.read_bytes(),
             media_type=mime,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f'{disposition}; filename="{fp.name}"'},
         )
 
     @mcp.tool
@@ -145,6 +163,8 @@ def build_server() -> FastMCP:
             table_headers: optional column headers for a table after the paragraphs.
             table_rows: optional table rows (list of lists) aligned to ``table_headers``.
         """
+        if not (title or paragraphs or table_headers):
+            title = filename  # guard: never emit an empty document if the model omitted content
         doc = Document()
         if title:
             doc.add_heading(title, level=0)
@@ -186,6 +206,8 @@ def build_server() -> FastMCP:
             table_headers: optional column headers for a table after the paragraphs.
             table_rows: optional table rows (list of lists) aligned to ``table_headers``.
         """
+        if not (title or paragraphs or table_headers):
+            title = filename  # guard: never emit a 0-page PDF if the model omitted content
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4, title=title or filename)
         styles = getSampleStyleSheet()

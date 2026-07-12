@@ -128,6 +128,10 @@ services:
       - MCP_HOST=0.0.0.0
       - MCP_PORT=8103
       - DOCGEN_PUBLIC_BASE_URL=http://localhost:8103
+      - DOCGEN_DATA_DIR=/data/files
+    # Persist generated files so download links survive container restarts/rebuilds.
+    volumes:
+      - docgen-files:/data
     restart: unless-stopped
 
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
@@ -155,3 +159,4 @@ volumes:
   librechat-images:
   librechat-logs:
   ecog-sd-cookies:
+  docgen-files:

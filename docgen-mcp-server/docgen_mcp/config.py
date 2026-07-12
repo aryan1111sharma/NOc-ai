@@ -20,5 +20,10 @@ class Settings(BaseSettings):
     # in production it should be a path behind the reverse proxy (ties to P0-1/P0-3).
     docgen_public_base_url: str = "http://localhost:8103"
 
+    # Directory where generated files are stored. Backed by a Docker volume so links survive
+    # container restarts. Bounded by DOCGEN_MAX_FILES (oldest evicted first).
+    docgen_data_dir: str = "/data/files"
+    docgen_max_files: int = 200
+
 
 settings = Settings()  # reads env / .env at import time

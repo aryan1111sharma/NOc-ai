@@ -5,6 +5,25 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.4.1] - 2026-07-12
+
+### Features
+
+- **ecog-sd:** Sd_set_session_cookie tool (validated in-chat cookie refresh) ([`b0a6d61`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b0a6d617fbb556e64f930d22c9496c8e6d75a224))
+- **noc:** Add SSH-exec config settings + websockets dependency ([`3ff747b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3ff747b93494509399f61f3484d262a1eafce962))
+- **noc:** Add single-use SSH confirmation-token store ([`491eb67`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/491eb6763500c3016806008eb2c07dced9d75c26))
+- **noc:** Add ANSI stripping + sentinel exit-code parsing for SSH output ([`b031ba7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b031ba7be1e8cb6c0d888d366a3cf2d8d7f2cc41))
+- **noc:** Add _run_ssh_command WebSocket round-trip + fake SSH server ([`e0e0ec8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e0e0ec807844c6ae29c8d0bb075bd95250569b01))
+
+### Bug Fixes
+
+- **docgen:** Persist files to a volume + serve PDFs inline ([`eb41f39`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/eb41f394bb0f640be189804e17d182a72041076a))
+
+### Documentation
+
+- **spec:** NOC SSH command-execution tools (two-step, audited) ([`dcbc291`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dcbc2918bc302ff5b9c85898fce4c9127683a348))
+- **plan:** Implementation plan for NOC SSH command-execution tools ([`22e17a2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/22e17a29384782e4b2d633a16039c8d82a4d5940))
+
 ## [0.4.0] - 2026-07-12
 
 ### Features

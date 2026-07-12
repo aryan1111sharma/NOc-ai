@@ -9,6 +9,7 @@ command. The password is never logged, returned, or persisted. See the design sp
 
 from __future__ import annotations
 
+import re
 import secrets
 import time
 from typing import Optional
@@ -33,3 +34,24 @@ def _pop_pending(token: str, ttl: int) -> Optional[dict]:
     if time.time() - req["created_at"] > ttl:
         return None
     return req
+
+
+_ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_SENTINEL_RE = re.compile(r"__QMCP_EXIT_(\d+)__")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
+def _parse_output(raw: str, command: str) -> tuple[str, Optional[int]]:
+    """From accumulated PTY output, strip ANSI, split off the sentinel to get the exit code,
+    and drop a leading echoed-command line if the PTY echoed it."""
+    clean = _strip_ansi(raw).replace("\r\n", "\n").replace("\r", "\n")
+    m = _SENTINEL_RE.search(clean)
+    exit_code = int(m.group(1)) if m else None
+    body = clean[: m.start()] if m else clean
+    lines = body.split("\n")
+    if lines and lines[0].strip() == command.strip():   # PTY echoed the typed command
+        lines = lines[1:]
+    return "\n".join(lines).strip(), exit_code

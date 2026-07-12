@@ -34,3 +34,26 @@ def test_pop_rejects_expired_token():
     ssh_exec._PENDING[tok]["created_at"] -= 1000     # force staleness
     assert ssh_exec._pop_pending(tok, ttl=120) is None
     assert tok not in ssh_exec._PENDING              # expired entry is evicted
+
+
+def test_strip_ansi_removes_escapes():
+    assert ssh_exec._strip_ansi("\x1b[32mup\x1b[0m 3 days") == "up 3 days"
+
+
+def test_parse_output_extracts_exit_code_and_body():
+    raw = "up 3 days, load 0.10\r\n__QMCP_EXIT_0__\r\n"
+    body, code = ssh_exec._parse_output(raw, command="uptime")
+    assert body == "up 3 days, load 0.10"
+    assert code == 0
+
+
+def test_parse_output_nonzero_exit_and_drops_echoed_command():
+    raw = "\x1b[0mls: cannot access 'x': No such file or directory\r\n__QMCP_EXIT_2__\r\n"
+    body, code = ssh_exec._parse_output(raw, command="ls x")
+    assert code == 2
+    assert "No such file" in body
+
+
+def test_parse_output_missing_sentinel_returns_none_code():
+    body, code = ssh_exec._parse_output("partial output no marker\n", command="x")
+    assert code is None and "partial output" in body

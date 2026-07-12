@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import secrets
 import time
@@ -18,6 +19,8 @@ from typing import Optional
 
 from websockets.asyncio.client import connect as _ws_connect
 from websockets.exceptions import WebSocketException
+
+from .config import settings
 
 # token -> {charger_id, command, username, password, created_at}
 _PENDING: dict[str, dict] = {}
@@ -121,3 +124,62 @@ async def _run_ssh_command(
             return {"output": output, "exit_code": exit_code, "truncated": truncated}
     except (WebSocketException, OSError, asyncio.TimeoutError) as e:
         return {"error": f"{type(e).__name__}: {e}"}
+
+
+_audit = logging.getLogger("noc_mcp.ssh_audit")
+
+
+def _default_ws_url_builder(charger_id: str) -> str:
+    base = settings.noc_base_url.rstrip("/")
+    ws = base.replace("https://", "wss://").replace("http://", "ws://")
+    return f"{ws}/ws/ssh-terminal/{charger_id}"
+
+
+def _register_ssh_tools(mcp, client, ws_url_builder=None) -> None:
+    """Register the two-step SSH command tools onto ``mcp``."""
+    build_ws_url = ws_url_builder or _default_ws_url_builder
+
+    @mcp.tool
+    async def charger_ssh_prepare(
+        charger_id: str, command: str, ssh_username: str, ssh_password: str,
+    ) -> dict:
+        """STEP 1 of running a shell command on a LIVE charger over SSH. Does NOT execute —
+        it returns a one-time confirmation_token and a preview. You MUST show the user the
+        command + charger and get their explicit approval, then call charger_ssh_execute with
+        the token. This runs on real hardware; treat it as such."""
+        token = _mint_pending({
+            "charger_id": charger_id, "command": command,
+            "username": ssh_username, "password": ssh_password,
+        })
+        return {
+            "confirmation_token": token,
+            "charger_id": charger_id,
+            "command": command,
+            "expires_in_seconds": settings.ssh_pending_ttl_seconds,
+            "warning": ("Runs on a LIVE charger. Show this command to the user and get "
+                        "explicit approval before calling charger_ssh_execute."),
+        }
+
+    @mcp.tool
+    async def charger_ssh_execute(confirmation_token: str) -> dict:
+        """STEP 2: run the command from a charger_ssh_prepare the user approved. Requires the
+        one-time confirmation_token. Returns {charger_id, command, output, exit_code,
+        truncated} or {error}. Read-only servers reject this; this is the one write path."""
+        req = _pop_pending(confirmation_token, ttl=settings.ssh_pending_ttl_seconds)
+        if req is None:
+            return {"error": "Unknown, expired, or already-used confirmation_token. "
+                             "Call charger_ssh_prepare again and get user approval."}
+        token = await client._ensure_token()
+        result = await _run_ssh_command(
+            build_ws_url(req["charger_id"]), token, req["username"], req["password"],
+            req["command"],
+            connect_timeout=settings.ssh_connect_timeout,
+            command_timeout=settings.ssh_command_timeout,
+            max_bytes=settings.ssh_max_output_bytes,
+        )
+        _audit.info(
+            "ssh_execute charger=%s command=%r exit=%s bytes=%s",
+            req["charger_id"], req["command"],
+            result.get("exit_code"), len(result.get("output", "")),
+        )
+        return {"charger_id": req["charger_id"], "command": req["command"], **result}

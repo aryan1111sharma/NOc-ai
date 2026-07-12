@@ -113,3 +113,79 @@ async def test_run_ssh_command_times_out():
             f"{base}/ws/ssh-terminal/SLOW", "tok", "u", "p", "sleep 99",
             connect_timeout=5.0, command_timeout=1.0, max_bytes=100_000)
     assert "error" in res and "timed out" in res["error"]
+
+
+import httpx
+import logging
+from fastmcp import Client
+from noc_mcp.auth import NocAuthClient
+from noc_mcp.server import build_server
+
+
+def _noc_client():
+    """A NocAuthClient whose login returns a token (nothing else is called)."""
+    def handler(request):
+        return httpx.Response(200, json={"access_token": "noc.tok.jwt", "token_type": "bearer"})
+    return NocAuthClient(base_url="http://noc.test", email="e", password="p",
+                         transport=httpx.MockTransport(handler))
+
+
+def _server(base):
+    return build_server(
+        client=_noc_client(),
+        ssh_ws_url_builder=lambda cid: f"{base}/ws/ssh-terminal/{cid}",
+    )
+
+
+@pytest.mark.asyncio
+async def test_prepare_returns_token_without_connecting():
+    ssh_exec._PENDING.clear()
+    async with fake_ssh_server() as base:
+        async with Client(_server(base)) as c:
+            res = (await c.call_tool("charger_ssh_prepare", {
+                "charger_id": "NORMAL", "command": "uptime",
+                "ssh_username": "torizon", "ssh_password": "s3cret"})).data
+    assert res["charger_id"] == "NORMAL" and res["command"] == "uptime"
+    assert isinstance(res["confirmation_token"], str)
+    assert "password" not in str(res).lower() or "s3cret" not in str(res)  # secret not echoed
+    assert ssh_exec._PENDING  # stored server-side
+
+
+@pytest.mark.asyncio
+async def test_execute_runs_command_end_to_end():
+    ssh_exec._PENDING.clear()
+    async with fake_ssh_server() as base:
+        async with Client(_server(base)) as c:
+            prep = (await c.call_tool("charger_ssh_prepare", {
+                "charger_id": "NORMAL", "command": "uptime",
+                "ssh_username": "torizon", "ssh_password": "s3cret"})).data
+            res = (await c.call_tool("charger_ssh_execute",
+                                     {"confirmation_token": prep["confirmation_token"]})).data
+    assert res["exit_code"] == 0 and "up 3 days" in res["output"]
+    assert "s3cret" not in str(res)                 # password never in output
+
+
+@pytest.mark.asyncio
+async def test_execute_rejects_bad_token_without_connecting():
+    ssh_exec._PENDING.clear()
+    async with fake_ssh_server() as base:
+        async with Client(_server(base)) as c:
+            res = (await c.call_tool("charger_ssh_execute",
+                                     {"confirmation_token": "bogus"})).data
+    assert "error" in res
+
+
+@pytest.mark.asyncio
+async def test_execute_audit_logs_command_not_password(caplog):
+    ssh_exec._PENDING.clear()
+    async with fake_ssh_server() as base:
+        async with Client(_server(base)) as c:
+            prep = (await c.call_tool("charger_ssh_prepare", {
+                "charger_id": "NORMAL", "command": "uptime",
+                "ssh_username": "torizon", "ssh_password": "s3cret"})).data
+            with caplog.at_level(logging.INFO, logger="noc_mcp.ssh_audit"):
+                await c.call_tool("charger_ssh_execute",
+                                  {"confirmation_token": prep["confirmation_token"]})
+    audit = " ".join(r.getMessage() for r in caplog.records)
+    assert "uptime" in audit and "NORMAL" in audit
+    assert "s3cret" not in audit                    # password never audited

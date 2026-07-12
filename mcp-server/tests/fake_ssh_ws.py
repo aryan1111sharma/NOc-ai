@@ -28,7 +28,9 @@ async def _handler(ws):
         if msg.get("action") != "data" or "__QMCP_EXIT" not in msg.get("data", ""):
             continue
         if scenario == "SLOW":
-            await asyncio.sleep(30)  # client's command_timeout fires first
+            # Bounded so server teardown is fast; still far longer than the client's
+            # sub-second command_timeout, so the client times out first (the point of SLOW).
+            await asyncio.sleep(2)
             continue
         if scenario == "ANSI":
             out = "\x1b[32mroot@charger\x1b[0m:~# \r\nup 3 days\r\n__QMCP_EXIT_0__\r\n"

@@ -74,6 +74,18 @@ class CookieAuthClient(httpx.AsyncClient):
         if self._cookie_file:
             save_cookie(self._cookie_file, self._cookie)
 
+    def set_cookie(self, header: str) -> None:
+        """Replace the current session cookie and persist it to the cache file."""
+        self._cookie = header
+        if self._cookie_file:
+            save_cookie(self._cookie_file, header)
+
+    async def probe(self, path: str, cookie: str) -> httpx.Response:
+        """Raw GET with a candidate cookie, bypassing the refresh-on-logout logic — used to
+        validate a cookie before adopting it (so a bad cookie doesn't trigger a login)."""
+        request = self.build_request("GET", path, headers={"Cookie": cookie})
+        return await httpx.AsyncClient.send(self, request)
+
     async def send(self, request: httpx.Request, **kwargs) -> httpx.Response:
         sent = self._cookie
         if sent:

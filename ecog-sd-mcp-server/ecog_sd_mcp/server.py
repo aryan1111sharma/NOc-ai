@@ -137,3 +137,30 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
         data = await _get_json(client, "/rest/servicedeskapi/servicedesk")
         return [{"id": d.get("id"), "projectKey": d.get("projectKey"),
                  "projectName": d.get("projectName")} for d in data.get("values", [])]
+
+    @mcp.tool
+    async def sd_set_session_cookie(cookie: str) -> str:
+        """Update the Ecog session cookie when the read tools start failing with a
+        'session expired' error. Paste the full `cookie:` request-header value copied from a
+        browser logged into ecog.atlassian.net (DevTools → Network → any ecog.atlassian.net
+        request → Request Headers → `cookie`). The cookie is validated against Ecog before it
+        is accepted; a bad paste is rejected and the current session is kept. This sets local
+        auth only — it does not read or modify any Ecog ticket."""
+        c = cookie.strip()
+        if c.lower().startswith("cookie:"):
+            c = c.split(":", 1)[1].strip()
+        if not c or "=" not in c:
+            return ("That does not look like a cookie header. Paste the full 'cookie:' value, "
+                    "e.g. 'a=1; b=2; ...'.")
+        resp = await client.probe("/rest/servicedeskapi/servicedesk", c)
+        if resp.status_code != 200:
+            return (f"Rejected: that cookie did not authenticate (HTTP {resp.status_code}). "
+                    "Re-copy the full 'cookie:' header from a browser currently logged into "
+                    "ecog.atlassian.net and try again. The current session was left unchanged.")
+        try:
+            n = len(resp.json().get("values", []))
+        except Exception:
+            n = 0
+        client.set_cookie(c)
+        return (f"Ecog session updated and validated ({n} service desk(s) visible). "
+                "It should stay valid about 30 days.")

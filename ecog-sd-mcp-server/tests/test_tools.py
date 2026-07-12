@@ -115,6 +115,37 @@ async def test_only_read_tools_registered():
     mcp = build_server(client=_client(handler))
     names = {t.name for t in await mcp.list_tools()}
     assert names == {"sd_list_requests", "sd_get_request",
-                     "sd_get_request_comments", "sd_list_servicedesks"}
+                     "sd_get_request_comments", "sd_list_servicedesks",
+                     "sd_set_session_cookie"}
     forbidden = ("create", "update", "delete", "add", "edit", "post", "transition", "close")
     assert not [n for n in names if any(f in n for f in forbidden)]
+
+
+@pytest.mark.asyncio
+async def test_sd_set_session_cookie_valid_updates_client():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("cookie") == "new=1":
+            return httpx.Response(200, json={"values": [{"id": "1"}, {"id": "2"}]})
+        return httpx.Response(401, json={})
+    from ecog_sd_mcp.auth import CookieAuthClient
+    client = CookieAuthClient(base_url="https://ecog.test", cookie="old=1",
+                              transport=httpx.MockTransport(handler))
+    mcp = build_server(client=client)
+    async with Client(mcp) as c:
+        res = await c.call_tool("sd_set_session_cookie", {"cookie": "new=1"})
+    assert "updated and validated" in res.data
+    assert client._cookie == "new=1"
+
+
+@pytest.mark.asyncio
+async def test_sd_set_session_cookie_invalid_is_rejected_and_keeps_old():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={})
+    from ecog_sd_mcp.auth import CookieAuthClient
+    client = CookieAuthClient(base_url="https://ecog.test", cookie="old=1",
+                              transport=httpx.MockTransport(handler))
+    mcp = build_server(client=client)
+    async with Client(mcp) as c:
+        res = await c.call_tool("sd_set_session_cookie", {"cookie": "bad=1"})
+    assert "Rejected" in res.data
+    assert client._cookie == "old=1"

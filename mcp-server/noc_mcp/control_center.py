@@ -32,5 +32,11 @@ async def _proxy_get(client, charger_id: str, port: int, path: str) -> dict:
 
 def _register_control_center_tools(mcp, client) -> None:
     """Register the curated Tier-1 on-charger tools onto ``mcp``."""
-    # tools are added in later tasks
-    return None
+
+    @mcp.tool
+    async def charger_get_charging_status(charger_id: str, gun_id: Optional[int] = None) -> dict:
+        """Live charging status for a charger (by NOC charger_id): per-gun connected/PLC/OCPP
+        state. Pass gun_id for a single gun. The charger must be ONLINE. Read-only."""
+        path = ("api/v1/charging/status" if gun_id is None
+                else f"api/v1/charging/status/{gun_id}")
+        return await _proxy_get(client, charger_id, 8003, path)

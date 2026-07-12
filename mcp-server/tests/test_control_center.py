@@ -54,3 +54,24 @@ async def test_proxy_get_returns_error_on_offline():
     async with _client(handler) as c:
         out = await _proxy_get(c, "OFFLINE", 8003, "api/v1/charging/status")
     assert "error" in out and out["port"] == 8003 and out["path"] == "api/v1/charging/status"
+
+
+from fastmcp import Client
+from tests.fake_noc import build_test_server
+
+
+@pytest.mark.asyncio
+async def test_charging_status_fleet_and_per_gun():
+    async with Client(build_test_server()) as client:
+        fleet = await client.call_tool("charger_get_charging_status", {"charger_id": "CHG-1"})
+        gun = await client.call_tool(
+            "charger_get_charging_status", {"charger_id": "CHG-1", "gun_id": 1})
+    assert fleet.data == {"guns": [{"gun_id": 1, "connected": True, "plc_state": "C"}]}
+    assert gun.data == {"gun_id": 1, "connected": True, "plc_state": "C"}
+
+
+@pytest.mark.asyncio
+async def test_charging_status_offline_returns_error():
+    async with Client(build_test_server()) as client:
+        res = await client.call_tool("charger_get_charging_status", {"charger_id": "OFFLINE"})
+    assert "error" in res.data and res.data["port"] == 8003

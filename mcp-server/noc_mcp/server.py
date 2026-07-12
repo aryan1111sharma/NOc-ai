@@ -108,10 +108,11 @@ def _register_control_center_catalog(mcp: FastMCP) -> None:
         return catalog
 
 
-def build_server() -> FastMCP:
+def build_server(client: NocAuthClient | None = None) -> FastMCP:
+    client = client or build_client()
     mcp = FastMCP.from_openapi(
         openapi_spec=load_spec(),
-        client=build_client(),
+        client=client,
         name="QuenchNOC Assistant (read-only)",
         route_maps=_ROUTE_MAPS,
     )

@@ -1,4 +1,4 @@
 fastmcp>=3.4
 httpx>=0.28
 pydantic-settings>=2.0
-playwright>=1.48
+playwright==1.48.0   # MUST match the Dockerfile's playwright base image (v1.48.0-jammy) — the image ships browsers for this exact version

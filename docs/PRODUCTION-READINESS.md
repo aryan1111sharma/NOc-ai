@@ -98,9 +98,15 @@ plus the **role-based access-control** workstream.
 
 ## P2 — Reliability & operations
 
-- [ ] **P2-1 — Health checks.** `healthcheck:` per compose service + a health/ping endpoint
-  on both MCP servers; gate `depends_on` on health.
-  *Accept:* `docker compose ps` shows healthy states; API waits for MCP health.
+- [ ] **P2-1 — Health checks + upstream-backend surfacing.** `healthcheck:` per compose service +
+  a health/ping endpoint on both MCP servers; gate `depends_on` on health. Also surface **upstream
+  backend** reachability (NOC / legacy CMS), not just the MCP process.
+  *Accept:* `docker compose ps` shows healthy states; API waits for MCP health; a down upstream is
+  visible without hand-probing.
+  > *Evidence (live probe, 2026-07-12):* the legacy CMS backend `https://quenchcms.com` returned
+  > **HTTP 503 on every attempt**, so all 6 CMS tools failed at login — invisible until manually
+  > probed. A process-only healthcheck would have shown CMS "healthy". Reinforces the need to
+  > surface *upstream* health (and ties to **P2-3** alerting on NOC/CMS auth failures).
 - [ ] **P2-2 — Centralized logging + tool-call audit trail** (who / which tool / which
   charger), especially for the live-charger proxy.
   *Accept:* a tool call is traceable to a user + target in the logs.
@@ -124,9 +130,16 @@ plus the **role-based access-control** workstream.
   and **running green on GitHub Actions** (it correctly caught a real import bug red, then went
   green after the fix). **Remaining (manual, GitHub UI):** enable branch protection → required
   checks `pytest (mcp-server)` / `pytest (cms-mcp-server)` so red checks block merge.
-- [ ] **P3-2 — Tool-name cleanup.** Apply `mcp_names`/`mcp_component_fn` to the 153 verbose
-  auto-names (`mcp-server/README.md:81-83`) for better LLM tool selection.
-  *Accept:* tools expose concise names; tests updated; agent still selects correctly.
+- [ ] **P3-2 — Tool-name cleanup + de-dup overlapping tools.** Apply `mcp_names`/`mcp_component_fn`
+  to the verbose auto-names (`mcp-server/README.md:81-83`) for better LLM tool selection, and
+  resolve **near-duplicate tools** that invite wrong-tool selection.
+  *Accept:* tools expose concise names; overlapping pairs are disambiguated or pruned; tests
+  updated; agent still selects correctly.
+  > *Evidence (live probe, 2026-07-12):* NOC registers **154 tools**; the probe surfaced concrete
+  > confusable pairs the model could pick wrong between — `get_control_center_api_catalog` vs
+  > `get_endpoints_catalog_api_v1_admin_endpoints_catalog_get`; **two** `dashboard_summary` tools
+  > (`…api_v1_dashboard_summary_get` vs `…api_v1_monitoring_dashboard_summary…`); and multiple
+  > `proxy`-named tools. Disambiguation matters as much as brevity here.
 - [ ] **P3-3 — OpenAPI spec freshness check** for bundled `noc_openapi.json` vs. live backend.
   *Accept:* CI (or a script) flags drift between bundled spec and backend.
 - [ ] **P3-4 — Agent config as code.** The LibreChat Agent (endpoint/tools/system prompt) is
@@ -143,6 +156,11 @@ plus the **role-based access-control** workstream.
   levels for reference: ① in-memory tool tests · ② MCP Inspector `fastmcp dev` · ③ http transport
   probe · ④ end-to-end in LibreChat.) *Accept:* every CMS tool + NOC catalog/proxy tool has a test;
   suite runs offline and is in the **P3-1** gate.
+  > *Note (live probe, 2026-07-12):* an in-container FastMCP in-memory `Client` smoke test confirmed
+  > **NOC healthy end-to-end** (154 tools; `dashboard_summary` returned live `{total, online,
+  > offline, by_controller}`) and **CMS = 6 tools** (not 7 as first stated) that register + fail
+  > *gracefully* on the upstream 503. That was a *live* smoke test; **P3-6 must still be the offline
+  > `MockTransport` kind** so it catches code regressions when backends are down.
 - [ ] **P3-7 — Injectable backend client (testability enabler for P3-6).** `build_server()`
   hardcodes `build_client()`, so tools can't be tested against a mock. Make `build_server(client=…)`
   accept an injected client (both servers). *Accept:* `build_server(client=mock)` works and **P3-6**

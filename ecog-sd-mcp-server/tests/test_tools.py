@@ -103,3 +103,14 @@ async def test_sd_list_servicedesks():
 
     assert res.data == [{"id": "1", "projectKey": "SASW", "projectName": "Support"},
                         {"id": "2", "projectKey": "HW", "projectName": "Hardware"}]
+
+
+@pytest.mark.asyncio
+async def test_only_read_tools_registered():
+    def handler(request): return httpx.Response(200, json={"values": []})
+    mcp = build_server(client=_client(handler))
+    names = {t.name for t in await mcp.list_tools()}
+    assert names == {"sd_list_requests", "sd_get_request",
+                     "sd_get_request_comments", "sd_list_servicedesks"}
+    forbidden = ("create", "update", "delete", "add", "edit", "post", "transition", "close")
+    assert not [n for n in names if any(f in n for f in forbidden)]

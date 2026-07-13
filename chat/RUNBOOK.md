@@ -64,6 +64,26 @@ MCP tools only work through a LibreChat **Agent**, not the bare GLM endpoint:
 
 **Test prompt:** "How many chargers are online vs offline?" → should call `dashboard_summary`.
 
+## Agents — capture & restore (config as code)
+
+Agents live in **MongoDB**, so `docker compose down -v` wipes them (the Artifacts toggle,
+context-window size, curated tool list, and system prompt all disappear). Capture them to git
+and restore after a fresh start with the scripts in **`chat/agents/`**:
+
+| When | Command (from `chat/agents/`) |
+|---|---|
+| After changing an agent in the UI — capture it to git | `./export-agents.ps1`  (bash: `./export-agents.sh`) |
+| After a fresh `up`, once the admin user is registered — recreate agents | `./restore-agents.ps1`  (bash: `./restore-agents.sh`) |
+
+- **What's captured** (`agents.json`): the full agent — model, **Artifacts** setting,
+  **maxContextTokens**, the tool list (including docgen), and instructions. The owner is stored
+  as an **email**, not a raw ObjectId, so it re-links correctly on a fresh database.
+- **Owner resolution on restore:** matches the emailed owner, falling back to the first `ADMIN`
+  user — so **register the admin first**, then restore.
+- **Idempotent:** re-running `restore` updates in place. Commit `agents.json` whenever it changes.
+- `agents.json` captures **every** agent in the DB — delete any test/junk agents in the UI and
+  re-export to keep the committed config clean.
+
 ## Admin Panel — roles & access control
 
 The **Admin Panel** (LibreChat's admin GUI) manages custom **roles**, **groups**, and

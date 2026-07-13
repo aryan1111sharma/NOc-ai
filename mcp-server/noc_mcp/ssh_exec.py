@@ -62,15 +62,32 @@ def _strip_ansi(text: str) -> str:
 
 def _parse_output(raw: str, command: str) -> tuple[str, Optional[int]]:
     """From accumulated PTY output, strip ANSI, split off the sentinel to get the exit code,
-    and drop a leading echoed-command line if the PTY echoed it."""
+    and strip the interactive-shell noise a real PTY wraps around the output.
+
+    A live login shell echoes: a login banner, ``<prompt>$ <command>``, the actual output,
+    then ``<prompt>$ echo __QMCP_EXIT_$?__``. We keep only the lines between the echoed
+    command and the sentinel.
+    """
     clean = _strip_ansi(raw).replace("\r\n", "\n").replace("\r", "\n")
     m = _SENTINEL_RE.search(clean)
     exit_code = int(m.group(1)) if m else None
     body = clean[: m.start()] if m else clean
     lines = body.split("\n")
-    if lines and lines[0].strip() == command.strip():   # PTY echoed the typed command
-        lines = lines[1:]
-    return "\n".join(lines).strip(), exit_code
+    cmd = command.strip()
+    # Output starts after the PTY-echoed command line (prompt + command / bare command).
+    start = 0
+    for i, ln in enumerate(lines):
+        s = ln.rstrip()
+        if s == cmd or (s.endswith(cmd) and any(p in s for p in ("$", "#", ">"))):
+            start = i + 1
+            break
+    out = lines[start:]
+    # Drop trailing prompt / echoed-sentinel / blank lines the shell leaves behind.
+    while out and (not out[-1].strip()
+                   or "__QMCP_EXIT" in out[-1]
+                   or out[-1].rstrip().endswith(("$", "#", ">"))):
+        out.pop()
+    return "\n".join(out).strip(), exit_code
 
 
 async def _run_ssh_command(

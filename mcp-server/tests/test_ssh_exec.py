@@ -59,6 +59,18 @@ def test_parse_output_missing_sentinel_returns_none_code():
     assert code is None and "partial output" in body
 
 
+def test_parse_output_strips_login_banner_and_prompts():
+    # Real captured shape from a live Torizon login shell (qflex-neo-240 smoke test).
+    raw = ("Last login: Sun Jul 12 06:54:45 2026 from ::1\r\n\r\n"
+           "torizon@verdin-imx8mp:~$ uptime\r\n"
+           " 05:16:20 up 2 days, 14:16,  2 users,  load average: 1.85, 1.79, 1.77\r\n"
+           "torizon@verdin-imx8mp:~$ echo __QMCP_EXIT_$?__\r\n__QMCP_EXIT_0__\r\n")
+    body, code = ssh_exec._parse_output(raw, command="uptime")
+    assert code == 0
+    assert body == "05:16:20 up 2 days, 14:16,  2 users,  load average: 1.85, 1.79, 1.77"
+    assert "Last login" not in body and "torizon@" not in body and "__QMCP_EXIT" not in body
+
+
 from tests.fake_ssh_ws import fake_ssh_server
 
 TO = dict(connect_timeout=5.0, command_timeout=5.0, max_bytes=100_000)

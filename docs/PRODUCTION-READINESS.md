@@ -436,6 +436,17 @@ Separate exploratory track (like **EPIC**, **EVT**).
 - [ ] **JR-5 — (Deferred) Write access decision.** Whether/where to allow create/transition, and
   under what guardrails (which tenant, which roles, GET-locked read stays the default elsewhere).
   *Accept:* explicit decision recorded before any write tool is built.
+- [ ] **JR-6 — (Future) Ecog Service Desk ticket creation.** Add the ability to raise Ecog
+  tickets from the assistant via the customer API (`POST /rest/servicedeskapi/request`; needs a
+  `sd_list_request_types` tool + a create tool). **Breaks the read-only guarantee of
+  `ecog-sd-mcp-server` — deliberate JR-5 decision required.** Risks: writing into a **vendor's**
+  tracker via an LLM (hallucinated/duplicate/wrong tickets damage the Ecog relationship); all
+  tickets filed as the shared cookie identity (Chitransh Jain). Decide the approach:
+  **(a) draft-only** — AI composes a well-formed ticket but does NOT submit; user submits in the
+  portal (zero write risk, read-only intact) — *recommended starting point*; or **(b) real create**
+  with safeguards: explicit confirm-in-chat before submit, request-type validation, audit logging
+  (P2-2), and role gating (engineer-only). *Accept:* approach chosen + (if b) confirm/audit/gating
+  in place and a test proving unconfirmed calls don't submit.
 
 ## RCA — Autonomous alarm-triage / root-cause agent (exploratory)
 

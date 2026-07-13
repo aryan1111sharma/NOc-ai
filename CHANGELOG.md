@@ -5,6 +5,25 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.4.2] - 2026-07-13
+
+### Features
+
+- **noc:** Add charger_ssh_prepare + charger_ssh_execute (two-step, audited) ([`7b4195a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7b4195a7bfcd6a1d05645706ef052d1d21747932))
+- **agents:** Capture agents as config-as-code with export/restore (P3-4) ([`8909d6f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8909d6f259b84453480c53c6c4a3e92c811f2a4a))
+
+### Bug Fixes
+
+- **noc:** SSH exit-code survives truncation; wire up audit logging ([`ca7f08d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ca7f08d69d60c194a65cd274579f08055502485e))
+
+### Documentation
+
+- **noc:** Document the two-step SSH command-execution tools ([`281fa88`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/281fa880765985429e4ebd508eaafe55cb4e5e69))
+
+### Testing
+
+- **noc:** Bound fake SSH SLOW sleep (30s -> 2s) so suite teardown is fast ([`06d8c97`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/06d8c9712a1323ca6a7001701015330631bf949e))
+
 ## [0.4.1] - 2026-07-12
 
 ### Features

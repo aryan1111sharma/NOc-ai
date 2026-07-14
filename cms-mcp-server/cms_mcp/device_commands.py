@@ -64,7 +64,8 @@ def is_safe_log_path(path: str) -> bool:
 
 def resolve_path(api_template: str, args: Optional[dict]) -> str:
     """Substitute {placeholders} in a catalog API template. Raises ValueError if any
-    placeholder is unfilled."""
+    placeholder is unfilled, or if a value contains a path separator / '..' (which
+    could smuggle extra path segments and escape the intended endpoint)."""
     args = args or {}
     holes = _PLACEHOLDER_RE.findall(api_template)
     missing = [h for h in holes if h not in args]
@@ -73,7 +74,11 @@ def resolve_path(api_template: str, args: Optional[dict]) -> str:
             f"command '{api_template}' needs args for: {', '.join(missing)}")
     out = api_template
     for h in holes:
-        out = out.replace("{" + h + "}", str(args[h]))
+        val = str(args[h])
+        if "/" in val or "\\" in val or ".." in val:
+            raise ValueError(
+                f"arg '{h}' must be a single path segment (no '/', '\\', or '..'): {val!r}")
+        out = out.replace("{" + h + "}", val)
     return out
 
 

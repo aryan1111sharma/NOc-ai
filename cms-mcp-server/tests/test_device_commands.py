@@ -80,3 +80,14 @@ def test_pending_token_single_use_and_expiry():
     token2 = dc._mint_pending({"charger": "y"})
     dc._PENDING[token2]["created_at"] -= 999
     assert dc._pop_pending(token2, ttl=120) is None
+
+
+def test_resolve_path_rejects_arg_injection():
+    from cms_mcp.device_commands import resolve_path
+    import pytest as _pytest
+    for bad in ["1/../reset", "1/2", r"a\b", ".."]:
+        with _pytest.raises(ValueError) as ei:
+            resolve_path("outlets/{number}/stop", {"number": bad})
+        assert "number" in str(ei.value)
+    # a normal single-segment value still works
+    assert resolve_path("outlets/{number}/stop", {"number": 3}) == "outlets/3/stop"

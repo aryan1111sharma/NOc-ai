@@ -5,6 +5,18 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.4.3] - 2026-07-14
+
+### Bug Fixes
+
+- **noc:** Strip PTY login banner/prompts/echoed-command from SSH output ([`2424245`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2424245b66cac7f96c5872d8da135107e863ce55))
+- **cms:** Ride through transient backend flaps with backoff retry ([`8d38efc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8d38efcfab4fae43e2a5c6f343691bfbcbbfdeb5))
+
+### Documentation
+
+- **backlog:** JR-6 — Ecog Service Desk ticket creation (future, draft-first) ([`db6e94a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/db6e94a27bcf776f7792d3b41580efd27f9d20e1))
+- **cms:** Spec for transient-flap resilience in CmsAuthClient ([`03f0d68`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/03f0d68e959c7969d21d7a29ff8e168643ccd8a4))
+
 ## [0.4.2] - 2026-07-13
 
 ### Features

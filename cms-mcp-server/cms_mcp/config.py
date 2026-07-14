@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     cms_pass: str
     request_timeout: float = 90.0  # legacy actions return large payloads
 
+    # Device-command tools (ExecuteApi / ReadJsonLogFile).
+    device_poll_timeout: float = 20.0       # max wait for an async execution result
+    device_poll_interval: float = 2.0       # delay between history polls
+    device_pending_ttl_seconds: int = 120   # single-use write-confirm token lifetime
+    device_audit_log_file: str | None = None  # audit sink; None -> stderr
+
     # MCP transport: "stdio" or "http"
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"

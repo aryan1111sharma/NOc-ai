@@ -19,6 +19,30 @@ import httpx
 
 _LOGIN_PATH = "/Home/GetUsersByEmailAndPassword"
 
+# Backoff (seconds) before each retry of a transient failure. Its length is the number of
+# extra attempts after the first, so N delays => N+1 total tries. The legacy CMS backend is
+# known to flap briefly (302-to-login or 5xx); these short retries ride through that without
+# making a genuine outage feel slow.
+_RETRY_DELAYS = (0.5, 1.5)
+
+
+class CmsUnavailableError(RuntimeError):
+    """Raised when a CMS request keeps failing transiently after re-login and retries.
+
+    Signals a (likely temporary) backend problem — not a code, credential, or permission
+    fault — so callers/agents get an accurate, actionable message instead of a raw redirect
+    error that reads like an auth failure.
+    """
+
+    def __init__(self, request: httpx.Request, response: httpx.Response) -> None:
+        self.request = request
+        self.response = response
+        super().__init__(
+            f"CMS temporarily unavailable: '{request.url.path}' still returned "
+            f"{response.status_code} after re-login and retries. The legacy CMS backend "
+            f"appears to be flapping; retry shortly."
+        )
+
 
 class CmsAuthClient(httpx.AsyncClient):
     """httpx.AsyncClient that keeps a legacy-CMS session alive via form re-login."""
@@ -59,6 +83,11 @@ class CmsAuthClient(httpx.AsyncClient):
                 if not self._logged_in:
                     await self._login()
 
+    async def _relogin(self) -> None:
+        async with self._lock:
+            self._logged_in = False
+            await self._login()
+
     @staticmethod
     def _looks_logged_out(resp: httpx.Response) -> bool:
         # Session expired -> MVC redirects to the login page, or serves HTML instead of JSON.
@@ -67,23 +96,39 @@ class CmsAuthClient(httpx.AsyncClient):
         ctype = resp.headers.get("content-type", "")
         return "text/html" in ctype
 
-    async def send(self, request: httpx.Request, **kwargs) -> httpx.Response:
-        is_login = request.url.path.endswith(_LOGIN_PATH)
-        if not is_login:
-            await self._ensure_login()
-            # httpx bakes the Cookie header at build time (before login ran), so apply the
-            # session cookies onto this request explicitly.
-            self.cookies.set_cookie_header(request)
+    @classmethod
+    def _is_transient(cls, resp: httpx.Response) -> bool:
+        # A brief backend flap looks like a login redirect / HTML, or a 5xx server error.
+        return cls._looks_logged_out(resp) or resp.status_code >= 500
 
+    async def send(self, request: httpx.Request, **kwargs) -> httpx.Response:
+        if request.url.path.endswith(_LOGIN_PATH):
+            return await super().send(request, **kwargs)
+
+        await self._ensure_login()
+        # httpx bakes the Cookie header at build time (before login ran), so apply the
+        # session cookies onto this request explicitly.
+        self.cookies.set_cookie_header(request)
         resp = await super().send(request, **kwargs)
 
-        if not is_login and self._looks_logged_out(resp):
+        # Transient failure (expired session or a backend flap): re-establish the session and
+        # retry, with backoff, up to the retry budget. Re-login is the correct recovery for
+        # both causes; it is guarded so a login that itself fails mid-flap doesn't abort the
+        # loop. All CMS data calls are read-only/idempotent, so retrying is safe.
+        for delay in _RETRY_DELAYS:
+            if not self._is_transient(resp):
+                return resp
             await resp.aread()
             await resp.aclose()
-            async with self._lock:
-                self._logged_in = False
-                await self._login()
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                await self._relogin()
+            except Exception:
+                pass  # backend may be mid-flap; let the next attempt try again
             self.cookies.set_cookie_header(request)
             resp = await super().send(request, **kwargs)
 
+        if self._is_transient(resp):
+            raise CmsUnavailableError(request, resp)
         return resp

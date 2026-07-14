@@ -200,3 +200,60 @@ async def test_action_prepare_then_execute_schedules(monkeypatch):
     token = prep.data["confirmation_token"]
     res = await _call("cms_run_device_action_execute", confirmation_token=token)
     assert "scheduled successfully" in str(res.data)
+
+
+@pytest.mark.asyncio
+async def test_execute_api_not_retried_on_transient_flap():
+    """A transient flap on the ExecuteApi WRITE must not be retried (would double-fire)."""
+    from cms_mcp import device_commands as dc
+    from cms_mcp.auth import CmsUnavailableError
+    calls = {"execute": 0}
+
+    def handler(request):
+        if request.url.path.endswith("/Home/GetUsersByEmailAndPassword"):
+            return _login_ok(request)
+        if request.url.path.endswith("/ExecuteApi"):
+            calls["execute"] += 1
+            return httpx.Response(502, text="flap")   # transient
+        return httpx.Response(200, json=[])
+
+    async with CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                             transport=httpx.MockTransport(handler)) as c:
+        with pytest.raises(CmsUnavailableError):
+            await dc._post_wrapped(c, dc._EXECUTE_PATH, "vvm",
+                                   {"ChargerID": 1, "ApiID": 1}, idempotent=False)
+    assert calls["execute"] == 1   # fired exactly once, NOT retried
+
+
+@pytest.mark.asyncio
+async def test_idempotent_post_still_retries_on_flap():
+    """Read-via-POST calls must KEEP retrying a transient flap (v0.4.3 behavior)."""
+    from cms_mcp import device_commands as dc
+    calls = {"n": 0}
+
+    def handler(request):
+        if request.url.path.endswith("/Home/GetUsersByEmailAndPassword"):
+            return _login_ok(request)
+        if request.url.path.endswith("/ReadJsonLogFile"):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return httpx.Response(502, text="flap")   # transient once
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(200, json=[])
+
+    async with CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                             transport=httpx.MockTransport(handler)) as c:
+        out = await dc._read_log(c, r"E:\ApiResponses\r.txt")
+    assert out == {"ok": True}
+    assert calls["n"] == 2   # retried after the flap
+
+
+def test_resolve_path_rejects_percent_and_unicode():
+    from cms_mcp.device_commands import resolve_path
+    import pytest as _pytest
+    for bad in ["..%2f..%2freset", "1%2e%2e", "1⁄reset"]:  # %-encoded / unicode slash
+        with _pytest.raises(ValueError):
+            resolve_path("outlets/{number}/stop", {"number": bad})
+    # a legit dotted script name (named GET read) still resolves
+    assert resolve_path("scripts/installed/{script}", {"script": "foo.py"}) == \
+        "scripts/installed/foo.py"

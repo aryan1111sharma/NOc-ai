@@ -8,7 +8,8 @@ The old NOC has no token API — it authenticates via a form login that sets For
 * re-logs-in once when the session has expired (a protected action redirects to login or
   returns the HTML login page instead of JSON), then retries.
 
-All data calls are GETs (read-only, idempotent), so retrying after re-login is safe.
+Read/idempotent calls are retried on a transient flap; non-idempotent writes (ExecuteApi)
+opt out via an X-CMS-No-Retry header so a flap never double-fires them.
 """
 
 from __future__ import annotations
@@ -113,12 +114,26 @@ class CmsAuthClient(httpx.AsyncClient):
         # httpx bakes the Cookie header at build time (before login ran), so apply the
         # session cookies onto this request explicitly.
         self.cookies.set_cookie_header(request)
+
+        # Non-idempotent (write) requests carry X-CMS-No-Retry. Retrying a write after a
+        # transient flap could double-fire a command the backend already executed, so we
+        # send it exactly once. Strip the marker first so it is never sent upstream.
+        no_retry = "x-cms-no-retry" in request.headers
+        if no_retry:
+            del request.headers["x-cms-no-retry"]
+
         resp = await super().send(request, **kwargs)
 
-        # Transient failure (expired session or a backend flap): re-establish the session and
-        # retry, with backoff, up to the retry budget. Re-login is the correct recovery for
-        # both causes; it is guarded so a login that itself fails mid-flap doesn't abort the
-        # loop. All CMS data calls are read-only/idempotent, so retrying is safe.
+        if no_retry:
+            if self._is_transient(resp):
+                raise CmsUnavailableError(request, resp)
+            return resp
+
+        # Transient failure on an idempotent (read) call: re-establish the session and
+        # retry, with backoff, up to the retry budget. Re-login is the correct recovery
+        # for both an expired session and a backend flap; it is guarded so a login that
+        # itself fails mid-flap doesn't abort the loop. These calls are read-only/
+        # idempotent, so retrying is safe.
         for delay in _RETRY_DELAYS:
             if not self._is_transient(resp):
                 return resp

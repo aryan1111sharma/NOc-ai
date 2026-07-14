@@ -64,8 +64,9 @@ def is_safe_log_path(path: str) -> bool:
 
 def resolve_path(api_template: str, args: Optional[dict]) -> str:
     """Substitute {placeholders} in a catalog API template. Raises ValueError if any
-    placeholder is unfilled, or if a value contains a path separator / '..' (which
-    could smuggle extra path segments and escape the intended endpoint)."""
+    placeholder is unfilled, or if a value contains a path separator, '..', '%', or
+    non-ASCII/non-printable characters (which could smuggle extra path segments, via
+    literal or percent-encoded separators, and escape the intended endpoint)."""
     args = args or {}
     holes = _PLACEHOLDER_RE.findall(api_template)
     missing = [h for h in holes if h not in args]
@@ -75,9 +76,11 @@ def resolve_path(api_template: str, args: Optional[dict]) -> str:
     out = api_template
     for h in holes:
         val = str(args[h])
-        if "/" in val or "\\" in val or ".." in val:
+        if ("/" in val or "\\" in val or ".." in val or "%" in val
+                or not val.isascii() or not val.isprintable()):
             raise ValueError(
-                f"arg '{h}' must be a single path segment (no '/', '\\', or '..'): {val!r}")
+                f"arg '{h}' must be a single path segment "
+                f"(no '/', '\\', '..', '%', or non-ASCII characters): {val!r}")
         out = out.replace("{" + h + "}", val)
     return out
 
@@ -101,15 +104,18 @@ def _pop_pending(token: str, ttl: int) -> Optional[dict]:
     return req
 
 
-async def _post_wrapped(client, path: str, wrapper_key: str, obj: Any):
+async def _post_wrapped(client, path: str, wrapper_key: str, obj: Any, *,
+                        idempotent: bool = True):
     """POST a legacy `{<key>: <json>}` wrapper body (the unquoted-key shape the CMS
-    JS uses) with the AJAX + JSON content-type headers. Returns the raw response."""
+    JS uses) with the AJAX + JSON content-type headers. Returns the raw response.
+    Set idempotent=False for non-idempotent writes (ExecuteApi) so a transient flap
+    is surfaced (CmsUnavailableError) rather than retried — retrying would double-fire."""
     body = "{%s: %s}" % (wrapper_key, json.dumps(obj))
-    resp = await client.post(
-        path, content=body,
-        headers={"X-Requested-With": "XMLHttpRequest",
-                 "Content-Type": "application/json; charset=utf-8"},
-    )
+    headers = {"X-Requested-With": "XMLHttpRequest",
+               "Content-Type": "application/json; charset=utf-8"}
+    if not idempotent:
+        headers["X-CMS-No-Retry"] = "1"
+    resp = await client.post(path, content=body, headers=headers)
     resp.raise_for_status()
     return resp
 
@@ -211,7 +217,7 @@ def register_device_tools(mcp, client, charger_map: dict) -> None:
         vvm = {"ChargerID": cid, "ApiID": row["ApiID"], "Input": resolved,
                "API": resolved, "UpdatedBy": getattr(client, "user_id", 0)}
         baseline = await _baseline_execid(client, cid)
-        await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm)
+        await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm, idempotent=False)
         hit = await _await_result(
             client, cid, resolved, baseline,
             timeout=settings.device_poll_timeout, interval=settings.device_poll_interval)
@@ -275,7 +281,7 @@ def register_device_tools(mcp, client, charger_map: dict) -> None:
         vvm = {"ChargerID": cid, "ApiID": req["api_id"], "Input": req["resolved"],
                "API": req["resolved"], "UpdatedBy": getattr(client, "user_id", 0)}
         baseline = await _baseline_execid(client, cid)
-        resp = await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm)
+        resp = await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm, idempotent=False)
         _audit.info("device_execute charger=%s command=%r resolved=%r user=%s",
                     req["qcharger_id"], req["command"], req["resolved"],
                     getattr(client, "user_id", 0))

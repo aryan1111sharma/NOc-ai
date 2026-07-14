@@ -133,3 +133,70 @@ async def test_load_catalog_maps_api_to_row():
         cat = await dc._load_catalog(c, 1429)
     assert cat["id"]["ApiID"] == 1 and cat["id"]["ApiType"] == "GET"
     assert cat["reset"]["ApiID"] == 154
+
+
+from fastmcp import Client
+from fake_cms import build_test_server, reset_execution_state
+
+
+@pytest.fixture(autouse=True)
+def _reset_exec_state():
+    reset_execution_state()
+    yield
+    reset_execution_state()
+
+
+async def _call(name, **kw):
+    async with Client(build_test_server()) as client:
+        return await client.call_tool(name, kw)
+
+
+@pytest.mark.asyncio
+async def test_action_prepare_rejects_off_allowlist():
+    with pytest.raises(Exception) as ei:
+        await _call("cms_run_device_action_prepare",
+                    qcharger_id="ab-sam-sim", command="scripts/active")
+    assert "allow-list" in str(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_action_execute_rejects_bad_token():
+    res = await _call("cms_run_device_action_execute", confirmation_token="nope")
+    assert "error" in res.data
+
+
+@pytest.mark.asyncio
+async def test_query_rejects_write_command():
+    with pytest.raises(Exception) as ei:
+        await _call("cms_run_device_query", qcharger_id="ab-sam-sim", command="reset")
+    assert "read-only" in str(ei.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_read_device_log_path_guard():
+    with pytest.raises(Exception) as ei:
+        await _call("cms_read_device_log", qcharger_id="ab-sam-sim",
+                    path=r"E:\Windows\System32\x.txt")
+    msg = str(ei.value).lower()
+    assert "state-log" in msg or "path must" in msg
+
+
+@pytest.mark.asyncio
+async def test_query_end_to_end_reads_device_output(monkeypatch):
+    from cms_mcp.config import settings
+    monkeypatch.setattr(settings, "device_poll_interval", 0.01)
+    monkeypatch.setattr(settings, "device_poll_timeout", 2.0)
+    res = await _call("cms_run_device_query", qcharger_id="ab-sam-sim", command="id")
+    assert "device-ok" in str(res.data)
+
+
+@pytest.mark.asyncio
+async def test_action_prepare_then_execute_schedules(monkeypatch):
+    from cms_mcp.config import settings
+    monkeypatch.setattr(settings, "device_poll_interval", 0.01)
+    monkeypatch.setattr(settings, "device_poll_timeout", 2.0)
+    prep = await _call("cms_run_device_action_prepare",
+                       qcharger_id="ab-sam-sim", command="reset")
+    token = prep.data["confirmation_token"]
+    res = await _call("cms_run_device_action_execute", confirmation_token=token)
+    assert "scheduled successfully" in str(res.data)

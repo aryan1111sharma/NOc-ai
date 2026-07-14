@@ -4,6 +4,8 @@ Simulates login + every per-charger endpoint the new tools call, keyed to the
 sim charger ab-sam-sim (numeric ChargerID 1429).
 """
 
+import json
+
 import httpx
 
 from cms_mcp.auth import CmsAuthClient
@@ -59,12 +61,26 @@ _CATALOG = [
      "IsActive": True},
 ]
 
+# Stateful execution store for the ExecuteApi -> history -> ReadJsonLogFile cycle.
+# Seeded with the historical action-history row that test_tools.py asserts on.
+_EXECUTIONS = [dict(_ACTION_HIST["data"][0])]
+_NEXT_EXECID = [500000]
+_LOG_FILES = {_ACTION_HIST["data"][0]["Output"]: {"api": "id", "value": "device-ok"}}
+
+
+def reset_execution_state():
+    """Restore the execution store to its seed (the one historical row + its output)."""
+    _EXECUTIONS[:] = [dict(_ACTION_HIST["data"][0])]
+    _LOG_FILES.clear()
+    _LOG_FILES[_ACTION_HIST["data"][0]["Output"]] = {"api": "id", "value": "device-ok"}
+    _NEXT_EXECID[0] = 500000
+
+
 _ROUTES = {
     "/ChargerDetails/GetChargerDetailsByChargerID": _DETAILS,
     "/ChargerDetails/GetChargerStatusByChargerID": _STATUS,
     "/ChargerDetails/GetSessionLogsByChargerID": _SESSIONS,
     "/ChargerDetails/GetAlertLogsByChargerID": _ALERTS,
-    "/ChargerDetails/GetApiExecutionDetailsByID": _ACTION_HIST,
     "/ChargerDetails/GetAllApisByChargerID": _CATALOG,
 }
 
@@ -76,6 +92,23 @@ def _handler(request: httpx.Request) -> httpx.Response:
                               headers={"set-cookie": ".ASPXAUTH=abc; path=/"})
     if path.endswith("/GetChargerByCustomerIDForDD"):
         return httpx.Response(200, json=_CHARGERS)
+    if path.endswith("/ExecuteApi"):
+        vvm = json.loads(request.content.decode().replace("{vvm:", '{"vvm":', 1))["vvm"]
+        execid = _NEXT_EXECID[0]; _NEXT_EXECID[0] += 1
+        outpath = f"E:\\ApiResponses\\{execid}.txt"
+        _LOG_FILES[outpath] = {"api": vvm["API"], "value": "device-ok"}
+        _EXECUTIONS.insert(0, {
+            "Name": vvm["API"], "API": vvm["API"], "ApiType": "GET",
+            "Description": "Executed", "StatusID": 2, "ExecutionID": execid,
+            "strExecutedTime": "10/06/2026 12:48:25", "Output": outpath})
+        return httpx.Response(200, json="API scheduled successfully !")
+    if path.endswith("/GetApiExecutionDetailsByID"):
+        return httpx.Response(200, json={
+            "draw": 1, "iTotalRecords": len(_EXECUTIONS),
+            "iTotalDisplayRecords": len(_EXECUTIONS), "data": list(_EXECUTIONS)})
+    if path.endswith("/ReadJsonLogFile"):
+        p = json.loads(request.content.decode().replace("{Paths:", '{"Paths":', 1))["Paths"]
+        return httpx.Response(200, json=_LOG_FILES.get(p, "not found"))
     for suffix, payload in _ROUTES.items():
         if path.endswith(suffix):
             return httpx.Response(200, json=payload)

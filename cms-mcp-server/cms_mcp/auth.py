@@ -55,6 +55,7 @@ class CmsAuthClient(httpx.AsyncClient):
         self._password = password
         self._logged_in = False
         self._lock = asyncio.Lock()
+        self.user_id = 0
 
     async def _login(self) -> None:
         self.cookies.clear()
@@ -70,7 +71,10 @@ class CmsAuthClient(httpx.AsyncClient):
         )
         ok = False
         try:
-            ok = int(resp.json().get("UserID", 0)) >= 1
+            uid = int(resp.json().get("UserID", 0))
+            ok = uid >= 1
+            if ok:
+                self.user_id = uid
         except Exception:
             ok = False
         if not ok:

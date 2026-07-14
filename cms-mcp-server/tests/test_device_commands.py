@@ -91,3 +91,45 @@ def test_resolve_path_rejects_arg_injection():
         assert "number" in str(ei.value)
     # a normal single-segment value still works
     assert resolve_path("outlets/{number}/stop", {"number": 3}) == "outlets/3/stop"
+
+
+@pytest.mark.asyncio
+async def test_post_wrapped_builds_vvm_body():
+    seen = {}
+
+    def handler(request):
+        if request.url.path.endswith("/Home/GetUsersByEmailAndPassword"):
+            return _login_ok(request)
+        seen["body"] = request.content.decode()
+        seen["ctype"] = request.headers.get("content-type")
+        return httpx.Response(200, json="API scheduled successfully !")
+
+    from cms_mcp import device_commands as dc
+    async with CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                             transport=httpx.MockTransport(handler)) as c:
+        resp = await dc._post_wrapped(c, dc._EXECUTE_PATH, "vvm",
+                                      {"ChargerID": 5, "ApiID": 1})
+    assert resp.json() == "API scheduled successfully !"
+    assert seen["body"].startswith("{vvm: ")
+    assert '"ChargerID": 5' in seen["body"]
+    assert "application/json" in seen["ctype"]
+
+
+@pytest.mark.asyncio
+async def test_load_catalog_maps_api_to_row():
+    def handler(request):
+        if request.url.path.endswith("/Home/GetUsersByEmailAndPassword"):
+            return _login_ok(request)
+        if request.url.path.endswith("/GetAllApisByChargerID"):
+            return httpx.Response(200, json=[
+                {"ApiID": 1, "API": "id", "ApiType": "GET", "IsInputRequired": False},
+                {"ApiID": 154, "API": "reset", "ApiType": "POST", "IsInputRequired": False},
+            ])
+        return httpx.Response(404)
+
+    from cms_mcp import device_commands as dc
+    async with CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                             transport=httpx.MockTransport(handler)) as c:
+        cat = await dc._load_catalog(c, 1429)
+    assert cat["id"]["ApiID"] == 1 and cat["id"]["ApiType"] == "GET"
+    assert cat["reset"]["ApiID"] == 154

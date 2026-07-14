@@ -99,3 +99,68 @@ def _pop_pending(token: str, ttl: int) -> Optional[dict]:
     if req is None or time.time() - req["created_at"] > ttl:
         return None
     return req
+
+
+async def _post_wrapped(client, path: str, wrapper_key: str, obj: Any):
+    """POST a legacy `{<key>: <json>}` wrapper body (the unquoted-key shape the CMS
+    JS uses) with the AJAX + JSON content-type headers. Returns the raw response."""
+    body = "{%s: %s}" % (wrapper_key, json.dumps(obj))
+    resp = await client.post(
+        path, content=body,
+        headers={"X-Requested-With": "XMLHttpRequest",
+                 "Content-Type": "application/json; charset=utf-8"},
+    )
+    resp.raise_for_status()
+    return resp
+
+
+async def _load_catalog(client, charger_id: int) -> dict[str, dict]:
+    """Fetch the per-charger device-API catalog as {API-template: row}."""
+    rows = await _post_json(client, _CATALOG_PATH, data={"ChargerID": str(charger_id)})
+    out = {}
+    for r in rows:
+        api = r.get("API")
+        if api:
+            out[str(api)] = r
+    return out
+
+
+async def _read_log(client, path: str) -> Any:
+    """POST ReadJsonLogFile for a server-side path; parse JSON, else return raw text."""
+    resp = await _post_wrapped(client, _READLOG_PATH, "Paths", path)
+    try:
+        return resp.json()
+    except Exception:
+        return resp.text
+
+
+async def _history_rows(client, charger_id: int, n: int) -> list[dict]:
+    """Fetch the latest `n` execution-history rows; [] on empty/flap."""
+    try:
+        resp = await _post_json(client, _HISTORY_PATH,
+                                json=_datatables_body(charger_id, n))
+    except Exception:
+        return []
+    return resp.get("data", []) if isinstance(resp, dict) else []
+
+
+async def _baseline_execid(client, charger_id: int) -> int:
+    """Max ExecutionID for this charger right now (correlation baseline)."""
+    rows = await _history_rows(client, charger_id, 5)
+    return max((int(r.get("ExecutionID") or 0) for r in rows), default=0)
+
+
+async def _await_result(client, charger_id: int, resolved_api: str,
+                        baseline: int, *, timeout: float, interval: float) -> Optional[dict]:
+    """Poll history until our new row appears: ExecutionID > baseline, matching API
+    path, with a non-empty Output. Returns the row or None on timeout."""
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        await asyncio.sleep(interval)
+        for r in await _history_rows(client, charger_id, 10):
+            if (int(r.get("ExecutionID") or 0) > baseline
+                    and str(r.get("API")) == resolved_api
+                    and r.get("Output")):
+                return r
+    return None

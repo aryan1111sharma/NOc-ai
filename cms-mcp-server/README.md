@@ -1,8 +1,9 @@
 # noc-mcp-agent · cms-mcp-server
 
-A **read-only** MCP server for the **legacy CMS / old NOC** at **quenchcms.com** — some
+A mostly **read-only** MCP server for the **legacy CMS / old NOC** at **quenchcms.com** — some
 chargers still live only in this old system. It complements the current-NOC `mcp-server`;
-your assistant can query both.
+your assistant can query both. It also exposes a small, curated set of **gated, audited**
+device-command writes for on-charger recovery (see [Device commands (gated)](#device-commands-gated)).
 
 ## How it works
 
@@ -40,6 +41,10 @@ Alerts / Actions tabs.
 | `cms_get_charger_alerts` | GetAlertLogsByChargerID | recent alert/fault logs for the charger (source, outlet/gun, error id + desc, timestamp); `limit` default 10 |
 | `cms_get_charger_action_history` | GetApiExecutionDetailsByID | recent remote-command execution history (which API ran, type, status, when); read-only; `limit` default 10 |
 | `cms_list_charger_actions` | GetAllApisByChargerID | catalog of device API commands available for the charger (name, verb, description); read-only reference — never executes |
+| `cms_run_device_query` | ExecuteApi (schedule) + ReadJsonLogFile (poll) | read-only device diagnostic response for a GET command (e.g. `id`, `state`, `outlets`, `ocpp-client/config`) |
+| `cms_run_device_action_prepare` | GetAllApisByChargerID (validate against recovery allow-list) | STEP 1 of a gated write: one-time `confirmation_token` + command preview; does not execute |
+| `cms_run_device_action_execute` | ExecuteApi | STEP 2: runs the approved write command (requires the token from `_prepare`); audited |
+| `cms_read_device_log` | ReadJsonLogFile | contents of a session/alert state-log or command-output blob by its CMS file path |
 
 ## Setup / run
 
@@ -57,6 +62,30 @@ python -m pip install pytest pytest-asyncio && python -m pytest
   per-charger tools above; the numeric-`ChargerID` blocker was solved by resolving
   `QChargerID` via `GetChargerByCustomerIDForDD` (`CustomerID=0` returns the full fleet with
   both ids). Endpoint contracts were captured from the CMS `ChargerSession` frontend.
-- **Read-only by design:** the action *catalog* and *history* are exposed, but no tool wraps a
-  device-command execute endpoint (`reset`, `unplug`, `restartStack`, …). Adding write actions
-  would be a deliberate, separately-reviewed change.
+- **Read-only by design — superseded.** The action *catalog* and *history* were exposed first,
+  with no execute endpoint wrapped. Write actions have since shipped as a deliberate,
+  separately-reviewed change: a curated 8-command recovery allow-list behind a two-step
+  confirmation-token gate. See [Device commands (gated)](#device-commands-gated).
+
+## Device commands (gated)
+
+Beyond the read-only CMS tools, four tools run device commands over the old NOC
+`ExecuteApi` endpoint (see `docs/device-api-catalog.md` for the full 129-command
+catalog and `docs/superpowers/specs/2026-07-14-cms-device-command-tools-design.md`
+for the design):
+
+- **Reads** (`cms_run_device_query`) — any of the 60 GET diagnostics
+  (`id`, `version`, `state`, `outlets`, `ocpp-client/config`, …). One call
+  schedules, polls the execution history, and returns the device output.
+- **Writes** (`cms_run_device_action_prepare` → `_execute`) — a **two-step,
+  audited** gate over a curated 8-command recovery allow-list: `reset`,
+  `restartStack`, controller reboot, `ocpp-client` start/stop/restart,
+  `outlets/{number}/stop`, `services/rfid/clear`. **All other writes**
+  (scripts, docker, gpio/pwm, hmi, network config, e-stop, …) are
+  **hard-blocked in code** and unreachable even with a token.
+- **Logs** (`cms_read_device_log`) — read a session/alert `FullStatePath` /
+  `StateLogPath` blob; path is restricted to CMS state-log/result roots.
+
+`ExecuteApi` is asynchronous; results are correlated by `ExecutionID` and read
+back via `ReadJsonLogFile`. Every executed write is recorded to the
+`cms_mcp.device_audit` logger (`DEVICE_AUDIT_LOG_FILE` to persist to a file).

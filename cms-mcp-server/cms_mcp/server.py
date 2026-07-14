@@ -285,4 +285,7 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         """Service engineers registered in the old CMS (id, name, state)."""
         return await _get_json("/Customer/GetServiceEngineerList")
 
+    from .device_commands import register_device_tools
+    register_device_tools(mcp, client, _charger_map)
+
     return mcp

@@ -164,3 +164,137 @@ async def _await_result(client, charger_id: int, resolved_api: str,
                     and r.get("Output")):
                 return r
     return None
+
+
+_audit = logging.getLogger("cms_mcp.device_audit")
+
+
+def _configure_audit_logger() -> None:
+    """Attach a handler so device_audit records are emitted (idempotent). Audit is the
+    compensating control for the write path, so it must not be a silent no-op."""
+    if _audit.handlers:
+        return
+    _audit.setLevel(logging.INFO)
+    path = settings.device_audit_log_file
+    handler = logging.FileHandler(path, encoding="utf-8") if path else logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    _audit.addHandler(handler)
+
+
+def register_device_tools(mcp, client, charger_map: dict) -> None:
+    """Register the device-command tools onto `mcp`, sharing the server's charger map."""
+    _configure_audit_logger()
+
+    @mcp.tool
+    async def cms_run_device_query(
+        qcharger_id: str, command: str, args: Optional[dict] = None
+    ) -> dict:
+        """Run a READ-ONLY device diagnostic on ONE charger (by QChargerID) via the old
+        NOC and return the device's response. `command` is the exact API path from
+        cms_list_charger_actions (e.g. "id", "version", "state", "outlets",
+        "ocpp-client/config"); fill any {placeholder} via `args`
+        (e.g. command="outlets/{number}/state", args={"number": 1}). Only GET commands
+        are allowed — for writes use cms_run_device_action_prepare."""
+        cid = await _resolve_charger_id(client, qcharger_id, charger_map)
+        catalog = await _load_catalog(client, cid)
+        row = catalog.get(command)
+        if row is None:
+            near = sorted(k for k in catalog if command.split("/")[0] in k)[:5]
+            hint = f" Did you mean: {', '.join(near)}?" if near else ""
+            raise ValueError(f"Unknown command '{command}' for {qcharger_id}.{hint}")
+        if str(row.get("ApiType")) != "GET":
+            raise ValueError(
+                f"'{command}' is a {row.get('ApiType')} (write); cms_run_device_query "
+                f"runs read-only GET commands only. Use cms_run_device_action_prepare.")
+        resolved = resolve_path(command, args)
+        await client._ensure_login()
+        vvm = {"ChargerID": cid, "ApiID": row["ApiID"], "Input": resolved,
+               "API": resolved, "UpdatedBy": getattr(client, "user_id", 0)}
+        baseline = await _baseline_execid(client, cid)
+        await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm)
+        hit = await _await_result(
+            client, cid, resolved, baseline,
+            timeout=settings.device_poll_timeout, interval=settings.device_poll_interval)
+        if hit is None:
+            raise RuntimeError(
+                f"No result for '{command}' on {qcharger_id} within "
+                f"{settings.device_poll_timeout:.0f}s — the charger may be offline or the "
+                f"CMS is busy; retry shortly.")
+        return {
+            "qcharger_id": qcharger_id, "command": command,
+            "execution_id": hit.get("ExecutionID"), "status_id": hit.get("StatusID"),
+            "executed_at": hit.get("strExecutedTime"),
+            "result": await _read_log(client, hit["Output"]),
+        }
+
+    @mcp.tool
+    async def cms_run_device_action_prepare(
+        qcharger_id: str, command: str, args: Optional[dict] = None
+    ) -> dict:
+        """STEP 1 of running a WRITE command on a LIVE charger (by QChargerID). Does NOT
+        execute — validates the command against the recovery allow-list and returns a
+        one-time confirmation_token + preview. Show the user the command + charger, get
+        explicit approval, then call cms_run_device_action_execute with the token.
+        Allowed: reset, restartStack, controller reboot, ocpp-client start/stop/restart,
+        outlets/{number}/stop, services/rfid/clear."""
+        if command not in WRITE_ALLOWLIST:
+            raise ValueError(
+                f"'{command}' is not on the device-action allow-list. Allowed writes: "
+                f"{', '.join(sorted(WRITE_ALLOWLIST))}.")
+        cid = await _resolve_charger_id(client, qcharger_id, charger_map)
+        catalog = await _load_catalog(client, cid)
+        row = catalog.get(command)
+        if row is None:
+            raise ValueError(f"'{command}' is not in {qcharger_id}'s catalog.")
+        resolved = resolve_path(command, args)
+        token = _mint_pending({
+            "qcharger_id": qcharger_id, "charger_id": cid, "api_id": row["ApiID"],
+            "command": command, "resolved": resolved,
+        })
+        return {
+            "confirmation_token": token, "qcharger_id": qcharger_id,
+            "command": command, "resolved_path": resolved,
+            "expires_in_seconds": settings.device_pending_ttl_seconds,
+            "warning": ("Runs on a LIVE charger. Show this command to the user and get "
+                        "explicit approval before calling cms_run_device_action_execute."),
+        }
+
+    @mcp.tool
+    async def cms_run_device_action_execute(confirmation_token: str) -> dict:
+        """STEP 2: run the WRITE command from a cms_run_device_action_prepare the user
+        approved. Requires the one-time confirmation_token. Schedules the command on the
+        charger and returns the ack (+ execution_id if it resolves quickly)."""
+        req = _pop_pending(confirmation_token, ttl=settings.device_pending_ttl_seconds)
+        if req is None:
+            return {"error": "Unknown, expired, or already-used confirmation_token. "
+                             "Call cms_run_device_action_prepare again and get approval."}
+        if req["command"] not in WRITE_ALLOWLIST:   # defensive re-check
+            return {"error": f"'{req['command']}' is not on the allow-list."}
+        cid = req["charger_id"]
+        await client._ensure_login()
+        vvm = {"ChargerID": cid, "ApiID": req["api_id"], "Input": req["resolved"],
+               "API": req["resolved"], "UpdatedBy": getattr(client, "user_id", 0)}
+        baseline = await _baseline_execid(client, cid)
+        resp = await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm)
+        _audit.info("device_execute charger=%s command=%r resolved=%r user=%s",
+                    req["qcharger_id"], req["command"], req["resolved"],
+                    getattr(client, "user_id", 0))
+        ack = resp.json() if resp.text.strip() else ""
+        hit = await _await_result(client, cid, req["resolved"], baseline,
+                                  timeout=min(settings.device_poll_timeout, 10.0),
+                                  interval=settings.device_poll_interval)
+        return {"qcharger_id": req["qcharger_id"], "command": req["command"],
+                "resolved_path": req["resolved"], "ack": ack,
+                "execution_id": hit.get("ExecutionID") if hit else None}
+
+    @mcp.tool
+    async def cms_read_device_log(qcharger_id: str, path: str) -> Any:
+        """Read a session/alert state-log or command-output blob from the old NOC by its
+        server-side file path (the FullStatePath / StateLogPath / Output value returned by
+        cms_get_charger_sessions / _alerts / device tools). Read-only; path must be a known
+        CMS state-log/result file."""
+        if not is_safe_log_path(path):
+            raise ValueError(
+                "path must be a CMS state-log/result file under ApiResponses or a "
+                "*State_Logs root (e.g. E:\\ApiResponses\\r.txt).")
+        return await _read_log(client, path)

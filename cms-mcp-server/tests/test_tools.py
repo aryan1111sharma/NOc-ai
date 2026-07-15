@@ -1,9 +1,59 @@
 """Integration tests: drive each tool through the in-memory FastMCP client."""
 
+import httpx
 import pytest
 from fastmcp import Client
 
-from tests.fake_cms import build_test_server
+from cms_mcp.auth import CmsAuthClient
+from cms_mcp.server import build_server
+from tests.fake_cms import _handler, build_test_server
+
+
+def _recording_server():
+    """A test server whose every outbound (path, content-type) is recorded."""
+    seen: list[tuple[str, str]] = []
+
+    def recording(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.path, request.headers.get("content-type", "").lower()))
+        return _handler(request)
+
+    client = CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                           transport=httpx.MockTransport(recording))
+    return build_server(client), seen
+
+
+@pytest.mark.asyncio
+async def test_datatables_actions_are_posted_form_urlencoded():
+    """Regression: the legacy binder answers 200 + EMPTY BODY when a DataTables
+    action is labelled application/json, so these tools silently returned [] for
+    every charger in production while the suite stayed green. The live page posts
+    a JSON string under jQuery's urlencoded default -- pin that."""
+    server, seen = _recording_server()
+    async with Client(server) as c:
+        await c.call_tool("cms_get_charger_sessions", {"qcharger_id": "ab-sam-sim"})
+        await c.call_tool("cms_get_charger_alerts", {"qcharger_id": "ab-sam-sim"})
+        await c.call_tool("cms_get_charger_action_history", {"qcharger_id": "ab-sam-sim"})
+
+    for action in ("/GetSessionLogsByChargerID", "/GetAlertLogsByChargerID",
+                   "/GetApiExecutionDetailsByID"):
+        cts = [ct for path, ct in seen if path.endswith(action)]
+        assert cts, f"{action} was never called"
+        assert all("application/x-www-form-urlencoded" in ct for ct in cts), \
+            f"{action} must be form-urlencoded, got {cts}"
+
+
+@pytest.mark.asyncio
+async def test_readjsonlogfile_is_posted_as_json():
+    """The mirror image of the above: ReadJsonLogFile binds only application/json
+    (form-urlencoded gets the same silent empty body), so the two encodings are
+    per-endpoint and must not be 'unified'."""
+    server, seen = _recording_server()
+    async with Client(server) as c:
+        await c.call_tool("cms_read_device_log",
+                          {"qcharger_id": "ab-sam-sim", "path": "E:\\ApiResponses\\r.txt"})
+    cts = [ct for path, ct in seen if path.endswith("/ReadJsonLogFile")]
+    assert cts, "ReadJsonLogFile was never called"
+    assert all("application/json" in ct for ct in cts), cts
 
 
 @pytest.mark.asyncio

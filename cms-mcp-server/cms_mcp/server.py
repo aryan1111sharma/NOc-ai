@@ -7,6 +7,7 @@ whitelist of meaningful fields (dropping nulls/empties) to keep payloads LLM-fri
 
 from __future__ import annotations
 
+import json as jsonlib
 from typing import Any, Optional
 
 from fastmcp import FastMCP
@@ -110,6 +111,32 @@ def _datatables_body(charger_id: int, limit: int) -> dict:
     }
 
 
+async def _post_datatables(client, path: str, charger_id: int, limit: int) -> dict:
+    """POST a DataTables request to a legacy list action and return the parsed payload.
+
+    Content-type is load-bearing. The page's DataTables config passes
+    ``JSON.stringify(d)`` to ``$.ajax`` without setting ``contentType``, so jQuery
+    labels the JSON body with its urlencoded default -- and the legacy binder
+    accepts only that. Labelling the same bytes ``application/json`` makes the
+    action return 200 with an EMPTY body instead of an error, which reads as
+    "this charger has no rows" rather than as a failure. Keep this header.
+
+    Returns ``{}`` for an empty body (a CMS flap) so callers see no rows rather
+    than a JSON decode error.
+    """
+    resp = await client.post(
+        path, content=jsonlib.dumps(_datatables_body(charger_id, limit)),
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+    )
+    resp.raise_for_status()
+    if not resp.text.strip():
+        return {}
+    return resp.json()
+
+
 async def _load_charger_map(client) -> dict[str, int]:
     """Fetch the fleet-wide QChargerID(lower) -> numeric ChargerID map."""
     rows = await _post_json(
@@ -195,9 +222,8 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         old CMS: session events, outlet/gun, start time, duration, energy, and any
         session error. Returned in the CMS default order (newest first)."""
         cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
-        resp = await _post_json(
-            client, "/ChargerDetails/GetSessionLogsByChargerID",
-            json=_datatables_body(cid, limit))
+        resp = await _post_datatables(
+            client, "/ChargerDetails/GetSessionLogsByChargerID", cid, limit)
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _SESSION_FIELDS)[:limit]
 
@@ -208,9 +234,8 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         timestamp. Newest first. (For a fleet-wide alert feed use
         cms_get_recent_alerts instead.)"""
         cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
-        resp = await _post_json(
-            client, "/ChargerDetails/GetAlertLogsByChargerID",
-            json=_datatables_body(cid, limit))
+        resp = await _post_datatables(
+            client, "/ChargerDetails/GetAlertLogsByChargerID", cid, limit)
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _CHG_ALERT_FIELDS)[:limit]
 
@@ -222,9 +247,8 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
         from the old CMS: which device API was run, its type, execution status,
         and when. Read-only history — this does NOT run any command."""
         cid = await _resolve_charger_id(client, qcharger_id, _charger_map)
-        resp = await _post_json(
-            client, "/ChargerDetails/GetApiExecutionDetailsByID",
-            json=_datatables_body(cid, limit))
+        resp = await _post_datatables(
+            client, "/ChargerDetails/GetApiExecutionDetailsByID", cid, limit)
         rows = resp.get("data", []) if isinstance(resp, dict) else []
         return _trim(rows, _ACTION_HIST_FIELDS)[:limit]
 

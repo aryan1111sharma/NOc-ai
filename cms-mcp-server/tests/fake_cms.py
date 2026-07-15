@@ -2,6 +2,17 @@
 
 Simulates login + every per-charger endpoint the new tools call, keyed to the
 sim charger ab-sam-sim (numeric ChargerID 1429).
+
+Content-type is enforced per endpoint, mirroring the live CMS (verified against
+quenchcms.com 2026-07-15). The legacy MVC binder does not error on a wrong
+content-type -- it answers 200 with an EMPTY body -- so a fake that accepts any
+content-type lets a silently-broken tool pass its tests. It bit us once already:
+the DataTables tools shipped sending application/json and returned [] for every
+charger in production while these tests stayed green.
+
+  - DataTables actions (jQuery sends a JSON string with jQuery's *default*
+    content-type): application/x-www-form-urlencoded
+  - ExecuteApi / ReadJsonLogFile ($.ajax with an explicit contentType): application/json
 """
 
 import json
@@ -84,6 +95,22 @@ _ROUTES = {
     "/ChargerDetails/GetAllApisByChargerID": _CATALOG,
 }
 
+# Actions whose live counterpart only binds a jQuery-DataTables body, which jQuery
+# posts under its default content-type. Anything else -> 200 with an empty body.
+_DATATABLES_PATHS = (
+    "/GetSessionLogsByChargerID",
+    "/GetAlertLogsByChargerID",
+    "/GetApiExecutionDetailsByID",
+)
+
+# The live CMS's silent rejection: 200 OK, no body, no error.
+_SILENT_EMPTY = httpx.Response(200, content=b"",
+                               headers={"content-type": "application/json"})
+
+
+def _content_type(request: httpx.Request) -> str:
+    return request.headers.get("content-type", "").lower()
+
 
 def _handler(request: httpx.Request) -> httpx.Response:
     path = request.url.path
@@ -92,6 +119,12 @@ def _handler(request: httpx.Request) -> httpx.Response:
                               headers={"set-cookie": ".ASPXAUTH=abc; path=/"})
     if path.endswith("/GetChargerByCustomerIDForDD"):
         return httpx.Response(200, json=_CHARGERS)
+    if any(path.endswith(p) for p in _DATATABLES_PATHS):
+        if "application/x-www-form-urlencoded" not in _content_type(request):
+            return _SILENT_EMPTY
+    elif path.endswith("/ExecuteApi") or path.endswith("/ReadJsonLogFile"):
+        if "application/json" not in _content_type(request):
+            return _SILENT_EMPTY
     if path.endswith("/ExecuteApi"):
         vvm = json.loads(request.content.decode().replace("{vvm:", '{"vvm":', 1))["vvm"]
         execid = _NEXT_EXECID[0]; _NEXT_EXECID[0] += 1

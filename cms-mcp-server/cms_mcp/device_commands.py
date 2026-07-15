@@ -23,7 +23,7 @@ import time
 from typing import Any, Optional
 
 from .config import settings
-from .server import _resolve_charger_id, _post_json, _datatables_body
+from .server import _resolve_charger_id, _post_json, _post_datatables
 
 _EXECUTE_PATH = "/ChargerDetails/ExecuteApi"
 _HISTORY_PATH = "/ChargerDetails/GetApiExecutionDetailsByID"
@@ -143,8 +143,7 @@ async def _read_log(client, path: str) -> Any:
 async def _history_rows(client, charger_id: int, n: int) -> list[dict]:
     """Fetch the latest `n` execution-history rows; [] on empty/flap."""
     try:
-        resp = await _post_json(client, _HISTORY_PATH,
-                                json=_datatables_body(charger_id, n))
+        resp = await _post_datatables(client, _HISTORY_PATH, charger_id, n)
     except Exception:
         return []
     return resp.get("data", []) if isinstance(resp, dict) else []

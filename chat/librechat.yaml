@@ -58,8 +58,13 @@ mcpServers:
   cms:
     type: streamable-http
     url: "http://cms-mcp-server:8101/mcp"
-    # legacy CMS actions return large payloads; allow more time.
-    timeout: 90000
+    # Must exceed the device-command poll budget (device_poll_timeout, 90s): a live
+    # charger can take ~44s to answer under load, and a small fleet query runs several
+    # of those. At the old 90s this equalled the poll budget, so any full-budget query
+    # was killed by this client before the tool could return. 5 min gives a single
+    # charger and a modest fleet call real headroom. Large sweeps use a background
+    # script, not chat -- see scripts/firmware-inventory (both-NOC firmware export).
+    timeout: 300000
   jira:
     type: streamable-http
     url: "http://jira-mcp-server:8102/mcp"

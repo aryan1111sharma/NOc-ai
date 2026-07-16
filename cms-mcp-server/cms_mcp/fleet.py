@@ -73,3 +73,47 @@ async def load_fleet_status(client) -> dict[str, dict]:
             "online": ping is not None and (now_ms - ping) <= window_ms,
         }
     return out
+
+
+async def _query_one(client, sem: asyncio.Semaphore, qcharger_id: str,
+                     charger_id: int, command: str, args: Optional[dict],
+                     timeout: float) -> dict:
+    """One charger's result, classified. Never raises: a batch must survive any
+    single charger, and every failure mode is a reportable fact, not an error."""
+    row: dict = {"qcharger_id": qcharger_id, "result": None, "status": "error"}
+    async with sem:
+        try:
+            out = await query_device(client, charger_id, command, args, timeout=timeout)
+            row.update(status="ok", result=_unwrap(out.get("result")),
+                       execution_id=out.get("execution_id"),
+                       executed_at=out.get("executed_at"))
+        except CmsUnavailableError:
+            # The CMS flapped. Says nothing about the charger — retryable.
+            # MUST stay above `except RuntimeError`: CmsUnavailableError subclasses it,
+            # so reversing these two silently reclassifies every flap as a device fault.
+            row["status"] = "cms_error"
+        except RuntimeError:
+            # Scheduled, but the device never answered within the budget.
+            row["status"] = "timeout"
+        except ValueError as exc:
+            # This charger's catalog has no such command (ApiID is per-charger).
+            row["status"] = "unsupported"
+            row["detail"] = str(exc)
+        except Exception as exc:  # noqa: BLE001 - never let one charger fail the batch
+            row["detail"] = f"{type(exc).__name__}: {exc}"
+    return row
+
+
+async def fan_out(client, targets: dict[str, int], command: str,
+                  args: Optional[dict] = None, *,
+                  timeout: Optional[float] = None) -> list[dict]:
+    """Run `command` across {qcharger_id: charger_id}, bounded by fleet_concurrency.
+
+    Returns one classified row per target, in the order given. Concurrency is bounded
+    because the legacy CMS flaps under load — this is a safety limit, not a tuning knob.
+    """
+    sem = asyncio.Semaphore(settings.fleet_concurrency)
+    budget = timeout if timeout is not None else settings.device_poll_timeout
+    return list(await asyncio.gather(*(
+        _query_one(client, sem, qid, cid, command, args, budget)
+        for qid, cid in targets.items())))

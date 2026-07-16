@@ -217,12 +217,20 @@ async def test_firmware_tools_never_reach_a_write(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fleet_firmware_deduplicates_repeated_ids():
+    """Duplicates used to break the reconciliation invariant: `targets` is a dict (which
+    de-duplicates) while matched/eligible/over_cap were lists (which don't), so the counts
+    disagreed. `limit` is essential to reproduce it -- without a cap, over_cap stays empty
+    and the dict's incidental de-duplication hides the bug.
+
+    Pre-fix, 5 duplicate ids with limit=2 reported queried=1, skipped_over_cap=3 -- three
+    chargers that never existed, announced as "not asked because of the cap".
+    """
     res = await _call("cms_get_fleet_firmware",
-                      qcharger_ids=["ab-sam-sim", "ab-sam-sim", "ab-sam-sim"],
-                      include_offline=True)
+                      qcharger_ids=["ab-sam-sim"] * 5, limit=2, include_offline=True)
     d = res.data
     assert d["queried"] == 1
-    assert d["skipped_over_cap"] == 0
+    assert d["skipped_over_cap"] == 0, "phantom duplicates reported as skipped"
+    assert d["queried"] + d["skipped_offline"] + d["skipped_over_cap"] == 1
     assert sum(d["rollup"].values()) == d["queried"]
 
 

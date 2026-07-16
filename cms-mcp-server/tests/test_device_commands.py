@@ -1,11 +1,5 @@
 """Unit + integration tests for the CMS device-command tools."""
 
-import os
-
-# Settings requires cms_user/cms_pass; provide them before importing config.
-os.environ.setdefault("CMS_USER", "u")
-os.environ.setdefault("CMS_PASS", "p")
-
 
 def test_device_settings_defaults():
     from cms_mcp.config import settings

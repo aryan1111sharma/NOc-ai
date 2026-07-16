@@ -322,4 +322,7 @@ def build_server(client: CmsAuthClient | None = None) -> FastMCP:
     from .device_commands import register_device_tools
     register_device_tools(mcp, client, _charger_map)
 
+    from .fleet import register_fleet_tools
+    register_fleet_tools(mcp, client, _charger_map)
+
     return mcp

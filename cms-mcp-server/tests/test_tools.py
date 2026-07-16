@@ -122,9 +122,9 @@ async def test_list_charger_actions_catalog():
         res = await client.call_tool(
             "cms_list_charger_actions", {"qcharger_id": "ab-sam-sim"})
     rows = res.data
-    assert len(rows) == 2
+    assert len(rows) == 3
     names = {r["API"] for r in rows}
-    assert {"id", "reset"} <= names
+    assert {"id", "reset", "release"} <= names
     reset = next(r for r in rows if r["API"] == "reset")
     assert reset["ApiType"] == "POST"
     assert reset["ApiDescription"] == "Reset"

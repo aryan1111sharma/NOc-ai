@@ -117,3 +117,86 @@ async def fan_out(client, targets: dict[str, int], command: str,
     return list(await asyncio.gather(*(
         _query_one(client, sem, qid, cid, command, args, budget)
         for qid, cid in targets.items())))
+
+
+def register_fleet_tools(mcp, client, charger_map: dict) -> None:
+    """Register the firmware tools onto `mcp`, sharing the server's charger map."""
+
+    @mcp.tool
+    async def cms_get_charger_firmware(qcharger_id: str) -> dict:
+        """Firmware/release version running on ONE charger (by QChargerID, e.g.
+        "ab-sam-00585") in the old CMS — e.g. "release-1.2.65". Read-only: runs the
+        device's `release` GET. The CMS does not store firmware, so this asks the
+        charger live and takes a few seconds. For several chargers at once use
+        cms_get_fleet_firmware. `status` is "ok" when `release` is populated; a
+        charger that cannot be reached reports status "timeout" (device silent) or
+        "cms_error" (CMS busy — retry) rather than failing."""
+        cid = await _resolve_charger_id(client, qcharger_id, charger_map)
+        sem = asyncio.Semaphore(1)
+        row = await _query_one(client, sem, qcharger_id, cid, "release", None,
+                               settings.device_poll_timeout)
+        return {"qcharger_id": qcharger_id, "release": row["result"],
+                "status": row["status"],
+                **({"detail": row["detail"]} if "detail" in row else {}),
+                "execution_id": row.get("execution_id"),
+                "executed_at": row.get("executed_at")}
+
+    @mcp.tool
+    async def cms_get_fleet_firmware(
+        search: Optional[str] = None,
+        qcharger_ids: Optional[list[str]] = None,
+        include_offline: bool = False,
+        limit: int = 0,
+    ) -> dict:
+        """Firmware/release versions across MANY chargers in the old CMS, e.g. "what
+        releases are running across Ador's chargers?". Give EITHER `search` (matches
+        QChargerID or customer name, as cms_list_chargers) OR an explicit
+        `qcharger_ids` list — an unfiltered whole-fleet sweep is not available, because
+        the CMS stores no firmware and each charger must be asked live.
+
+        Offline chargers (no recent ping) are skipped and named in
+        skipped_offline_ids; pass include_offline=True to query them anyway. Returns a
+        `rollup` of release -> count (failures counted as "unreachable") plus a
+        `chargers` row per charger queried. `queried + skipped_offline +
+        skipped_over_cap` always equals the number of chargers matched, so a partial
+        answer is never mistaken for a complete one."""
+        if bool(search) == bool(qcharger_ids):
+            raise ValueError(
+                "Give exactly one of `search` (e.g. a customer name or QChargerID "
+                "prefix) or `qcharger_ids`. An unfiltered fleet sweep is not offered: "
+                "every charger must be asked live.")
+        cap = limit if limit and limit > 0 else settings.fleet_max_targets
+
+        status = await load_fleet_status(client)
+        if qcharger_ids:
+            matched = [str(x) for x in qcharger_ids]
+            missing = [q for q in matched if q not in status]
+            if missing:
+                raise ValueError(f"Unknown QChargerID(s): {', '.join(missing[:5])}")
+        else:
+            s = search.lower()
+            matched = sorted(q for q in status if s in q.lower())
+            if not matched:
+                raise ValueError(f"No chargers matched '{search}'.")
+
+        offline_ids = ([] if include_offline
+                       else [q for q in matched if not status[q]["online"]])
+        eligible = [q for q in matched if q not in set(offline_ids)]
+        targets_ids, over_cap = eligible[:cap], eligible[cap:]
+        targets = {q: status[q]["charger_id"] for q in targets_ids}
+
+        rows = await fan_out(client, targets, "release")
+
+        rollup: dict[str, int] = {}
+        for r in rows:
+            key = r["result"] if r["status"] == "ok" else "unreachable"
+            rollup[str(key)] = rollup.get(str(key), 0) + 1
+        return {
+            "rollup": rollup,
+            "queried": len(rows),
+            "skipped_offline": len(offline_ids),
+            "skipped_offline_ids": offline_ids,
+            "skipped_over_cap": len(over_cap),
+            "chargers": [{"qcharger_id": r["qcharger_id"], "release": r["result"],
+                          "status": r["status"]} for r in rows],
+        }

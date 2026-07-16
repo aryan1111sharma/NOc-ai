@@ -115,3 +115,100 @@ async def test_fan_out_one_failure_does_not_fail_the_batch(monkeypatch):
     by_id = {r["qcharger_id"]: r for r in rows}
     assert by_id["ab-sam-sim"]["status"] == "ok"
     assert by_id["ab-sam-00585"]["status"] == "timeout"
+
+
+from fastmcp import Client
+
+
+async def _call(name, **kw):
+    async with Client(build_test_server()) as client:
+        return await client.call_tool(name, kw)
+
+
+@pytest.mark.asyncio
+async def test_get_charger_firmware_returns_unquoted_release():
+    res = await _call("cms_get_charger_firmware", qcharger_id="ab-sam-sim")
+    assert res.data["status"] == "ok"
+    assert res.data["release"] == "release-1.2.65"   # NOT '"release-1.2.65"'
+    assert res.data["qcharger_id"] == "ab-sam-sim"
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_skips_offline_and_names_them():
+    res = await _call("cms_get_fleet_firmware", search="ab-sam")
+    d = res.data
+    assert d["skipped_offline"] == 1
+    assert d["skipped_offline_ids"] == ["ab-sam-00591"]      # ping 600 min ago
+    assert "ab-sam-00591" not in [c["qcharger_id"] for c in d["chargers"]]
+    assert d["queried"] == len(d["chargers"])
+    assert sum(d["rollup"].values()) == d["queried"]         # the invariant
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_include_offline_queries_them():
+    res = await _call("cms_get_fleet_firmware", search="ab-sam", include_offline=True)
+    assert res.data["skipped_offline"] == 0
+    assert "ab-sam-00591" in [c["qcharger_id"] for c in res.data["chargers"]]
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_caps_targets_and_reports_the_overflow():
+    res = await _call("cms_get_fleet_firmware", search="ab-sam", limit=1)
+    d = res.data
+    assert d["queried"] == 1
+    assert d["skipped_over_cap"] == 1        # 2 online match; 1 queried
+    assert d["queried"] + d["skipped_offline"] + d["skipped_over_cap"] == 3
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_requires_a_filter():
+    with pytest.raises(Exception, match="search"):
+        await _call("cms_get_fleet_firmware")
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_explicit_ids_are_queried_and_rollup_groups_by_release():
+    res = await _call("cms_get_fleet_firmware",
+                      qcharger_ids=["ab-sam-sim", "ab-sam-00591"], include_offline=True)
+    d = res.data
+    assert d["rollup"].get("release-1.2.65") == 2
+    assert sum(d["rollup"].values()) == d["queried"]
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_rollup_buckets_a_failure_as_unreachable(monkeypatch):
+    """A charger we couldn't reach must be counted, not dropped: rollup must still
+    reconcile with `queried`, so 'we couldn't ask' never reads as 'it has no firmware'."""
+    real = fleet_mod.query_device
+
+    async def fail_one(client, cid, command, args=None, *, timeout=None):
+        if cid == 1187:                      # ab-sam-00585
+            raise RuntimeError("device silent")
+        return await real(client, cid, command, args, timeout=timeout)
+
+    monkeypatch.setattr(fleet_mod, "query_device", fail_one)
+    res = await _call("cms_get_fleet_firmware", search="ab-sam")
+    d = res.data
+    assert d["rollup"].get("unreachable") == 1
+    assert d["rollup"].get("release-1.2.65") == 1
+    assert sum(d["rollup"].values()) == d["queried"] == 2
+    assert [c["status"] for c in d["chargers"]
+            if c["qcharger_id"] == "ab-sam-00585"] == ["timeout"]
+
+
+@pytest.mark.asyncio
+async def test_firmware_tools_never_reach_a_write(monkeypatch):
+    """These tools are read-only. `release` is a GET, and nothing here may touch the
+    gated write path, with or without a confirmation token."""
+    seen: list[str] = []
+    real = fleet_mod.query_device
+
+    async def spy(client, cid, command, args=None, *, timeout=None):
+        seen.append(command)
+        return await real(client, cid, command, args, timeout=timeout)
+
+    monkeypatch.setattr(fleet_mod, "query_device", spy)
+    await _call("cms_get_charger_firmware", qcharger_id="ab-sam-sim")
+    await _call("cms_get_fleet_firmware", search="ab-sam")
+    assert set(seen) == {"release"}, f"unexpected commands issued: {seen}"
+    assert "reset" not in seen

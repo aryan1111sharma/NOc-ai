@@ -72,6 +72,9 @@ _CATALOG = [
     {"ApiID": 16, "Name": "Reset", "API": "reset", "ApiType": "POST", "ApiTypeID": 3,
      "ApiDescription": "Reset", "CategoryID": 1, "IsInputRequired": False,
      "IsActive": True},
+    {"ApiID": 7, "Name": "Release", "API": "release", "ApiType": "GET", "ApiTypeID": 1,
+     "ApiDescription": "Release", "CategoryID": 1, "IsInputRequired": False,
+     "IsActive": True},
 ]
 
 
@@ -152,7 +155,11 @@ def _handler(request: httpx.Request) -> httpx.Response:
         vvm = json.loads(request.content.decode().replace("{vvm:", '{"vvm":', 1))["vvm"]
         execid = _NEXT_EXECID[0]; _NEXT_EXECID[0] += 1
         outpath = f"E:\\ApiResponses\\{execid}.txt"
-        _LOG_FILES[outpath] = {"api": vvm["API"], "value": "device-ok"}
+        # `release` mirrors the live wire shape: ReadJsonLogFile returns a JSON string
+        # that itself contains a JSON string, so a parse yields '"release-1.2.65"' --
+        # quotes included. That is what _unwrap must strip.
+        _LOG_FILES[outpath] = ('"release-1.2.65"' if vvm["API"] == "release"
+                               else {"api": vvm["API"], "value": "device-ok"})
         _EXECUTIONS.insert(0, {
             "Name": vvm["API"], "API": vvm["API"], "ApiType": "GET",
             "Description": "Executed", "StatusID": 2, "ExecutionID": execid,

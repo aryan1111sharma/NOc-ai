@@ -16,6 +16,7 @@ charger in production while these tests stayed green.
 """
 
 import json
+import time
 
 import httpx
 
@@ -28,6 +29,7 @@ _LOGIN = "/Home/GetUsersByEmailAndPassword"
 _CHARGERS = [
     {"ChargerID": 1429, "QChargerID": "ab-sam-sim"},
     {"ChargerID": 1187, "QChargerID": "ab-sam-00585"},
+    {"ChargerID": 1188, "QChargerID": "ab-sam-00591"},
 ]
 _DETAILS = {
     "QChargerID": "ab-sam-sim", "ChargerTypeID": 1, "CustomerID": 101,
@@ -71,6 +73,25 @@ _CATALOG = [
      "ApiDescription": "Reset", "CategoryID": 1, "IsInputRequired": False,
      "IsActive": True},
 ]
+
+
+def _ping(minutes_ago: float) -> str:
+    """A /Date(ms)/ ping stamp `minutes_ago` in the past, as the live CMS emits."""
+    return "/Date(%d)/" % int((time.time() - minutes_ago * 60) * 1000)
+
+
+# GetChargerDetailsForMap: the fleet-wide map feed. The live payload carries per-charger
+# Ping_Timestamp/StatusID; StatusID reads 0 even on healthy chargers, so ping recency is
+# the only usable online signal (mirrored here deliberately).
+def _fleet_map() -> list[dict]:
+    return [
+        {"QChargerID": "ab-sam-sim", "ChargerID": 1429, "Name": "Ador",
+         "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(1)},      # online
+        {"QChargerID": "ab-sam-00585", "ChargerID": 1187, "Name": "Ador",
+         "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(2)},      # online
+        {"QChargerID": "ab-sam-00591", "ChargerID": 1188, "Name": "Ador",
+         "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(600)},    # stale -> offline
+    ]
 
 # Stateful execution store for the ExecuteApi -> history -> ReadJsonLogFile cycle.
 # Seeded with the historical action-history row that test_tools.py asserts on.
@@ -119,6 +140,8 @@ def _handler(request: httpx.Request) -> httpx.Response:
                               headers={"set-cookie": ".ASPXAUTH=abc; path=/"})
     if path.endswith("/GetChargerByCustomerIDForDD"):
         return httpx.Response(200, json=_CHARGERS)
+    if path.endswith("/GetChargerDetailsForMap"):
+        return httpx.Response(200, json=_fleet_map())
     if any(path.endswith(p) for p in _DATATABLES_PATHS):
         if "application/x-www-form-urlencoded" not in _content_type(request):
             return _SILENT_EMPTY
@@ -155,3 +178,9 @@ def build_test_server():
         transport=httpx.MockTransport(_handler),
     )
     return build_server(client)
+
+
+def build_test_client():
+    """A CmsAuthClient wired to the fake CMS (for engine-level tests)."""
+    return CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                         transport=httpx.MockTransport(_handler))

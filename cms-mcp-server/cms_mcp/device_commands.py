@@ -204,6 +204,51 @@ def _configure_audit_logger() -> None:
     _audit.addHandler(handler)
 
 
+async def query_device(client, charger_id: int, command: str,
+                       args: Optional[dict] = None, *,
+                       timeout: Optional[float] = None) -> dict:
+    """Run ONE read-only (GET) device command and return its result.
+
+    The shared core behind cms_run_device_query and the fleet fan-out: resolve the
+    per-charger catalog (ApiID is per-charger), schedule via ExecuteApi, poll history
+    for our row, then read the Output blob.
+
+    Raises ValueError for an unknown/non-GET command, RuntimeError on a clean timeout,
+    and CmsUnavailableError when the CMS is flapping (see _await_result).
+    """
+    catalog = await _load_catalog(client, charger_id)
+    row = catalog.get(command)
+    if row is None:
+        near = sorted(k for k in catalog if command.split("/")[0] in k)[:5]
+        hint = f" Did you mean: {', '.join(near)}?" if near else ""
+        raise ValueError(f"Unknown command '{command}' for charger {charger_id}.{hint}")
+    if str(row.get("ApiType")) != "GET":
+        raise ValueError(
+            f"'{command}' is a {row.get('ApiType')} (write); query_device runs read-only "
+            f"GET commands only. Use cms_run_device_action_prepare.")
+    resolved = resolve_path(command, args)
+    await client._ensure_login()
+    vvm = {"ChargerID": charger_id, "ApiID": row["ApiID"], "Input": resolved,
+           "API": resolved, "UpdatedBy": getattr(client, "user_id", 0)}
+    baseline = await _baseline_execid(client, charger_id)
+    await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm, idempotent=False)
+    hit = await _await_result(
+        client, charger_id, resolved, baseline,
+        timeout=timeout if timeout is not None else settings.device_poll_timeout,
+        interval=settings.device_poll_interval)
+    if hit is None:
+        raise RuntimeError(
+            f"No result for '{command}' on charger {charger_id} within "
+            f"{timeout if timeout is not None else settings.device_poll_timeout:.0f}s — "
+            f"the charger did not answer; it may be offline.")
+    return {
+        "command": command,
+        "execution_id": hit.get("ExecutionID"), "status_id": hit.get("StatusID"),
+        "executed_at": hit.get("strExecutedTime"),
+        "result": await _read_log(client, hit["Output"]),
+    }
+
+
 def register_device_tools(mcp, client, charger_map: dict) -> None:
     """Register the device-command tools onto `mcp`, sharing the server's charger map."""
     _configure_audit_logger()
@@ -219,36 +264,19 @@ def register_device_tools(mcp, client, charger_map: dict) -> None:
         (e.g. command="outlets/{number}/state", args={"number": 1}). Only GET commands
         are allowed — for writes use cms_run_device_action_prepare."""
         cid = await _resolve_charger_id(client, qcharger_id, charger_map)
-        catalog = await _load_catalog(client, cid)
-        row = catalog.get(command)
-        if row is None:
-            near = sorted(k for k in catalog if command.split("/")[0] in k)[:5]
-            hint = f" Did you mean: {', '.join(near)}?" if near else ""
-            raise ValueError(f"Unknown command '{command}' for {qcharger_id}.{hint}")
-        if str(row.get("ApiType")) != "GET":
-            raise ValueError(
-                f"'{command}' is a {row.get('ApiType')} (write); cms_run_device_query "
-                f"runs read-only GET commands only. Use cms_run_device_action_prepare.")
-        resolved = resolve_path(command, args)
-        await client._ensure_login()
-        vvm = {"ChargerID": cid, "ApiID": row["ApiID"], "Input": resolved,
-               "API": resolved, "UpdatedBy": getattr(client, "user_id", 0)}
-        baseline = await _baseline_execid(client, cid)
-        await _post_wrapped(client, _EXECUTE_PATH, "vvm", vvm, idempotent=False)
-        hit = await _await_result(
-            client, cid, resolved, baseline,
-            timeout=settings.device_poll_timeout, interval=settings.device_poll_interval)
-        if hit is None:
+        try:
+            out = await query_device(client, cid, command, args)
+        except CmsUnavailableError:
+            # MUST precede `except RuntimeError`: CmsUnavailableError subclasses it.
+            # Re-raise untouched — its message names the CMS as the culprit. Folding it
+            # into the message below would blame the charger for a backend flap.
+            raise
+        except RuntimeError as exc:
             raise RuntimeError(
                 f"No result for '{command}' on {qcharger_id} within "
-                f"{settings.device_poll_timeout:.0f}s — the charger may be offline or the "
-                f"CMS is busy; retry shortly.")
-        return {
-            "qcharger_id": qcharger_id, "command": command,
-            "execution_id": hit.get("ExecutionID"), "status_id": hit.get("StatusID"),
-            "executed_at": hit.get("strExecutedTime"),
-            "result": await _read_log(client, hit["Output"]),
-        }
+                f"{settings.device_poll_timeout:.0f}s — the charger did not answer; it "
+                f"may be offline.") from exc
+        return {"qcharger_id": qcharger_id, **out}
 
     @mcp.tool
     async def cms_run_device_action_prepare(

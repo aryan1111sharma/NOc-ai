@@ -411,7 +411,7 @@ Separate exploratory track (like **EPIC**, **EVT**).
 
 > **Data-boundary caveat (gates external sharing):** ChargeZone data is **client-confidential**
 > and Ecog data is **vendor-confidential / cross-company**. Piping either into the shared
-> Adore Manthan.AI stack sends it to the configured inference provider — reinforces **D1**
+> Ador Manthan.AI stack sends it to the configured inference provider — reinforces **D1**
 > (residency) and means each Jira MCP must be scoped to the right audience only (**AC-8**),
 > not visible fleet-wide.
 

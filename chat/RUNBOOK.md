@@ -1,6 +1,6 @@
 # RUNBOOK — Run the chat stack locally (Windows)
 
-**Adore Manthan.AI** — the NOC assistant: **LibreChat** (web UI :3080) → **GLM** → read-only
+**Ador Manthan.AI** — the NOC assistant: **LibreChat** (web UI :3080) → **GLM** → read-only
 **NOC MCP server** (:8100) and legacy **CMS MCP server** (:8101), all via Docker Compose.
 
 ```
@@ -48,7 +48,7 @@ docker compose logs mcp-server
 ```
 
 Then open **http://localhost:3080** and **register an account** (registration is open).
-The footer shows the running build, e.g. **Adore Manthan.AI v0.1.0 (377a150)**, and the
+The footer shows the running build, e.g. **Ador Manthan.AI v0.1.0 (377a150)**, and the
 new-chat screen greets you with the version.
 
 ## Wire up the tools (one-time, in the LibreChat UI)

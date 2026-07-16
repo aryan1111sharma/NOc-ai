@@ -117,6 +117,25 @@ async def test_get_charger_action_history_trims():
 
 
 @pytest.mark.asyncio
+async def test_empty_body_raises_rather_than_reading_as_no_rows():
+    """An empty body is a degraded read, never 'no rows'. Silently returning {} zeroed
+    the correlation baseline and let a years-old row be reported as current firmware."""
+    def empty(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/Home/GetUsersByEmailAndPassword"):
+            return httpx.Response(200, json={"UserID": 1},
+                                  headers={"set-cookie": ".ASPXAUTH=abc; path=/"})
+        return httpx.Response(200, content=b"", headers={"content-type": "application/json"})
+
+    client = CmsAuthClient(base_url="http://cms.test", user="u", password="p",
+                           transport=httpx.MockTransport(empty))
+    from cms_mcp.auth import CmsUnavailableError
+    from cms_mcp.server import _post_datatables
+    async with client:
+        with pytest.raises(CmsUnavailableError):
+            await _post_datatables(client, "/ChargerDetails/GetApiExecutionDetailsByID", 1429, 5)
+
+
+@pytest.mark.asyncio
 async def test_list_charger_actions_catalog():
     async with Client(build_test_server()) as client:
         res = await client.call_tool(

@@ -84,6 +84,10 @@ async def load_fleet_status(client, charger_map: Optional[dict] = None) -> dict[
             "charger_id": charger_map.get(str(qid).lower()),
             "ping_ms": ping,
             "online": ping is not None and (now_ms - ping) <= window_ms,
+            # The map feed's `Name` field IS the owning customer's name (not the
+            # charger's own name) -- retained so `search` can match it, per the
+            # docstring's own worked example ("Ador's chargers").
+            "customer": r.get("Name"),
         }
     return out
 
@@ -182,15 +186,19 @@ def register_fleet_tools(mcp, client, charger_map: dict) -> None:
 
         status = await load_fleet_status(client, charger_map)
         if qcharger_ids:
-            matched = [str(x) for x in qcharger_ids]
-            missing = [q for q in matched if q not in status]
+            canon = {q.lower(): q for q in status}
+            requested = [str(x).strip() for x in qcharger_ids]
+            missing = [q for q in requested if q.lower() not in canon]
             if missing:
                 raise ValueError(f"Unknown QChargerID(s): {', '.join(missing[:5])}")
+            matched = [canon[q.lower()] for q in requested]
         else:
             s = search.lower()
-            matched = sorted(q for q in status if s in q.lower())
+            matched = sorted(q for q, v in status.items()
+                             if s in q.lower() or s in str(v.get("customer") or "").lower())
             if not matched:
                 raise ValueError(f"No chargers matched '{search}'.")
+        matched = list(dict.fromkeys(matched))
 
         offline_ids = ([] if include_offline
                        else [q for q in matched if not status[q]["online"]])

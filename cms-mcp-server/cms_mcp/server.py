@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from fastmcp import FastMCP
 
-from .auth import CmsAuthClient
+from .auth import CmsAuthClient, CmsUnavailableError
 from .config import settings
 
 # ── Field whitelists (subset of the 206-field god DTO) ───────────────────────────────────
@@ -121,8 +121,10 @@ async def _post_datatables(client, path: str, charger_id: int, limit: int) -> di
     action return 200 with an EMPTY body instead of an error, which reads as
     "this charger has no rows" rather than as a failure. Keep this header.
 
-    Returns ``{}`` for an empty body (a CMS flap) so callers see no rows rather
-    than a JSON decode error.
+    Raises ``CmsUnavailableError`` for an empty body, because an empty body is never
+    a legitimate "no rows" -- a real empty result is ``{"draw":1,"data":[]}``. An
+    empty body means the read was degraded (wrong content-type, or a backend flap),
+    so it must not be silently converted to "no rows".
     """
     resp = await client.post(
         path, content=jsonlib.dumps(_datatables_body(charger_id, limit)),
@@ -133,7 +135,12 @@ async def _post_datatables(client, path: str, charger_id: int, limit: int) -> di
     )
     resp.raise_for_status()
     if not resp.text.strip():
-        return {}
+        # An empty body is never "no rows" -- a real empty result is {"draw":1,"data":[]}.
+        # It means the read was degraded (a flap, or a rejected content-type), so it must
+        # raise rather than masquerade as data. Silently returning {} here let a zeroed
+        # correlation baseline match a years-old execution row and report stale firmware
+        # as fresh.
+        raise CmsUnavailableError(resp.request, resp)
     return resp.json()
 
 

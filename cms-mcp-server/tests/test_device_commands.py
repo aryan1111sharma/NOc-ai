@@ -326,3 +326,16 @@ async def test_history_rows_returns_empty_when_there_are_no_rows(monkeypatch):
 
     monkeypatch.setattr(dc, "_post_datatables", empty)
     assert await dc._history_rows(None, 1429, 5) == []
+
+
+@pytest.mark.asyncio
+async def test_degraded_history_read_cannot_report_stale_firmware(monkeypatch):
+    """Regression: a degraded read used to zero the baseline, so _await_result matched a
+    years-old execution row and reported it as current firmware with status ok."""
+    async def degraded(client, path, charger_id, limit):
+        raise CmsUnavailableError(httpx.Request("POST", "http://cms.test/x"),
+                                  httpx.Response(200))
+
+    monkeypatch.setattr(dc, "_post_datatables", degraded)
+    with pytest.raises(CmsUnavailableError):
+        await dc._baseline_execid(None, 1429)

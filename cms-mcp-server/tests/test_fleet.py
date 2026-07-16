@@ -210,5 +210,35 @@ async def test_firmware_tools_never_reach_a_write(monkeypatch):
     monkeypatch.setattr(fleet_mod, "query_device", spy)
     await _call("cms_get_charger_firmware", qcharger_id="ab-sam-sim")
     await _call("cms_get_fleet_firmware", search="ab-sam")
+    # Only pins the command string the fleet layer issues. The actual GET-only
+    # enforcement guard lives in test_query_rejects_write_command (test_device_commands.py).
     assert set(seen) == {"release"}, f"unexpected commands issued: {seen}"
-    assert "reset" not in seen
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_deduplicates_repeated_ids():
+    res = await _call("cms_get_fleet_firmware",
+                      qcharger_ids=["ab-sam-sim", "ab-sam-sim", "ab-sam-sim"],
+                      include_offline=True)
+    d = res.data
+    assert d["queried"] == 1
+    assert d["skipped_over_cap"] == 0
+    assert sum(d["rollup"].values()) == d["queried"]
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_search_matches_customer_name():
+    """The docstring's own worked example -- "Ador's chargers" -- must actually work."""
+    res = await _call("cms_get_fleet_firmware", search="Ador", include_offline=True)
+    d = res.data
+    assert d["queried"] == 3
+    assert sum(d["rollup"].values()) == d["queried"]
+
+
+@pytest.mark.asyncio
+async def test_fleet_firmware_accepts_ids_case_insensitively():
+    """cms_get_charger_firmware accepts any casing; the fleet tool must not disagree."""
+    res = await _call("cms_get_fleet_firmware", qcharger_ids=["AB-SAM-SIM"],
+                      include_offline=True)
+    assert res.data["queried"] == 1
+    assert res.data["chargers"][0]["status"] == "ok"

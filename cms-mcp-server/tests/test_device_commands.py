@@ -257,3 +257,52 @@ def test_resolve_path_rejects_percent_and_unicode():
     # a legit dotted script name (named GET read) still resolves
     assert resolve_path("scripts/installed/{script}", {"script": "foo.py"}) == \
         "scripts/installed/foo.py"
+
+
+from cms_mcp import device_commands as dc
+from cms_mcp.auth import CmsUnavailableError
+
+
+def _flap() -> CmsUnavailableError:
+    return CmsUnavailableError(httpx.Request("POST", "http://cms.test/x"),
+                               httpx.Response(502))
+
+
+@pytest.mark.asyncio
+async def test_await_result_raises_cms_error_when_flapping_not_timeout(monkeypatch):
+    """A flapping CMS must NOT be reported as a device/charger problem."""
+    async def always_flap(client, charger_id, n):
+        raise _flap()
+
+    monkeypatch.setattr(dc, "_history_rows", always_flap)
+    with pytest.raises(CmsUnavailableError):
+        await dc._await_result(None, 1429, "release", 0, timeout=0.3, interval=0.01)
+
+
+@pytest.mark.asyncio
+async def test_await_result_returns_none_on_clean_timeout(monkeypatch):
+    """Polls succeeded, device never answered => a genuine timeout, not a CMS error."""
+    async def no_rows(client, charger_id, n):
+        return []
+
+    monkeypatch.setattr(dc, "_history_rows", no_rows)
+    assert await dc._await_result(None, 1429, "release", 0,
+                                  timeout=0.2, interval=0.01) is None
+
+
+@pytest.mark.asyncio
+async def test_await_result_survives_a_transient_flap_then_succeeds(monkeypatch):
+    """A flap on ONE poll must not fail the query if a later poll finds the row."""
+    calls = {"n": 0}
+    row = {"ExecutionID": 5, "API": "release", "StatusID": 2,
+           "Output": "E:\\ApiResponses\\r.txt"}
+
+    async def flap_once(client, charger_id, n):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _flap()
+        return [row]
+
+    monkeypatch.setattr(dc, "_history_rows", flap_once)
+    hit = await dc._await_result(None, 1429, "release", 0, timeout=2.0, interval=0.01)
+    assert hit is not None and hit["ExecutionID"] == 5

@@ -22,6 +22,7 @@ import secrets
 import time
 from typing import Any, Optional
 
+from .auth import CmsUnavailableError
 from .config import settings
 from .server import _resolve_charger_id, _post_json, _post_datatables
 
@@ -141,11 +142,13 @@ async def _read_log(client, path: str) -> Any:
 
 
 async def _history_rows(client, charger_id: int, n: int) -> list[dict]:
-    """Fetch the latest `n` execution-history rows; [] on empty/flap."""
-    try:
-        resp = await _post_datatables(client, _HISTORY_PATH, charger_id, n)
-    except Exception:
-        return []
+    """Fetch the latest `n` execution-history rows; [] when there are none.
+
+    Does NOT swallow CmsUnavailableError: callers must be able to tell "the CMS is
+    flapping" from "the device hasn't answered yet". Conflating the two is what makes
+    a backend hiccup read as "the charger may be offline".
+    """
+    resp = await _post_datatables(client, _HISTORY_PATH, charger_id, n)
     return resp.get("data", []) if isinstance(resp, dict) else []
 
 
@@ -158,16 +161,31 @@ async def _baseline_execid(client, charger_id: int) -> int:
 async def _await_result(client, charger_id: int, resolved_api: str,
                         baseline: int, *, timeout: float, interval: float) -> Optional[dict]:
     """Poll history until our new row appears: ExecutionID > baseline, matching API
-    path, with a non-empty Output. Returns the row or None on timeout."""
+    path, with a non-empty Output.
+
+    Returns the row, or None on a clean timeout (polls succeeded, the device never
+    answered). Raises CmsUnavailableError if the budget expires and the CMS was
+    flapping — that is a backend problem and must not be reported as a device one.
+    A flap on a single poll is tolerated: we keep polling.
+    """
     loop = asyncio.get_event_loop()
     deadline = loop.time() + timeout
+    last_flap: Optional[CmsUnavailableError] = None
     while loop.time() < deadline:
         await asyncio.sleep(interval)
-        for r in await _history_rows(client, charger_id, 10):
+        try:
+            rows = await _history_rows(client, charger_id, 10)
+        except CmsUnavailableError as exc:
+            last_flap = exc
+            continue
+        last_flap = None
+        for r in rows:
             if (int(r.get("ExecutionID") or 0) > baseline
                     and str(r.get("API")) == resolved_api
                     and r.get("Output")):
                 return r
+    if last_flap is not None:
+        raise last_flap
     return None
 
 

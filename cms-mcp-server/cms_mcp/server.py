@@ -137,6 +137,16 @@ async def _post_datatables(client, path: str, charger_id: int, limit: int) -> di
     return resp.json()
 
 
+async def _get_json_via(client, path: str, params: Optional[dict] = None) -> Any:
+    """GET a legacy MVC JSON action. Module-level twin of build_server's _get_json,
+    for modules (fleet.py) that hold a client but not the closure."""
+    resp = await client.get(path, params=params or {})
+    resp.raise_for_status()
+    if not resp.text.strip():
+        return []
+    return resp.json()
+
+
 async def _load_charger_map(client) -> dict[str, int]:
     """Fetch the fleet-wide QChargerID(lower) -> numeric ChargerID map."""
     rows = await _post_json(

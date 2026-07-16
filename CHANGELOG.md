@@ -5,6 +5,58 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.5.0] - 2026-07-16
+
+### Features
+
+- **cms:** Add device-command settings ([`e700b1e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e700b1e0945ddbd0d6857df8255a00eebd0eef95))
+- **cms:** Capture CMS UserID on login for ExecuteApi audit ([`01e5ec1`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/01e5ec1803bbca3dcef18075fd916d2eae69623d))
+- **cms:** Device-commands module — allow-list, path guard, token store ([`648bf09`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/648bf09b873d543a4487827140a7994fe64beefc))
+- **cms:** Device-command network helpers (wrapped POST, catalog, correlation) ([`625a65a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/625a65a2145a66de498d813d45549cb1df997186))
+- **cms:** Register device-query, gated-action, and read-log tools ([`8994e96`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8994e96d07b8ea2f6fddbc768ac07c54c902b9aa))
+- **cms:** Add fleet fan-out settings ([`8cc933a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8cc933a46021b54202aa72cf9f72dea0cb770653))
+- **cms:** Fleet status (ping-recency online) and output unwrap helpers ([`91a9ea5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/91a9ea5a0c778b1dad3e3d81d464527505876cd2))
+- **cms:** Bounded fleet fan-out engine with per-charger status classification ([`f6a39ac`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f6a39ac0c66482b458a5a76c43d0f880eaafa637))
+- **cms:** Cms_get_charger_firmware and cms_get_fleet_firmware ([`3c59c16`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3c59c16ff94df07cd9384e4dd469dd29dad47941))
+- **scripts:** Both-NOC firmware inventory sweep + Excel export ([`87faf46`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/87faf462688447e7ef566852c85795cfb83237d3))
+- **scripts:** List offline chargers in the firmware inventory ([`b91a81e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b91a81eeeec77911feef2efb4446d868f5c36a64))
+
+### Bug Fixes
+
+- **cms:** Reject path-separator injection in device-command args ([`01cd38a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/01cd38ae9a2cd26d0f2eb55ea3ba1a86f0b9552c))
+- **cms:** Never retry the ExecuteApi write (double-execute on flap); harden args ([`7b11cdd`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7b11cdd6259faf8567416d0186a82be7624f2d07))
+- **cms:** Post DataTables actions form-urlencoded (silent empty-body bug) ([`302eaaa`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/302eaaa18afa15d4095466b07f279eef2ce9dca1))
+- **chat:** Expose the 9 missing CMS tools to the NOC agents ([`1b89274`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1b89274b9446c990d4f4a1beadec0a3723da6542))
+- **cms:** Report a flapping CMS as a CMS error, not "charger may be offline" ([`0f87109`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/0f8710960427f618ebb9db2f23d35b377b5f9d3d))
+- **cms:** Resolve ChargerID from the id map, not the fleet-map feed ([`4ecabaa`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4ecabaae20309b6a6560be08d1f2f93aa9d27c4d))
+- **cms:** Raise device poll budget 20s -> 90s (live-measured latency) ([`47e5190`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/47e5190d8d6886ef8fbfbb073c8e02a3fa57c558))
+- **cms:** Raise on degraded DataTables reads; dedupe/case-fix fleet firmware ([`10cf722`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/10cf7225bd9b3828ab019d3da8f01f1a31b4e409))
+- **chat:** Expose the firmware tools to the NOC agents ([`d8fe54e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d8fe54ef44c6538d3ed85a2fff46141c1b4c9ae7))
+- **chat:** Guardrail against wrong-charger confabulation + stale NOC count ([`19f13a7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/19f13a7b1df53248104ca95942b1fc968bf943c6))
+- **chat:** Correct "Adore" -> "Ador" branding; show real version in footer ([`5cefb9f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5cefb9f5e4ad053ecc10b1f64d48f5134e26b878))
+- **scripts:** Make sweep_cms importable when run as a file (sys.path) ([`1a1a46d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1a1a46df5e092c2efd0e24251787699396b177bd))
+
+### Refactoring
+
+- **cms:** Extract reusable query_device core from cms_run_device_query ([`d78e0d3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d78e0d35e725db814655484a5a8f145cc18ec515))
+
+### Documentation
+
+- **cms:** Spec + device-API catalog for gated device-command tools ([`f1c55dc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f1c55dc37338f495927e7c9d92b9c15ebe8f8a01))
+- **cms:** Implementation plan for gated device-command tools ([`6d848a0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6d848a07266ab23233a822762648c6ccc6892f6c))
+- **cms:** Document device-command tools + read/write boundary ([`3e2a5a9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3e2a5a95f4b8f7ed443881488b2767d4f4c857b8))
+- **cms:** Design for dedicated firmware/release tools ([`7e3c55c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7e3c55ca9efe20706cec5785ac588aed7340ff14))
+- **cms:** Implementation plan for the firmware/release tools ([`346224a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/346224a6e68ecd9bca99bbdbb5f66ac90a97250d))
+- **cms:** Document the firmware/release tools ([`4b361a6`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4b361a6fb0127da49853fd335c7c7a10b29d955b))
+
+### Testing
+
+- **cms:** Device-command gate, path-guard, and end-to-end round-trip ([`37c8d13`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/37c8d13ebd611107bceafa0768298221edf4cba7))
+- **cms:** Pin the _history_rows flap-swallow regression ([`af15a54`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/af15a544268a55a31bead58fb233dec1e1f212e4))
+- **cms:** Fake the fleet-map feed with controllable ping stamps ([`d303daf`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d303daf1f71bdccb90424ff5123faa97b4e88962))
+- **cms:** Set CMS creds in conftest so test files run standalone ([`f889cf7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f889cf7960196f2bfdccd90bd323ab766b28f205))
+- **cms:** Make the dedupe test actually reproduce the bug ([`7d14461`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7d14461a35a92dace6ecdbbac3f262d37f320920))
+
 ## [0.4.3] - 2026-07-14
 
 ### Bug Fixes

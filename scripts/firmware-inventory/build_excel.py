@@ -28,6 +28,7 @@ from openpyxl.styles import Font, PatternFill
 
 CMS_IN = os.environ.get("CMS_IN", "/tmp/cms_firmware.jsonl")
 NOC_IN = os.environ.get("NOC_IN", "/tmp/noc_firmware.json")
+CMS_ROSTER = os.environ.get("CMS_ROSTER", "/tmp/cms_roster.json")
 OUT = os.environ.get("XLSX_OUT", "/tmp/firmware_inventory.xlsx")
 
 
@@ -59,8 +60,23 @@ def _load_noc():
     return {}
 
 
+def _apply_roster(cms):
+    """Fold the full CMS roster in so offline chargers -- which can't be asked for firmware
+    live -- are still LISTED (status 'offline', firmware blank) rather than silently absent.
+    A charger already swept keeps its real result; this only fills the gaps."""
+    if not os.path.exists(CMS_ROSTER):
+        return
+    for r in json.load(open(CMS_ROSTER, encoding="utf-8")):
+        k = _key(r["qcharger_id"])
+        if k in cms:
+            continue
+        cms[k] = {"qcharger_id": r["qcharger_id"], "release": None,
+                  "status": "offline" if not r.get("online") else "not_swept"}
+
+
 def main():
     cms, noc = _load_cms(), _load_noc()
+    _apply_roster(cms)
     ids = sorted(set(cms) | set(noc))
 
     wb = Workbook()
@@ -102,14 +118,16 @@ def main():
     # Summary sheet
     s = wb.create_sheet("Summary")
     cms_ok = sum(1 for r in cms.values() if r.get("status") == "ok")
-    cms_unreached = len(cms) - cms_ok
+    cms_offline = sum(1 for r in cms.values() if r.get("status") == "offline")
+    cms_timeout = sum(1 for r in cms.values() if r.get("status") == "timeout")
     noc_fw = sum(1 for r in noc.values() if r.get("firmware_version"))
     for row in [
         ["Metric", "Count"],
         ["Total chargers (union)", len(ids)],
-        ["In old CMS", len(cms)],
-        ["  old-CMS firmware read OK", cms_ok],
-        ["  old-CMS unreachable (timeout/cms_error/etc.)", cms_unreached],
+        ["In old CMS (full roster)", len(cms)],
+        ["  firmware read live OK", cms_ok],
+        ["  offline — not asked (device down)", cms_offline],
+        ["  online but no answer (timeout)", cms_timeout],
         ["In new NOC", len(noc)],
         ["  new-NOC firmware present", noc_fw],
         ["  new-NOC firmware blank (not stored)", len(noc) - noc_fw],

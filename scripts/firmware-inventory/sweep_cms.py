@@ -20,7 +20,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import time
+
+# Running as a script puts this file's dir on sys.path, not the app root, so make the
+# package importable without relying on PYTHONPATH (which git-bash mangles on Windows).
+sys.path.insert(0, "/app")
 
 from cms_mcp.config import settings
 from cms_mcp.device_commands import query_device

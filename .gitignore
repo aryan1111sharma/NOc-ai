@@ -22,3 +22,4 @@ __pycache__/
 firmware_inventory.xlsx
 scripts/firmware-inventory/*.jsonl
 scripts/firmware-inventory/*.json
+Output.txt

@@ -83,16 +83,20 @@ def _ping(minutes_ago: float) -> str:
     return "/Date(%d)/" % int((time.time() - minutes_ago * 60) * 1000)
 
 
-# GetChargerDetailsForMap: the fleet-wide map feed. The live payload carries per-charger
-# Ping_Timestamp/StatusID; StatusID reads 0 even on healthy chargers, so ping recency is
-# the only usable online signal (mirrored here deliberately).
+# GetChargerDetailsForMap: the fleet-wide map feed. Carries QChargerID + Ping_Timestamp,
+# and per-charger StatusID -- which reads 0 even on healthy chargers, so ping recency is
+# the only usable online signal.
+# ChargerID is 0 for EVERY row on the live feed (verified 2026-07-16): this action does
+# not expose the numeric id. It must be resolved via GetChargerByCustomerIDForDD instead.
+# Faking a real id here once hid a bug where every fleet query was scheduled against
+# charger 0 and timed out in production while these tests stayed green.
 def _fleet_map() -> list[dict]:
     return [
-        {"QChargerID": "ab-sam-sim", "ChargerID": 1429, "Name": "Ador",
+        {"QChargerID": "ab-sam-sim", "ChargerID": 0, "Name": "Ador",
          "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(1)},      # online
-        {"QChargerID": "ab-sam-00585", "ChargerID": 1187, "Name": "Ador",
+        {"QChargerID": "ab-sam-00585", "ChargerID": 0, "Name": "Ador",
          "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(2)},      # online
-        {"QChargerID": "ab-sam-00591", "ChargerID": 1188, "Name": "Ador",
+        {"QChargerID": "ab-sam-00591", "ChargerID": 0, "Name": "Ador",
          "StatusID": 0, "IsActive": True, "Ping_Timestamp": _ping(600)},    # stale -> offline
     ]
 

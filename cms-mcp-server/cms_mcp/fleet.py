@@ -19,7 +19,7 @@ from typing import Any, Optional
 from .auth import CmsUnavailableError
 from .config import settings
 from .device_commands import query_device
-from .server import _get_json_via, _resolve_charger_id
+from .server import _get_json_via, _load_charger_map, _resolve_charger_id
 
 _MAP_PATH = "/ChargerDetails/GetChargerDetailsForMap"
 _DATE_RE = re.compile(r"/Date\((\d+)")
@@ -52,12 +52,25 @@ def _unwrap(result: Any) -> Any:
     return text
 
 
-async def load_fleet_status(client) -> dict[str, dict]:
-    """ONE call -> {qcharger_id: {charger_id, ping_ms, online}} for the whole fleet.
+async def load_fleet_status(client, charger_map: Optional[dict] = None) -> dict[str, dict]:
+    """{qcharger_id: {charger_id, ping_ms, online}} for the whole fleet.
+
+    Two fleet-wide calls, merged:
+      * GetChargerDetailsForMap  -> Ping_Timestamp (liveness)
+      * GetChargerByCustomerIDForDD -> the numeric ChargerID
+
+    Both are needed. The map feed's own ChargerID is **0 on every row** (verified live
+    2026-07-16) -- it simply doesn't expose the id -- so trusting it schedules every
+    device command against a non-existent charger 0. `charger_map` is the server's
+    shared cache; it is populated on first use and reused thereafter.
 
     `online` is ping recency, NOT StatusID: the live feed returns StatusID 0 even for
     healthy, actively-pinging chargers, so it cannot be used for this.
     """
+    if charger_map is None:
+        charger_map = {}
+    if not charger_map:
+        charger_map.update(await _load_charger_map(client))
     rows = await _get_json_via(client, _MAP_PATH)
     window_ms = settings.fleet_online_window_minutes * 60_000
     now_ms = time.time() * 1000
@@ -68,7 +81,7 @@ async def load_fleet_status(client) -> dict[str, dict]:
             continue
         ping = _ping_ms(r.get("Ping_Timestamp"))
         out[str(qid)] = {
-            "charger_id": r.get("ChargerID"),
+            "charger_id": charger_map.get(str(qid).lower()),
             "ping_ms": ping,
             "online": ping is not None and (now_ms - ping) <= window_ms,
         }
@@ -167,7 +180,7 @@ def register_fleet_tools(mcp, client, charger_map: dict) -> None:
                 "every charger must be asked live.")
         cap = limit if limit and limit > 0 else settings.fleet_max_targets
 
-        status = await load_fleet_status(client)
+        status = await load_fleet_status(client, charger_map)
         if qcharger_ids:
             matched = [str(x) for x in qcharger_ids]
             missing = [q for q in matched if q not in status]
@@ -183,9 +196,16 @@ def register_fleet_tools(mcp, client, charger_map: dict) -> None:
                        else [q for q in matched if not status[q]["online"]])
         eligible = [q for q in matched if q not in set(offline_ids)]
         targets_ids, over_cap = eligible[:cap], eligible[cap:]
-        targets = {q: status[q]["charger_id"] for q in targets_ids}
+        # A charger present on the map feed but absent from the id map cannot be
+        # queried; report it rather than scheduling against a bogus id.
+        targets = {q: status[q]["charger_id"] for q in targets_ids
+                   if status[q]["charger_id"]}
+        unresolved = [q for q in targets_ids if not status[q]["charger_id"]]
 
         rows = await fan_out(client, targets, "release")
+        rows = rows + [{"qcharger_id": q, "result": None, "status": "error",
+                        "detail": "no numeric ChargerID found for this QChargerID"}
+                       for q in unresolved]
 
         rollup: dict[str, int] = {}
         for r in rows:

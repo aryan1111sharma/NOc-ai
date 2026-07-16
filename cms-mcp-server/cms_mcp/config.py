@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     device_pending_ttl_seconds: int = 120   # single-use write-confirm token lifetime
     device_audit_log_file: str | None = None  # audit sink; None -> stderr
 
+    # Fleet fan-out (cms_get_fleet_firmware and later per-command fleet tools).
+    fleet_concurrency: int = 8              # max simultaneous device queries
+    fleet_online_window_minutes: int = 15   # ping newer than this => charger is online
+    fleet_max_targets: int = 100            # cap per call; overflow is reported, not dropped
+
     # MCP transport: "stdio" or "http"
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"

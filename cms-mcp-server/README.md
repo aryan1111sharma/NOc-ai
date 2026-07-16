@@ -45,6 +45,8 @@ Alerts / Actions tabs.
 | `cms_run_device_action_prepare` | GetAllApisByChargerID (validate against recovery allow-list) | STEP 1 of a gated write: one-time `confirmation_token` + command preview; does not execute |
 | `cms_run_device_action_execute` | ExecuteApi | STEP 2: runs the approved write command (requires the token from `_prepare`); audited |
 | `cms_read_device_log` | ReadJsonLogFile | contents of a session/alert state-log or command-output blob by its CMS file path |
+| `cms_get_charger_firmware` | ExecuteApi `release` | firmware/release running on ONE charger (e.g. `release-1.2.65`) |
+| `cms_get_fleet_firmware` | GetChargerDetailsForMap + ExecuteApi `release` | releases across MANY chargers (filtered, online-only): rollup + per-charger rows |
 
 ## Setup / run
 
@@ -89,3 +91,23 @@ for the design):
 `ExecuteApi` is asynchronous; results are correlated by `ExecutionID` and read
 back via `ReadJsonLogFile`. Every executed write is recorded to the
 `cms_mcp.device_audit` logger (`DEVICE_AUDIT_LOG_FILE` to persist to a file).
+
+## Firmware / release
+
+The old CMS **stores no firmware** — its own Actions page asks each charger at runtime.
+So a fleet-wide answer is inherently one device round-trip per charger (~7s each), and
+`cms_get_fleet_firmware` is shaped around that:
+
+- **A filter is required** (`search` or `qcharger_ids`). No whole-fleet sweep: ~700
+  online chargers would mean ~10 minutes of load on a backend that flaps under load.
+- **Online-only by default.** Online is decided by `Ping_Timestamp` recency
+  (`FLEET_ONLINE_WINDOW_MINUTES`, default 15) — *not* `StatusID`, which reads 0 even on
+  healthy chargers. Skipped chargers are **named** in `skipped_offline_ids`.
+- **Bounded:** `FLEET_CONCURRENCY` (8) simultaneous queries, `FLEET_MAX_TARGETS` (100)
+  per call. Overflow is reported in `skipped_over_cap`, never silently dropped.
+- `queried + skipped_offline + skipped_over_cap` always equals the number matched.
+
+Per-charger `status` distinguishes `ok` / `timeout` (device silent) / `cms_error` (CMS
+busy — retry) / `unsupported` (this charger's catalog has no `release`) / `error`.
+`timeout` and `cms_error` are deliberately separate: a flapping backend must never be
+reported as a charger fault.

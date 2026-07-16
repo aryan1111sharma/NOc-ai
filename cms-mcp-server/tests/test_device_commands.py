@@ -306,3 +306,26 @@ async def test_await_result_survives_a_transient_flap_then_succeeds(monkeypatch)
     monkeypatch.setattr(dc, "_history_rows", flap_once)
     hit = await dc._await_result(None, 1429, "release", 0, timeout=2.0, interval=0.01)
     assert hit is not None and hit["ExecutionID"] == 5
+
+
+@pytest.mark.asyncio
+async def test_history_rows_does_not_swallow_cms_unavailable(monkeypatch):
+    """The regression test for the actual bug: _history_rows used to wrap its poll in a
+    bare `except Exception: return []`, making a flapping CMS look identical to "no rows
+    yet" -- which surfaced to users as "the charger may be offline". A flap must escape."""
+    async def flap(client, path, charger_id, n):
+        raise _flap()
+
+    monkeypatch.setattr(dc, "_post_datatables", flap)
+    with pytest.raises(CmsUnavailableError):
+        await dc._history_rows(None, 1429, 5)
+
+
+@pytest.mark.asyncio
+async def test_history_rows_returns_empty_when_there_are_no_rows(monkeypatch):
+    """The other half: a genuinely empty history is [], not an error."""
+    async def empty(client, path, charger_id, n):
+        return {"draw": 1, "data": []}
+
+    monkeypatch.setattr(dc, "_post_datatables", empty)
+    assert await dc._history_rows(None, 1429, 5) == []

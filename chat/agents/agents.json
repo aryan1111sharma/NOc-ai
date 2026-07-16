@@ -177,7 +177,9 @@
       "cms_run_device_query_mcp_cms",
       "cms_run_device_action_prepare_mcp_cms",
       "cms_run_device_action_execute_mcp_cms",
-      "cms_read_device_log_mcp_cms"
+      "cms_read_device_log_mcp_cms",
+      "cms_get_charger_firmware_mcp_cms",
+      "cms_get_fleet_firmware_mcp_cms"
     ],
     "tool_kwargs": [],
     "agent_ids": [],
@@ -1179,7 +1181,9 @@
       "cms_run_device_query_mcp_cms",
       "cms_run_device_action_prepare_mcp_cms",
       "cms_run_device_action_execute_mcp_cms",
-      "cms_read_device_log_mcp_cms"
+      "cms_read_device_log_mcp_cms",
+      "cms_get_charger_firmware_mcp_cms",
+      "cms_get_fleet_firmware_mcp_cms"
     ],
     "tool_kwargs": [],
     "agent_ids": [],
@@ -1778,7 +1782,9 @@
       "cms_run_device_query_mcp_cms",
       "cms_run_device_action_prepare_mcp_cms",
       "cms_run_device_action_execute_mcp_cms",
-      "cms_read_device_log_mcp_cms"
+      "cms_read_device_log_mcp_cms",
+      "cms_get_charger_firmware_mcp_cms",
+      "cms_get_fleet_firmware_mcp_cms"
     ],
     "tool_kwargs": [],
     "agent_ids": [],

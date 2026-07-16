@@ -3,7 +3,10 @@
 
 def test_device_settings_defaults():
     from cms_mcp.config import settings
-    assert settings.device_poll_timeout == 20.0
+    # 90s, not the original 20s: a live smoke on 2026-07-16 measured a healthy charger
+    # taking 44s to answer under load (6.7s idle the day before), so 20s gave up first
+    # and reported working chargers as "timeout".
+    assert settings.device_poll_timeout == 90.0
     assert settings.device_poll_interval == 2.0
     assert settings.device_pending_ttl_seconds == 120
     assert settings.device_audit_log_file is None

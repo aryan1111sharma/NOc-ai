@@ -17,7 +17,12 @@ class Settings(BaseSettings):
     request_timeout: float = 90.0  # legacy actions return large payloads
 
     # Device-command tools (ExecuteApi / ReadJsonLogFile).
-    device_poll_timeout: float = 20.0       # max wait for an async execution result
+    # 90s, not 20s: measured live 2026-07-16, a healthy charger took 44s to answer while
+    # the CMS was busy (it managed 6.7s idle the day before). At 20s the poll gave up
+    # first and reported a working charger as "timeout" — the misdiagnosis these tools
+    # exist to prevent. Sized off the observed 44s with headroom; the cost is that a
+    # genuinely dead charger now takes 90s to report.
+    device_poll_timeout: float = 90.0       # max wait for an async execution result
     device_poll_interval: float = 2.0       # delay between history polls
     device_pending_ttl_seconds: int = 120   # single-use write-confirm token lifetime
     device_audit_log_file: str | None = None  # audit sink; None -> stderr

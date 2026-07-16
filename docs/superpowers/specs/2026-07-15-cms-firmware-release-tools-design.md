@@ -61,11 +61,11 @@ Without that fix these tools would return `timeout` for every charger.
 
 ## 3. Live-verified facts this design rests on
 
-| Fact | Evidence (2026-07-15) |
+| Fact | Evidence |
 |---|---|
-| `release` returns `release-1.2.65` | Live, exec 442936 / 442937, StatusID 2 |
-| Device latency ~6.7s | InProgress at 3.4s → Executed + Output at 6.7s; 20s budget is ample |
-| Fleet status is **one call** | `GetChargerDetailsForMap` carries per-charger `Ping_Timestamp` |
+| `release` returns `release-1.2.65` | Live, exec 442936 / 442937, StatusID 2 (07-15) |
+| Device latency is **highly variable** | 6.7s idle (07-15) but **44s under load** (07-16). Sizing the timeout off the idle figure was a mistake — see §8. |
+| Fleet status needs **two calls, merged** | `GetChargerDetailsForMap` carries `Ping_Timestamp` but **`ChargerID: 0` on every row** (07-16). The numeric id must come from `GetChargerByCustomerIDForDD`. Trusting the map's id scheduled every command against charger 0. |
 | `StatusID` is **unusable** as an online signal | Returned `0` on healthy, actively-pinging chargers |
 | Online fleet ≈ 66% | 714 of 1081 chargers pinged within 15 min |
 | Output is double-encoded | `ReadJsonLogFile` yields `'"release-1.2.65"'` (quotes included) |
@@ -203,10 +203,17 @@ The catalog is resolved per charger (`ApiID` is per-charger) and cached per call
 
 ### 7.1 Why no unfiltered fleet sweep
 
-~700 online chargers × ~6.7s at 8 concurrent ≈ 10 min of sustained load on a legacy backend
-that flaps under load — the failure mode we are already fighting. Offering it invites an
-agent to call it casually. Requiring a filter makes the cost a deliberate choice. A caller
-who truly wants everything can page through customers.
+~700 online chargers at 8 concurrent is **~1 hour** of sustained load on a legacy backend
+that flaps under load — the failure mode we are already fighting. (The original estimate of
+~10 min assumed the 6.7s idle latency; the live smoke measured 44s under load, so the true
+cost is ~6× worse than designed.) Offering an unfiltered sweep invites an agent to call it
+casually. Requiring a filter makes the cost a deliberate choice. A caller who truly wants
+everything can page through customers.
+
+The load appears partly self-inflicted: the backend seems to serialise device commands, so
+fanning out queues them and inflates per-charger latency. `fleet_concurrency` may therefore
+be closer to a throughput ceiling than a throttle. Worth measuring single-vs-concurrent
+latency properly before raising it — raising it may make things slower, not faster.
 
 ## 8. Config (`config.py`)
 
@@ -216,7 +223,11 @@ who truly wants everything can page through customers.
 | `fleet_online_window_minutes` | 15 | Ping recency = online (§3) |
 | `fleet_max_targets` | 100 | Cap per call; overflow reported, never dropped |
 
-Per-charger timeout reuses the existing `device_poll_timeout` (20s — ample vs ~6.7s actual).
+Per-charger timeout reuses `device_poll_timeout`, **raised 20s → 90s** during the live smoke
+(§13). The 20s figure was sized off a 6.7s idle measurement; under real load a healthy
+charger took **44s**, so 20s reported working chargers as `timeout` — the exact
+misdiagnosis this design exists to prevent. This also fixes `cms_run_device_query`, which
+shared the same too-short default.
 
 ## 9. Deferred
 

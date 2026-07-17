@@ -15,6 +15,8 @@ import httpx
 class JiraAuthClient(httpx.AsyncClient):
     """httpx.AsyncClient pre-loaded with Jira Cloud Basic-auth + JSON headers."""
 
+    _READ_METHODS = {"GET", "HEAD", "OPTIONS"}
+
     def __init__(self, *args, email: str, api_token: str, **kwargs) -> None:
         token = base64.b64encode(f"{email}:{api_token}".encode()).decode()
         headers = dict(kwargs.pop("headers", {}) or {})
@@ -23,3 +25,10 @@ class JiraAuthClient(httpx.AsyncClient):
         kwargs["headers"] = headers
         kwargs.setdefault("follow_redirects", True)
         super().__init__(*args, **kwargs)
+
+    async def request(self, method, *args, **kwargs):
+        if str(method).upper() not in self._READ_METHODS:
+            raise RuntimeError(
+                f"This Jira client is read-only; {str(method).upper()} is not permitted."
+            )
+        return await super().request(method, *args, **kwargs)

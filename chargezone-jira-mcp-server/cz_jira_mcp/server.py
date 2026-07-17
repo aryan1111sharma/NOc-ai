@@ -20,14 +20,15 @@ from .config import settings
 # ── Pure helpers ─────────────────────────────────────────────────────────────────────────
 
 _BLOCK_TYPES = {"paragraph", "heading", "listItem", "blockquote", "codeBlock"}
+_MAX_ADF_DEPTH = 200
 
 
-def _adf_to_text(node: Any) -> str:
+def _adf_to_text(node: Any, _depth: int = 0) -> str:
     """Flatten an Atlassian Document Format node tree to plain text."""
-    if node is None:
+    if node is None or _depth > _MAX_ADF_DEPTH:
         return ""
     if isinstance(node, list):
-        return "".join(_adf_to_text(n) for n in node)
+        return "".join(_adf_to_text(n, _depth + 1) for n in node)
     if not isinstance(node, dict):
         return ""
     ntype = node.get("type")
@@ -40,7 +41,7 @@ def _adf_to_text(node: Any) -> str:
         leaf = attrs.get("text") or attrs.get("url")
         if leaf:
             return leaf
-    text = _adf_to_text(node.get("content"))
+    text = _adf_to_text(node.get("content"), _depth + 1)
     if ntype in _BLOCK_TYPES:
         return text + "\n"
     return text
@@ -101,13 +102,47 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
             f"Jira returned 404 for {path} — no such issue/resource or not visible to this account."
         )
     resp.raise_for_status()
-    return resp.json() if resp.text.strip() else {}
+    if not resp.text.strip():
+        return {}
+    try:
+        return resp.json()
+    except ValueError as exc:  # includes json.JSONDecodeError
+        raise RuntimeError(
+            f"Jira returned a non-JSON response for {path} (status {resp.status_code}); "
+            "the backend may be temporarily unavailable."
+        ) from exc
 
 
 # ── Scope guards (QCH-only) ──────────────────────────────────────────────────────────────
 
-_KEY_RE = re.compile(rf"^{re.escape(settings.project_key)}-\d+$")
+_KEY_RE = re.compile(rf"^{re.escape(settings.project_key)}-[0-9]+$")
 _ORDER_BY_RE = re.compile(r"\border\s+by\b", re.IGNORECASE)
+
+
+def _parens_balanced(s: str) -> bool:
+    """True iff parentheses in s are balanced, ignoring parens inside quoted JQL string
+    literals. Depth must never go negative and must return to 0 (and no unterminated quote)."""
+    depth = 0
+    quote = None       # active string delimiter, or None
+    escaped = False
+    for ch in s:
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth < 0:
+                return False
+    return depth == 0 and quote is None
 
 
 def require_qch(key: str) -> str:
@@ -132,6 +167,11 @@ def build_scoped_jql(conditions: str) -> str:
     conditions = (conditions or "").strip()
     if not conditions:
         return f"{proj} ORDER BY updated DESC"
+    if not _parens_balanced(conditions):
+        raise ValueError(
+            "Rejected search conditions: unbalanced parentheses. Pass a self-contained JQL "
+            "fragment (the part after the project filter)."
+        )
     m = _ORDER_BY_RE.search(conditions)
     if m:
         where = conditions[: m.start()].strip()

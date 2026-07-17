@@ -102,6 +102,30 @@ async def test_get_json_raises_on_404():
             await _get_json(c, "/rest/api/3/issue/QCH-999")
 
 
+@pytest.mark.asyncio
+async def test_get_json_raises_on_non_json_200():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="<html>maintenance</html>")
+    async with JiraAuthClient(base_url="https://cz.test", email="e", api_token="t",
+                              transport=httpx.MockTransport(handler)) as c:
+        with pytest.raises(RuntimeError, match="non-JSON"):
+            await _get_json(c, "/rest/api/3/search/jql")
+
+
+def test_adf_to_text_survives_deep_nesting():
+    node = {"type": "text", "text": "deep"}
+    for _ in range(1000):
+        node = {"type": "paragraph", "content": [node]}
+    assert isinstance(_adf_to_text(node), str)  # no RecursionError
+
+
+def test_adf_to_text_reads_text_within_depth_limit():
+    node = {"type": "text", "text": "hi"}
+    for _ in range(10):
+        node = {"type": "paragraph", "content": [node]}
+    assert "hi" in _adf_to_text(node)
+
+
 def test_adf_to_text_reads_mention_and_emoji_attrs():
     doc = {
         "type": "doc",

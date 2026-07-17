@@ -23,3 +23,13 @@ async def test_sets_basic_auth_header(mock_client):
     expected = "Basic " + base64.b64encode(b"e@x.com:tok").decode()
     assert seen["auth"] == expected
     assert seen["accept"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_write_methods_are_blocked(mock_client):
+    def handler(request):  # pragma: no cover - should never be hit
+        return httpx.Response(200, json={})
+    async with mock_client(handler) as c:
+        for call in (c.post("/x"), c.put("/x"), c.patch("/x"), c.delete("/x")):
+            with pytest.raises(RuntimeError, match="read-only"):
+                await call

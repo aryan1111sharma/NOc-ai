@@ -1,0 +1,41 @@
+# chargezone-jira-mcp-server — ChargeZone Jira, Quench project (read-only)
+
+Self-hosted [FastMCP](https://github.com/jlowin/fastmcp) server exposing the **`QCH`
+(Quench)** project inside **ChargeZone's Atlassian Cloud Jira** (REST API v3) as read-only
+tools. Scoped to QCH only — no other project is reachable. Mirrors `jira-mcp-server`.
+
+## Tools
+- `cz_jira_search(conditions="", limit=50)` — search QCH issues by JQL *conditions* (the
+  server prepends `project = "QCH"`; you cannot escape the project). Empty → newest QCH issues.
+- `cz_jira_get_issue(key)` — full detail of one QCH issue (description flattened from ADF).
+- `cz_jira_get_comments(key, limit=50)` — comments (author, created, body text).
+- `cz_jira_get_issue_transitions(key)` — current status + *available* transitions (read only).
+
+By-key tools accept **only `QCH-####` keys**. Read-only by construction — there is no write tool.
+
+## Configuration (env / `.env`)
+| Var | Default | Notes |
+|---|---|---|
+| `CZ_JIRA_BASE_URL` | `https://team-1604552506221.atlassian.net` | ChargeZone Cloud site. |
+| `CZ_JIRA_EMAIL` | *(required)* | Account that owns the API token. |
+| `CZ_JIRA_API_TOKEN` | *(required)* | Atlassian API token — **inject as a secret**. |
+| `PROJECT_KEY` | `QCH` | Hard scope; do not change without a scope review. |
+| `MCP_TRANSPORT` | `stdio` | `stdio` or `http`. |
+| `MCP_HOST` / `MCP_PORT` | `127.0.0.1` / `8105` | Keep internal (never publish). |
+
+Create an API token at <https://id.atlassian.com/manage-profile/security/api-tokens>.
+
+## Run
+```bash
+pip install -r requirements.txt
+CZ_JIRA_EMAIL=svc@… CZ_JIRA_API_TOKEN=… python -m cz_jira_mcp        # stdio
+MCP_TRANSPORT=http python -m cz_jira_mcp                             # http on :8105
+```
+
+## Test
+```bash
+python -m pytest -v
+```
+
+> **Data note:** QCH tickets are Quench field-ops data; tool results reach the inference
+> provider. Internal/dev use only until the residency decision (D1) is signed off.

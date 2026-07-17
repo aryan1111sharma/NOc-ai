@@ -139,3 +139,82 @@ def build_scoped_jql(conditions: str) -> str:
     else:
         where, order = conditions, "ORDER BY updated DESC"
     return f"{proj} AND ({where}) {order}" if where else f"{proj} {order}"
+
+
+# ── Client + server factories ────────────────────────────────────────────────────────────
+
+def build_client() -> JiraAuthClient:
+    return JiraAuthClient(
+        base_url=settings.cz_jira_base_url.rstrip("/"),
+        email=settings.cz_jira_email,
+        api_token=settings.cz_jira_api_token,
+        timeout=settings.request_timeout,
+    )
+
+
+def build_server(client: Optional[JiraAuthClient] = None) -> FastMCP:
+    mcp = FastMCP(name="ChargeZone Jira — Quench (read-only)")
+    client = client or build_client()
+    _register_tools(mcp, client)
+    return mcp
+
+
+def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
+
+    _SEARCH_FIELDS = "summary,status,issuetype,priority,assignee,updated,project"
+
+    @mcp.tool
+    async def cz_jira_search(conditions: str = "", limit: int = 50) -> list[dict]:
+        """Search Quench (QCH) Jira issues. Pass JQL *conditions* only — the part AFTER the
+        project filter — e.g. 'status = "To Do"' or 'text ~ "offline" ORDER BY created DESC'.
+        The server always scopes the query to project = QCH; you cannot query any other
+        project. Empty conditions returns the most recently updated QCH issues. Returns a
+        compact list: key, summary, status, type, priority, assignee, updated, project.
+        Read-only. Single page only (Jira caps maxResults ~100)."""
+        jql = build_scoped_jql(conditions)
+        data = await _get_json(client, "/rest/api/3/search/jql", params={
+            "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,
+        })
+        return [_issue_summary(i) for i in data.get("issues", [])]
+
+    _DETAIL_FIELDS = (
+        "summary,status,issuetype,priority,assignee,reporter,created,updated,"
+        "labels,components,description"
+    )
+
+    @mcp.tool
+    async def cz_jira_get_issue(key: str) -> dict:
+        """Full detail of one Quench (QCH) Jira issue by key (e.g. 'QCH-4490'): summary,
+        status, type, priority, reporter/assignee, dates, labels, components, and the
+        description (flattened to text). Only QCH keys are accepted. Read-only."""
+        key = require_qch(key)
+        data = await _get_json(client, f"/rest/api/3/issue/{key}", params={
+            "fields": _DETAIL_FIELDS,
+        })
+        return _issue_detail(data)
+
+    @mcp.tool
+    async def cz_jira_get_comments(key: str, limit: int = 50) -> list[dict]:
+        """Comments on a Quench (QCH) Jira issue by key: author, created, and body text (ADF
+        flattened). Useful for RCA discussion history. Only QCH keys are accepted. Read-only."""
+        key = require_qch(key)
+        data = await _get_json(client, f"/rest/api/3/issue/{key}/comment", params={
+            "maxResults": limit,
+        })
+        return [_comment(c) for c in data.get("comments", [])]
+
+    @mcp.tool
+    async def cz_jira_get_issue_transitions(key: str) -> dict:
+        """Current status of a Quench (QCH) Jira issue plus the transitions *available* from
+        it — {status, transitions:[{id, name, to}]}. This only READS workflow options; it
+        never performs a transition. Only QCH keys are accepted. Read-only."""
+        key = require_qch(key)
+        data = await _get_json(client, f"/rest/api/3/issue/{key}", params={
+            "fields": "status", "expand": "transitions",
+        })
+        status = ((data.get("fields") or {}).get("status") or {}).get("name")
+        transitions = [
+            {"id": t.get("id"), "name": t.get("name"), "to": (t.get("to") or {}).get("name")}
+            for t in data.get("transitions", [])
+        ]
+        return _drop_empty({"status": status, "transitions": transitions})

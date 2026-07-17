@@ -25,6 +25,9 @@ shrinking the maintainer's job from "review everything and fix everything" to
 - Any change to how end users interact with Manthan.
 - Cloud/hosted execution (see §3 — everything runs locally by constraint).
 - Fine-tuning or model training. This loop edits *prompts and tool code*, not weights.
+- **Auto-building new features.** The loop may *propose* new tools/skillsets/behaviors
+  (D9, §12) but never designs or ships them autonomously — generative work has no
+  ground-truth oracle and must go through a human-led brainstorm → spec → build.
 
 ---
 
@@ -40,6 +43,7 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D6 | **Regression set** | **Self-curated**: the loop promotes judge-confirmed-correct sessions into a growing regression store; no manual upkeep required (entries can be pinned/blocklisted). |
 | D7 | **Candidate replay fidelity** | The judge is **Claude** (best reasoning); the candidate-agent replay uses the **production model** (GLM via z.ai) so a GLM agent's fix is tested on GLM. |
 | D8 | **Escalation format** | Tool/code fixes become a **patch file + digest entry**; optionally a **draft GitHub PR**. Never auto-applied. |
+| D9 | **Feature discovery** | The loop **detects capability gaps** from real sessions and writes **feature proposals** (propose-only). It **never auto-builds** new tools/skillsets/behaviors — those are human-decided and go through their own brainstorm → spec → build. See §12. |
 
 ---
 
@@ -226,6 +230,9 @@ Writes `docs/manthan-review/YYYY-MM-DD.md`:
   the verify proof (fix passed + regression clean), with the commit hash.
 - **Awaiting you** section: escalated tool/code patches with root cause, failing
   session, and the `proposals/` patch path (+ PR link if opened).
+- **Feature proposals** section (D9, §12): clustered capability gaps with the
+  evidence (how many sessions, representative asks) and a one-line suggested
+  direction — for you to triage, never auto-built.
 - **Cost:** tokens/model calls spent.
 
 ---
@@ -295,4 +302,35 @@ open_pr: false               # escalations as patch file only unless true
 - **End-to-end (dry-run):** full nightly run with `apply: off` against a copy of
   real sessions; inspect the digest for correctness before enabling apply.
 - **Regression self-test:** confirm a promoted good session, replayed, still passes.
+
+---
+
+## 12. Feature-Discovery Extension (propose-only) (D9)
+
+The loop already reads every real session, so it is the ideal *scout* for what to
+build next — but it must **never build**. This extension adds detection + proposal
+only; humans decide and build.
+
+### 12.1 What it detects
+While judging/diagnosing, a session is also tagged for **capability signals**:
+- **Unmet need** — the user asked for something no current tool/skill can answer
+  (agent had to decline, guess, or gave a partial answer despite calling tools
+  correctly). This is distinct from a *wrong* answer (a corrective failure).
+- **Friction pattern** — recurring behavioral gaps that a *feature* (not a one-off
+  guardrail) would solve, e.g. many vague queries that fired tools prematurely
+  → signals a "clarify-before-invoke / slot-filling" feature.
+
+### 12.2 Output
+Capability signals are clustered weekly-over-daily (a proposal needs recurrence,
+not a single occurrence) and written to a backlog file
+(`manthan-review/proposals/features.md`) and the digest's **Feature proposals**
+section, each with: the gap, how many sessions/how often, 1–3 representative asks,
+and a one-line suggested direction. Nothing here is drafted as code or applied.
+
+### 12.3 Boundary (why this stays safe)
+- A feature proposal is **data for a human**, never an input to the auto-apply path.
+- The allow-list (§6.4) is unchanged — it still forbids anything but additive
+  instruction edits, so a proposal can never leak into an auto-applied change.
+- Turning a proposal into a feature is a separate **brainstorm → spec → build**
+  cycle. The loop's role ends at "here's what's worth building, and why."
 ```

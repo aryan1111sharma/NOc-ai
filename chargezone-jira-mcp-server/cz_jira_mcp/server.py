@@ -219,6 +219,11 @@ def build_scoped_jql(conditions: str) -> str:
     return f"{proj} AND ({conditions}) ORDER BY updated DESC"
 
 
+_STATS_CAP = 2000
+_STATS_PAGE = 100
+_STATS_FIELDS = "status,issuetype,priority,assignee,created"
+
+
 # ── Client + server factories ────────────────────────────────────────────────────────────
 
 def build_client() -> JiraAuthClient:
@@ -329,4 +334,68 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "rows": rows,
             "row_count": len(rows),
             "truncated": len(rows) >= limit,
+        }
+
+    @mcp.tool
+    async def cz_jira_stats(conditions: str = "") -> dict:
+        """Analytics summary of Quench (QCH) tickets. Pass JQL filter *conditions* only (no
+        ORDER BY; always QCH-scoped), or empty for the whole project. Returns totals and
+        breakdowns: {total, sampled, truncated, by_status, by_type, by_priority,
+        top_assignees (top 10), created_last_7d, created_last_30d}. Read-only. Paginates up
+        to 2000 issues; beyond that total is ">=2000" and truncated=true."""
+        jql = build_scoped_jql(conditions)
+        issues: list[dict] = []
+        token = None
+        while len(issues) < _STATS_CAP:
+            params = {"jql": jql, "maxResults": _STATS_PAGE, "fields": _STATS_FIELDS}
+            if token:
+                params["nextPageToken"] = token
+            data = await _get_json(client, "/rest/api/3/search/jql", params=params)
+            batch = data.get("issues", [])
+            issues.extend(batch)
+            token = data.get("nextPageToken")
+            if not token or not batch:
+                break
+        truncated = len(issues) >= _STATS_CAP and bool(token)
+        issues = issues[:_STATS_CAP]
+
+        now = datetime.now(timezone.utc)
+
+        def _created(i: dict):
+            c = (i.get("fields") or {}).get("created")
+            if not c:
+                return None
+            try:
+                return datetime.strptime(c, "%Y-%m-%dT%H:%M:%S.%f%z")
+            except ValueError:
+                return None
+
+        by_status: Counter = Counter()
+        by_type: Counter = Counter()
+        by_priority: Counter = Counter()
+        by_assignee: Counter = Counter()
+        c7 = c30 = 0
+        for i in issues:
+            f = i.get("fields", {}) or {}
+            by_status[(f.get("status") or {}).get("name") or "Unknown"] += 1
+            by_type[(f.get("issuetype") or {}).get("name") or "Unknown"] += 1
+            by_priority[(f.get("priority") or {}).get("name") or "None"] += 1
+            by_assignee[(f.get("assignee") or {}).get("displayName") or "Unassigned"] += 1
+            dt = _created(i)
+            if dt:
+                age = (now - dt).days
+                if age <= 7:
+                    c7 += 1
+                if age <= 30:
+                    c30 += 1
+        return {
+            "total": (f">={_STATS_CAP}" if truncated else len(issues)),
+            "sampled": len(issues),
+            "truncated": truncated,
+            "by_status": dict(by_status.most_common()),
+            "by_type": dict(by_type.most_common()),
+            "by_priority": dict(by_priority.most_common()),
+            "top_assignees": dict(by_assignee.most_common(10)),
+            "created_last_7d": c7,
+            "created_last_30d": c30,
         }

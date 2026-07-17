@@ -69,3 +69,49 @@ async def test_cz_jira_export_non_csv_raises(mock_client):
     async with Client(mcp) as c:
         with pytest.raises(Exception, match="CSV export"):
             await c.call_tool("cz_jira_export", {"conditions": ""})
+
+
+def _iso(dt):
+    # Jira REST v3 created format, e.g. 2026-07-10T10:00:00.000+0000
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.000%z").replace("+0000", "+0000")
+
+
+@pytest.mark.asyncio
+async def test_cz_jira_stats_tallies_and_paginates(mock_client):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+
+    def mk(key, status, itype, prio, assignee, days_ago):
+        return {"key": key, "fields": {
+            "status": {"name": status}, "issuetype": {"name": itype},
+            "priority": {"name": prio},
+            "assignee": ({"displayName": assignee} if assignee else None),
+            "created": (now - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%S.000%z")}}
+
+    page1 = {"issues": [
+        mk("QCH-1", "To Do", "Task", "Medium", "Quench Support", 2),
+        mk("QCH-2", "QA", "Bug", "Medium", "Quench Support", 10),
+    ], "nextPageToken": "tok2"}
+    page2 = {"issues": [
+        mk("QCH-3", "To Do", "Task", "High", None, 40),
+    ]}  # no nextPageToken -> last page
+
+    calls = {"n": 0}
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        assert request.url.path == "/rest/api/3/search/jql"
+        assert request.url.params.get("jql") == 'project = "QCH" ORDER BY updated DESC'
+        return httpx.Response(200, json=(page1 if request.url.params.get("nextPageToken") is None else page2))
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_stats", {"conditions": ""})
+
+    d = res.data
+    assert calls["n"] == 2                       # followed nextPageToken
+    assert d["total"] == 3 and d["sampled"] == 3 and d["truncated"] is False
+    assert d["by_status"] == {"To Do": 2, "QA": 1}
+    assert d["by_type"] == {"Task": 2, "Bug": 1}
+    assert d["top_assignees"] == {"Quench Support": 2, "Unassigned": 1}
+    assert d["created_last_7d"] == 1             # only QCH-1 (2 days)
+    assert d["created_last_30d"] == 2            # QCH-1 (2d) + QCH-2 (10d)

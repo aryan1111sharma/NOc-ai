@@ -23,15 +23,6 @@ def test_build_scoped_jql_wraps_conditions_and_adds_default_order():
         'project = "QCH" AND (status = "To Do") ORDER BY updated DESC'
 
 
-def test_build_scoped_jql_keeps_user_order_by_outside_parens():
-    assert build_scoped_jql("status = Open ORDER BY created ASC") == \
-        'project = "QCH" AND (status = Open) ORDER BY created ASC'
-
-
-def test_build_scoped_jql_order_by_only():
-    assert build_scoped_jql("ORDER BY created DESC") == 'project = "QCH" ORDER BY created DESC'
-
-
 def test_build_scoped_jql_foreign_project_is_neutralized_by_and():
     # A smuggled project filter stays ANDed under QCH → resolves to empty, never widens scope.
     assert build_scoped_jql("project = ADNOC") == \
@@ -61,6 +52,18 @@ def test_build_scoped_jql_whitespace_only_is_default():
     assert build_scoped_jql("   ") == 'project = "QCH" ORDER BY updated DESC'
 
 
-def test_build_scoped_jql_lowercase_order_by_kept_outside_parens():
-    assert build_scoped_jql("status = Open order by created ASC") == \
-        'project = "QCH" AND (status = Open) order by created ASC'
+@pytest.mark.parametrize("cond", [
+    "status = Open ORDER BY created ASC",
+    "ORDER BY created DESC",
+    '(x = 1 ORDER BY updated) OR (project != "QCH")',   # the 2nd-escape payload
+    "status = Open order by created",                   # lowercase
+])
+def test_build_scoped_jql_rejects_order_by_in_conditions(cond):
+    with pytest.raises(ValueError, match="ORDER BY"):
+        build_scoped_jql(cond)
+
+
+def test_build_scoped_jql_allows_order_by_inside_quotes():
+    # 'order by' inside a quoted string is data, not a clause — must be allowed and wrapped.
+    assert build_scoped_jql('text ~ "please order by priority"') == \
+        'project = "QCH" AND (text ~ "please order by priority") ORDER BY updated DESC'

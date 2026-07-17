@@ -116,7 +116,6 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
 # ── Scope guards (QCH-only) ──────────────────────────────────────────────────────────────
 
 _KEY_RE = re.compile(rf"^{re.escape(settings.project_key)}-[0-9]+$")
-_ORDER_BY_RE = re.compile(r"\border\s+by\b", re.IGNORECASE)
 
 
 def _parens_balanced(s: str) -> bool:
@@ -145,6 +144,33 @@ def _parens_balanced(s: str) -> bool:
     return depth == 0 and quote is None
 
 
+def _contains_order_by(s: str) -> bool:
+    """True iff an 'order by' keyword appears OUTSIDE any quoted string literal."""
+    quote = None
+    escaped = False
+    lowered = s.lower()
+    i, n = 0, len(s)
+    while i < n:
+        ch = s[i]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            i += 1
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            i += 1
+            continue
+        if lowered.startswith("order", i) and re.match(r"order\s+by\b", lowered[i:]):
+            return True
+        i += 1
+    return False
+
+
 def require_qch(key: str) -> str:
     """Return the trimmed key iff it is a QCH issue key; otherwise raise. Runs before any call."""
     k = key.strip() if isinstance(key, str) else key
@@ -157,28 +183,26 @@ def require_qch(key: str) -> str:
 
 
 def build_scoped_jql(conditions: str) -> str:
-    """Prepend the QCH project filter so no query can leave the project.
-
-    Any user `ORDER BY` is kept OUTSIDE the parentheses (JQL forbids ORDER BY inside `()`).
-    Empty conditions → newest-first QCH listing. The result is always project-bounded, which
-    also satisfies Jira's "no unbounded JQL" rule on /rest/api/3/search/jql.
+    """Return a project-locked JQL query. User-supplied WHERE `conditions` are ALWAYS wrapped
+    whole in `project = "<KEY>" AND (...)`, and ordering is ALWAYS our fixed trailing clause —
+    user conditions may not contain ORDER BY. This makes it structurally impossible for any
+    clause to escape the project filter, and keeps every query bounded.
     """
     proj = f'project = "{settings.project_key}"'
     conditions = (conditions or "").strip()
     if not conditions:
         return f"{proj} ORDER BY updated DESC"
+    if _contains_order_by(conditions):
+        raise ValueError(
+            "Rejected search conditions: remove ORDER BY. Results are always ordered by most "
+            "recently updated; pass only filter conditions (the part after the project filter)."
+        )
     if not _parens_balanced(conditions):
         raise ValueError(
             "Rejected search conditions: unbalanced parentheses. Pass a self-contained JQL "
-            "fragment (the part after the project filter)."
+            "filter fragment."
         )
-    m = _ORDER_BY_RE.search(conditions)
-    if m:
-        where = conditions[: m.start()].strip()
-        order = conditions[m.start():].strip()
-    else:
-        where, order = conditions, "ORDER BY updated DESC"
-    return f"{proj} AND ({where}) {order}" if where else f"{proj} {order}"
+    return f"{proj} AND ({conditions}) ORDER BY updated DESC"
 
 
 # ── Client + server factories ────────────────────────────────────────────────────────────
@@ -205,12 +229,13 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
 
     @mcp.tool
     async def cz_jira_search(conditions: str = "", limit: int = 50) -> list[dict]:
-        """Search Quench (QCH) Jira issues. Pass JQL *conditions* only — the part AFTER the
-        project filter — e.g. 'status = "To Do"' or 'text ~ "offline" ORDER BY created DESC'.
-        The server always scopes the query to project = QCH; you cannot query any other
-        project. Empty conditions returns the most recently updated QCH issues. Returns a
-        compact list: key, summary, status, type, priority, assignee, updated, project.
-        Read-only. Single page only (Jira caps maxResults ~100)."""
+        """Search Quench (QCH) Jira issues. Pass JQL filter *conditions* only — the part AFTER
+        the project filter — e.g. 'status = "To Do"' or 'text ~ "offline"'. Do NOT include
+        ORDER BY — results are always ordered by most recently updated. The server always
+        scopes the query to project = QCH; you cannot query any other project. Empty
+        conditions returns the most recently updated QCH issues. Returns a compact list: key,
+        summary, status, type, priority, assignee, updated, project. Read-only. Single page
+        only (Jira caps maxResults ~100)."""
         jql = build_scoped_jql(conditions)
         data = await _get_json(client, "/rest/api/3/search/jql", params={
             "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,

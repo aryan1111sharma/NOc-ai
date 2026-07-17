@@ -5,8 +5,9 @@ Self-hosted [FastMCP](https://github.com/jlowin/fastmcp) server exposing the **`
 tools. Scoped to QCH only — no other project is reachable. Mirrors `jira-mcp-server`.
 
 ## Tools
-- `cz_jira_search(conditions="", limit=50)` — search QCH issues by JQL *conditions* (the
-  server prepends `project = "QCH"`; you cannot escape the project). Empty → newest QCH issues.
+- `cz_jira_search(conditions="", limit=50)` — search QCH issues by JQL filter *conditions*
+  only (no `ORDER BY` — results are always ordered by most recently updated). The server
+  prepends `project = "QCH"`; you cannot escape the project. Empty → newest QCH issues.
 - `cz_jira_get_issue(key)` — full detail of one QCH issue (description flattened from ADF).
 - `cz_jira_get_comments(key, limit=50)` — comments (author, created, body text).
 - `cz_jira_get_issue_transitions(key)` — current status + *available* transitions (read only).

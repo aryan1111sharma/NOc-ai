@@ -41,7 +41,7 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D4 | **"Hermes" role** | **Scheduler/orchestrator only** — a dumb nightly trigger. All intelligence lives in the pipeline it invokes. |
 | D5 | **Verify-before-apply** | **Always verify**: an auto-applied instruction change must (a) make the original failing question pass, and (b) not regress a sampled regression set — before it goes live. |
 | D6 | **Regression set** | **Self-curated**: the loop promotes judge-confirmed-correct sessions into a growing regression store; no manual upkeep required (entries can be pinned/blocklisted). |
-| D7 | **Analysis/improvement model** | The judge, diagnose, cluster, and draft reasoning all run on **GLM 5.2 (advanced)** via the z.ai API — keeps the whole loop on the same provider/residency as the production agents, needs no Claude key at runtime, and reuses the proven GLM+MCP tool-calling path. Claude Code is the **dev-time authoring tool**, not a runtime dependency. |
+| D7 | **Review model** | The judge, diagnose, cluster, and **instruction-fix drafting** — everything that **reads production session/charger data** — runs on **GLM 5.2 (advanced)** via z.ai, keeping NOC data on the same residency as the production agents and reusing the proven GLM+MCP tool-calling path. The entire **auto-applied path therefore never touches Claude.** |
 | D7a | **Candidate replay fidelity** | The candidate-agent replay uses each agent's **own production model** (GLM `glm-4.7` / `glm-5.2` / `glm-5-turbo`) so a fix is tested on the model that will actually run it. |
 | D7b | **Self-grading caveat** | Judge and (some) agents share the GLM family, so the judge may grade its own family's output. Mitigated because verdicts are grounded in **re-querying MCP tools (ground truth)**, not model opinion. GLM-5.2 judging quality MUST be validated in a dry-run (`apply: off`) before auto-apply is enabled. |
 | D8 | **Escalation format** | Escalations become a **draft GitHub PR** (merge = approve) plus a patch file in `proposals/` and a digest/email entry. Never auto-applied. See §14. |
@@ -50,6 +50,7 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D11 | **Tool health** | The report includes **MCP tool-health metrics** (per `cms_`/`noc_` tool: success / error / timeout / empty-response counts) aggregated from the day's session tool-calls **and** the judge's own re-query calls. Degraded tools are flagged **email-only** (no PR — nothing to merge) for manual investigation. See §13. |
 | D12 | **Approval channel** | The escalated set is approved via **GitHub draft PR** on `Quench-EV-Charger/noc-mcp-agent`: **merge = approve**, **close = reject**. Merging an instruction PR triggers `restore-agents.ps1`; production is untouched until a human merges (no auto-merge). See §14. |
 | D13 | **Human steering** | The maintainer directs Hermes via a plain-English **`policy.md`** (injected into the nightly reasoning prompts) + **pinned regression cases**. New Hermes *machinery* is normal brainstorm → spec → build. Hermes may *propose* changes to its own code but **never auto-applies** them. See §15. |
+| D14 | **Code-drafting engine** | Escalated **tool/code fixes** and **Hermes self-improvements** are drafted by the **locally-installed Claude Code** (headless `claude -p`, using the repo's GitHub / TDD / code-review skills) — a stronger developer than a raw API call — which also opens the PR. Data boundary: raw session *review* stays on GLM 5.2; the *code* path may pass diagnosis context to Claude, but every code change is a human-gated PR (§14). See §16. |
 
 ---
 
@@ -85,8 +86,9 @@ production agent's data. This forces D3.
 |-----------|----------------|---------|
 | **Scheduler** (D4, "Hermes") | Wake once daily, invoke `run.ps1`, exit. No logic. | Container on the `chat` network **or** Windows Task Scheduler. |
 | **Harness** (`manthan-review/`) | Deterministic, safety-critical code: extract sessions, enforce the allow-list **guard**, edit `agents.json` + git commit + `restore`, manage the regression store, write the digest. | Python, headless. |
-| **Reasoning** (`manthan-review/prompts/`) | The intelligence: **judge**, **diagnose**, **cluster**, **draft** — prompt templates the harness sends to **GLM 5.2** with the MCP tools bound. | GLM 5.2 via z.ai API (D7). |
-| **Verification tools** | Existing CMS/NOC MCP servers, called by the judge (for detection) and by candidate replay (for verify). | Local MCP containers. |
+| **Reviewer** (`manthan-review/prompts/`) | The judgment: **judge**, **diagnose**, **cluster**, and **instruction-fix drafting** — prompt templates the harness sends to **GLM 5.2** with the MCP tools bound. Reads production data. | GLM 5.2 via z.ai API (D7). |
+| **Developer** (`dev.py` → `claude -p`) | Drafts escalated **tool/code fixes** + **Hermes self-improvements** and opens the PR, via the locally-installed Claude Code headless (D14, §16). | Local Claude Code (`claude -p`). |
+| **Verification tools** | Existing CMS/NOC MCP servers, called by the reviewer (for detection) and by candidate replay (for verify). | Local MCP containers. |
 
 **Design principle — the safety boundary is code, not prompt.** The decision to
 auto-apply and the write itself live in the Harness (`guard.py` / `apply.py`). The
@@ -100,6 +102,7 @@ manthan-review/
   guard.py          # allow-list enforcement — THE safety boundary
   apply.py          # agents.json edit → git commit → restore-agents wrapper
   pr.py             # push branch + open draft PR per escalation (D12)
+  dev.py            # invoke local Claude Code (claude -p) to draft code fixes (D14)
   replay.py         # candidate-agent replay on the production GLM model + MCP
   regression/       # self-curated golden cases (question + verified answer)
     _index.json     #   registry with pinned/blocklisted flags
@@ -265,6 +268,10 @@ Writes `docs/manthan-review/YYYY-MM-DD.md`:
   report-only (still reviews + digests, applies nothing).
 - **Escalation-by-default** — anything ambiguous, unverifiable, or outside the
   allow-list is reported, never applied.
+- **Residency boundary (D7/D14)** — all production-data *review* runs on GLM 5.2 (z.ai),
+  and the entire **auto-applied path never touches Claude**. Only the *escalated code*
+  path may pass diagnosis context to the local Claude Code, and that path is always a
+  human-gated PR — nothing lands from it without a merge.
 
 ---
 
@@ -321,6 +328,11 @@ health:                      # tool-health metrics (D11)
    on the host so the nightly job can push branches/PRs. Decide **merge→live for
    instruction PRs**: a GitHub Action on merge (near-immediate) vs. next-run detection
    (no CI, but go-live waits until the next night).
+8. **Claude Code headless invocation (D14)** — confirm the nightly job can run
+   `claude -p` non-interactively on the host (auth/credentials present, correct model,
+   skills available) and capture its produced patch/PR reliably. Define the exact
+   prompt + context handed to it (diagnosis + failing session + target files), and cap
+   its scope so it edits only the intended files.
 
 ---
 
@@ -446,7 +458,8 @@ Degraded-tool health alerts are **email-only** (D11) — no PR, nothing to merge
 1. **Notify** — the daily email's "Awaiting you" section lists each escalation: id,
    type, why it was escalated, evidence (failing session), the proposed diff, and the
    PR link.
-2. **Stage** — `pr.py` pushes each escalation as a branch
+2. **Draft + stage** — for a *code* escalation, `dev.py` invokes the local Claude Code
+   (§16) to write the fix; `pr.py` then pushes each escalation as a branch
    (`manthan-auto/<date>-<slug>`) and opens a **draft PR** on
    `Quench-EV-Charger/noc-mcp-agent`. A copy of the patch is also written to
    `proposals/` for local reference.
@@ -499,3 +512,34 @@ a PR. Hermes is an ordinary component of the repo.
 Hermes may *review and propose* improvements to its own code (it can read the repo), but
 any change to `manthan-review/` is **escalated as a PR like other code changes** — never
 auto-applied. It does not rewrite itself unattended.
+
+---
+
+## 16. Developer Engine — Local Claude Code (D14)
+
+Reviewing and *coding* are different skills, so the loop uses different engines.
+
+### 16.1 Split of responsibilities
+- **GLM 5.2 (reviewer, D7)** — reads sessions, verifies via MCP, judges, diagnoses,
+  and drafts **instruction** fixes (the auto-applied path). Production data stays on z.ai.
+- **Local Claude Code (developer, D14)** — drafts **escalated tool/code fixes** and
+  **Hermes self-improvements**, then opens the PR. It is the already-installed,
+  authenticated Claude Code on this host, invoked headless (`claude -p`) with the repo's
+  GitHub / TDD / code-review / superpowers skills available — a far stronger developer
+  than a single API call.
+
+### 16.2 Invocation (`dev.py`)
+- Called only for **code-class** escalations (never for instruction auto-fixes).
+- Hands Claude Code a bounded task: the diagnosis, the representative failing session,
+  and the target file(s); instructs it to produce a minimal patch + a draft PR, scoped
+  to the intended files only.
+- Output (branch + draft PR) flows into the normal approval workflow (§14) — **human
+  merge required**, nothing auto-merges.
+
+### 16.3 Why this is safe
+- The **auto-applied path never invokes Claude** — only human-gated code PRs do (§7
+  residency boundary).
+- Claude Code's edits are bounded to named files and land as a reviewable diff, not a
+  live change.
+- Prerequisite: confirm headless `claude -p` runs non-interactively from the nightly
+  job (§9 item 8).

@@ -96,6 +96,19 @@ services:
       - MCP_PORT=8102
     restart: unless-stopped
 
+  # Read-only MCP for ChargeZone's Atlassian Jira, HARD-scoped to the QCH (Quench) project.
+  chargezone-jira-mcp-server:
+    build: ../chargezone-jira-mcp-server
+    container_name: chargezone-jira-mcp-server
+    environment:
+      - CZ_JIRA_BASE_URL=${CZ_JIRA_BASE_URL}
+      - CZ_JIRA_EMAIL=${CZ_JIRA_EMAIL}
+      - CZ_JIRA_API_TOKEN=${CZ_JIRA_API_TOKEN}
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8105
+    restart: unless-stopped
+
   # Read-only MCP for Ecog's Jira Service Desk (customer API, cookie/Playwright auth).
   ecog-sd-mcp-server:
     build: ../ecog-sd-mcp-server

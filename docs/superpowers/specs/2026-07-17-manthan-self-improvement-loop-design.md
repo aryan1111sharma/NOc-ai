@@ -49,6 +49,7 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D10 | **Daily email report** | The nightly run **emails a health+quality digest** to the maintainer via **Gmail SMTP** (Google Workspace, app password in a gitignored `.env`). The emailed report is the same digest rendered as HTML. See §13. |
 | D11 | **Tool health** | The report includes **MCP tool-health metrics** (per `cms_`/`noc_` tool: success / error / timeout / empty-response counts) aggregated from the day's session tool-calls **and** the judge's own re-query calls. Degraded tools are flagged **email-only** (no PR — nothing to merge) for manual investigation. See §13. |
 | D12 | **Approval channel** | The escalated set is approved via **GitHub draft PR** on `Quench-EV-Charger/noc-mcp-agent`: **merge = approve**, **close = reject**. Merging an instruction PR triggers `restore-agents.ps1`; production is untouched until a human merges (no auto-merge). See §14. |
+| D13 | **Human steering** | The maintainer directs Hermes via a plain-English **`policy.md`** (injected into the nightly reasoning prompts) + **pinned regression cases**. New Hermes *machinery* is normal brainstorm → spec → build. Hermes may *propose* changes to its own code but **never auto-applies** them. See §15. |
 
 ---
 
@@ -112,6 +113,7 @@ manthan-review/
   glm_client.py     # z.ai GLM 5.2 API wrapper (reasoning calls, MCP tools bound)
   prompts/          # judge / diagnose / cluster / draft prompt templates (GLM 5.2)
   config.yaml       # caps, sampling, model id, kill switch defaults
+  policy.md         # plain-English review rules/priorities, injected into prompts (D13)
   run.ps1           # entrypoint the scheduler calls
   tests/            # unit tests for guard, apply, extract, regression store
 docs/manthan-review/
@@ -465,3 +467,35 @@ Degraded-tool health alerts are **email-only** (D11) — no PR, nothing to merge
 Merges and rejections are recorded in `state/`, keyed by root-cause signature, so the
 loop learns your calls — it neither re-proposes a rejected change nor re-opens a merged
 one (dedup).
+
+---
+
+## 15. Human Steering & Input Channels (D13)
+
+You extend Hermes through three channels, ordered by weight of change.
+
+### 15.1 Steer what it reviews — `policy.md` (no code)
+`manthan-review/policy.md` is plain-English guidance injected into the judge/diagnose
+prompts each run. Use it for new rules and priorities — e.g. "flag prices quoted
+without a date", "treat >30 s tool responses as issues", "watch customer ACME this
+month". Edit → commit → effective next run. Being in git, every steering change is
+auditable and revertible.
+
+> **Not the same as agent instructions.** `policy.md` steers *Hermes's review*; it is
+> distinct from the *agents'* `instructions` in `agents.json` (which are what Hermes
+> edits). One tells the reviewer what to look for; the other is the thing being reviewed.
+
+### 15.2 Lock a behavior — pinned regression cases (no code)
+Add a question + expected answer to `regression/` and pin it (§6.7). Hermes enforces it
+indefinitely and the verify gate (D5) blocks any change that breaks it. Use this for
+hard "must always work" guarantees (e.g. the slot-filling success cases).
+
+### 15.3 Add new machinery — code (brainstorm → spec → build)
+New capabilities (a new email section, a new check type, a new data source) are code in
+`manthan-review/` and go through the normal brainstorm → spec → build cycle, shipped as
+a PR. Hermes is an ordinary component of the repo.
+
+### 15.4 Self-improvement boundary
+Hermes may *review and propose* improvements to its own code (it can read the repo), but
+any change to `manthan-review/` is **escalated as a PR like other code changes** — never
+auto-applied. It does not rewrite itself unattended.

@@ -8,7 +8,11 @@ and every tool is locked to the QCH (Quench) project.
 
 from __future__ import annotations
 
+import csv
+import io
 import re
+from collections import Counter
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
@@ -111,6 +115,16 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
             f"Jira returned a non-JSON response for {path} (status {resp.status_code}); "
             "the backend may be temporarily unavailable."
         ) from exc
+
+
+def _parse_csv(text: str) -> tuple[list[str], list[list[str]]]:
+    """Parse CSV text into (headers, rows). Empty text -> ([], [])."""
+    if not text.strip():
+        return [], []
+    reader = list(csv.reader(io.StringIO(text)))
+    if not reader:
+        return [], []
+    return reader[0], [r for r in reader[1:]]
 
 
 # ── Scope guards (QCH-only) ──────────────────────────────────────────────────────────────
@@ -283,3 +297,36 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             for t in data.get("transitions", [])
         ]
         return _drop_empty({"status": status, "transitions": transitions})
+
+    @mcp.tool
+    async def cz_jira_export(conditions: str = "", all_fields: bool = False,
+                             limit: int = 1000) -> dict:
+        """Export Quench (QCH) Jira issues as tabular data for download. Pass JQL filter
+        *conditions* only (no ORDER BY; always QCH-scoped), same as cz_jira_search. Returns
+        {headers, rows, row_count, truncated}. all_fields=False -> 14 tidy columns (key,
+        summary, assignee, status, priority, dates...); all_fields=True -> every field.
+        To give the user a downloadable file, pass the returned headers+rows to the docgen
+        `create_excel` tool and present its download link. Read-only. `limit` caps rows
+        (default 1000); truncated=true means more matched than were returned."""
+        jql = build_scoped_jql(conditions)
+        variant = "searchrequest-csv-all-fields" if all_fields else "searchrequest-csv-current-fields"
+        path = f"/sr/jira.issueviews:{variant}/temp/SearchRequest.csv"
+        resp = await client.get(path, params={"jqlQuery": jql, "tempMax": limit})
+        if resp.status_code in (401, 403):
+            raise RuntimeError(
+                f"Jira auth failed ({resp.status_code}) — check CZ_JIRA_EMAIL / CZ_JIRA_API_TOKEN."
+            )
+        resp.raise_for_status()
+        ctype = resp.headers.get("content-type", "")
+        if "csv" not in ctype.lower():
+            raise RuntimeError(
+                f"Jira CSV export failed — expected text/csv, got {ctype!r} "
+                "(likely an auth redirect to a login page)."
+            )
+        headers, rows = _parse_csv(resp.text)
+        return {
+            "headers": headers,
+            "rows": rows,
+            "row_count": len(rows),
+            "truncated": len(rows) >= limit,
+        }

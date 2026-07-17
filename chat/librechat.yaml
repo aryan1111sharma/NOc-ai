@@ -18,6 +18,7 @@ mcpSettings:
     - "jira-mcp-server:8102"
     - "docgen-mcp-server:8103"
     - "ecog-sd-mcp-server:8104"
+    - "chargezone-jira-mcp-server:8105"
 
 endpoints:
   custom:

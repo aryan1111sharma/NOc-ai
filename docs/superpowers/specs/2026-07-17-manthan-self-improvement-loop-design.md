@@ -46,6 +46,8 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D7b | **Self-grading caveat** | Judge and (some) agents share the GLM family, so the judge may grade its own family's output. Mitigated because verdicts are grounded in **re-querying MCP tools (ground truth)**, not model opinion. GLM-5.2 judging quality MUST be validated in a dry-run (`apply: off`) before auto-apply is enabled. |
 | D8 | **Escalation format** | Tool/code fixes become a **patch file + digest entry**; optionally a **draft GitHub PR**. Never auto-applied. |
 | D9 | **Feature discovery** | The loop **detects capability gaps** from real sessions and writes **feature proposals** (propose-only). It **never auto-builds** new tools/skillsets/behaviors — those are human-decided and go through their own brainstorm → spec → build. See §12. |
+| D10 | **Daily email report** | The nightly run **emails a health+quality digest** to the maintainer via **Gmail SMTP** (Google Workspace, app password in a gitignored `.env`). The emailed report is the same digest rendered as HTML. See §13. |
+| D11 | **Tool health** | The report includes **MCP tool-health metrics** (per `cms_`/`noc_` tool: success / error / timeout / empty-response counts) aggregated from the day's session tool-calls **and** the judge's own re-query calls. Degraded tools are flagged and become **escalations** (tool/code class — never auto-fixed). See §13. |
 
 ---
 
@@ -101,6 +103,10 @@ manthan-review/
   proposals/        # escalated tool/code patches (patch files)
   state/            # reviewed-session cursor, run logs
   digest.py         # writes docs/manthan-review/YYYY-MM-DD.md
+  health.py         # aggregates per-tool success/error/timeout/empty from tool-calls (D11)
+  mailer.py         # renders digest as HTML + sends via Gmail SMTP (D10)
+  email_template.html  # HTML report template
+  .env              # GMAIL_APP_PASSWORD etc. — GITIGNORED, never committed
   glm_client.py     # z.ai GLM 5.2 API wrapper (reasoning calls, MCP tools bound)
   prompts/          # judge / diagnose / cluster / draft prompt templates (GLM 5.2)
   config.yaml       # caps, sampling, model id, kill switch defaults
@@ -153,8 +159,13 @@ CLUSTER ── group the day's failures by root cause (one fix per pattern)
         write patch to proposals/ + digest entry (+ optional draft PR) │
                                                                         │
   ▼                                                                     ▼
+Harness.health ── aggregate per-tool success/error/timeout/empty (D11)
+  │
+  ▼
 Harness.digest ── docs/manthan-review/YYYY-MM-DD.md
-     (found / auto-applied w/ before-after + verify proof / awaiting you / cost)
+  │  (sessions / tool-health / found / auto-applied w/ proof / awaiting you / cost)
+  ▼
+Harness.mailer ── render digest as HTML → send via Gmail SMTP to maintainer (D10)
 ```
 
 ---
@@ -264,6 +275,19 @@ max_diff_lines: 15           # per-change instruction diff cap
 regression_sample: 20        # regression entries replayed per verify
 apply: on                    # overridden by MANTHAN_REVIEW_APPLY=off
 open_pr: false               # escalations as patch file only unless true
+
+email:                       # daily report (D10)
+  enabled: true
+  smtp_host: smtp.gmail.com
+  smtp_port: 587             # STARTTLS
+  from: manthan-noc@quenchchargers.com   # confirm sender (§9)
+  to: [kmittal@quenchchargers.com]
+  # app password read from GMAIL_APP_PASSWORD in .env — NEVER in this file
+  send_when_empty: true      # still send a "clean night, nothing to report" note
+
+health:                      # tool-health metrics (D11)
+  degraded_error_rate: 0.20  # flag a tool if >20% of its calls failed/timed out
+  timeout_seconds: 90        # matches CMS device-latency budget
 ```
 
 ---
@@ -284,6 +308,10 @@ open_pr: false               # escalations as patch file only unless true
    already does this for the agents, so the path exists — confirm it outside LibreChat).
 5. **GLM-5.2 judging quality (D7b)** — dry-run (`apply: off`) to confirm GLM 5.2 is a
    reliable judge before enabling auto-apply.
+6. **Gmail send path (D10)** — confirm quenchchargers.com is Google Workspace, provision
+   a **sender** (a dedicated address like `manthan-noc@` is cleaner than a personal one)
+   and a **Gmail app password** (requires 2FA on that account), stored only in
+   `manthan-review/.env`. Verify the Windows host can reach `smtp.gmail.com:587`.
 
 ---
 
@@ -342,4 +370,55 @@ and a one-line suggested direction. Nothing here is drafted as code or applied.
   instruction edits, so a proposal can never leak into an auto-applied change.
 - Turning a proposal into a feature is a separate **brainstorm → spec → build**
   cycle. The loop's role ends at "here's what's worth building, and why."
-```
+
+---
+
+## 13. Daily Email Report & Tool Health (D10, D11)
+
+### 13.1 Purpose
+Deliver the daily digest to the maintainer's inbox so review needs no repo-diving,
+and surface **tool health** next to answer **quality**. The email is the same digest
+(§6.8) rendered as HTML — one artifact, two channels (git file + inbox).
+
+### 13.2 Tool-health aggregation (`health.py`, D11)
+- **Source:** every MCP tool call in the day's sessions (reconstructed by `extract.py`,
+  §6.1) **plus** the judge's own re-query calls (§6.2) — the latter is a live probe.
+- **Per tool** (`cms_*`, `noc_*`): count outcomes — success / error / timeout / **empty**
+  (empty = HTTP 200 but no body, the known CMS content-type failure mode).
+- **Degraded** if (error + timeout) rate > `health.degraded_error_rate`.
+- A degraded tool is a **tool/code-class** finding → **escalated**, never auto-fixed
+  (consistent with D1/D8). This is how "identify issues with the tool and improve it"
+  works for infrastructure problems: surfaced to you with evidence, not silently patched.
+
+### 13.3 Email content (Full health + quality)
+1. **Header** — date, total sessions, one-line status.
+2. **Session summary** — counts by agent; any sessions that errored.
+3. **Tool health** — per-tool table (calls / errors / timeouts / empty / status);
+   degraded tools called out at the top.
+4. **Quality review** — issues found, by severity.
+5. **Improvements** — auto-applied (before/after + verify proof + commit hash) and
+   awaiting-you (escalated patches + links).
+6. **Feature proposals** (§12).
+7. **Cost** — tokens / model calls spent.
+
+### 13.4 Send path (`mailer.py`, D10)
+- Renders `email_template.html`; sends via **Gmail SMTP** (`smtp.gmail.com:587`,
+  STARTTLS) authenticated with `GMAIL_APP_PASSWORD` from `.env`.
+- Runs as the **final** step, after `digest.py`. **Non-blocking:** a send failure is
+  logged and retried once; it never fails the run (the git digest stays the source of
+  truth).
+- `send_when_empty: true` still sends a short "clean night — nothing to report" note,
+  so a silent inbox means *"the job didn't run"*, not *"nothing happened"*.
+
+### 13.5 Secrets
+The Gmail app password lives **only** in `manthan-review/.env` (gitignored, per repo
+secrets policy). Never in `config.yaml`, never committed, never logged. Requires 2FA
+on the sender account to mint an app password (§9 item 6).
+
+### 13.6 Testing
+- `health.py` unit tests: outcome classification (esp. empty-body detection) and the
+  degraded threshold.
+- `mailer.py` test: render + send against a local capture (e.g. write the `.eml` to
+  disk or a dev SMTP sink) — no real send in tests.
+- End-to-end dry-run: a full nightly run with `apply: off` produces a digest file and
+  a well-formed email to the maintainer.

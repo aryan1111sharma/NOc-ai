@@ -141,3 +141,27 @@ async def test_cz_jira_project_meta_flattens(mock_client):
     assert d["issue_types"] == ["Task", "Bug", "Epic"]
     assert d["statuses"] == ["To Do", "Done", "QA"]        # unique, first-seen order
     assert d["priorities"] == ["High", "Medium", "Low"]
+
+
+@pytest.mark.asyncio
+async def test_cz_jira_list_dashboards_filters_to_qch(mock_client):
+    def handler(request: httpx.Request) -> httpx.Response:
+        p = request.url.path
+        if p == "/rest/api/3/dashboard":
+            return httpx.Response(200, json={"dashboards": [
+                {"id": "10189", "name": "Quench"}, {"id": "10000", "name": "Default dashboard"}]})
+        if p == "/rest/api/3/filter/search":
+            return httpx.Response(200, json={"values": [
+                {"id": "1", "name": "Filter for QCH board", "jql": "project = QCH ORDER BY Rank ASC"},
+                {"id": "2", "name": "Quench R&D open", "jql": "status = Open"},
+                {"id": "3", "name": "CDB - Blocked", "jql": "project = CDB"}]})
+        return httpx.Response(404, json={})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_list_dashboards", {})
+
+    d = res.data
+    assert {x["id"] for x in d["dashboards"]} == {"10189", "10000"}
+    got = {f["id"] for f in d["quench_filters"]}
+    assert got == {"1", "2"}          # QCH in jql, "Quench" in name; CDB excluded

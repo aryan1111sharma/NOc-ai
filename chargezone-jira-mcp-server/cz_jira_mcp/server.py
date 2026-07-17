@@ -427,3 +427,25 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "issue_types": issue_types,
             "priorities": prio_names,
         })
+
+    @mcp.tool
+    async def cz_jira_list_dashboards() -> dict:
+        """List Jira dashboards and the saved filters that reference Quench (QCH). Returns
+        {dashboards:[{id,name}], quench_filters:[{id,name,jql}]}. Dashboard chart data is not
+        API-exposed — this is a navigation aid: open a dashboard by id in Jira, or reuse a
+        filter's JQL via cz_jira_search. Read-only, no parameters."""
+        dash = await _get_json(client, "/rest/api/3/dashboard", params={"maxResults": 50})
+        dashboards = [
+            {"id": d.get("id"), "name": d.get("name")} for d in dash.get("dashboards", [])
+        ]
+        filt = await _get_json(
+            client, "/rest/api/3/filter/search", params={"maxResults": 100, "expand": "jql"})
+        key = settings.project_key.lower()
+        quench_filters = []
+        for f in filt.get("values", []):
+            name = f.get("name") or ""
+            jql = f.get("jql") or ""
+            hay = (name + " " + jql).lower()
+            if key in hay or "quench" in hay:
+                quench_filters.append({"id": f.get("id"), "name": name, "jql": jql})
+        return {"dashboards": dashboards, "quench_filters": quench_filters}

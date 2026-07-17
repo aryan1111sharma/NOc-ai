@@ -115,3 +115,29 @@ async def test_cz_jira_stats_tallies_and_paginates(mock_client):
     assert d["top_assignees"] == {"Quench Support": 2, "Unassigned": 1}
     assert d["created_last_7d"] == 1             # only QCH-1 (2 days)
     assert d["created_last_30d"] == 2            # QCH-1 (2d) + QCH-2 (10d)
+
+
+@pytest.mark.asyncio
+async def test_cz_jira_project_meta_flattens(mock_client):
+    def handler(request: httpx.Request) -> httpx.Response:
+        p = request.url.path
+        if p == "/rest/api/3/project/QCH":
+            return httpx.Response(200, json={"key": "QCH", "name": "Quench",
+                "issueTypes": [{"name": "Task"}, {"name": "Bug"}, {"name": "Epic"}]})
+        if p == "/rest/api/3/project/QCH/statuses":
+            return httpx.Response(200, json=[
+                {"name": "Task", "statuses": [{"name": "To Do"}, {"name": "Done"}]},
+                {"name": "Bug", "statuses": [{"name": "To Do"}, {"name": "QA"}]}])
+        if p == "/rest/api/3/priority":
+            return httpx.Response(200, json=[{"name": "High"}, {"name": "Medium"}, {"name": "Low"}])
+        return httpx.Response(404, json={})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_project_meta", {})
+
+    d = res.data
+    assert d["key"] == "QCH" and d["name"] == "Quench"
+    assert d["issue_types"] == ["Task", "Bug", "Epic"]
+    assert d["statuses"] == ["To Do", "Done", "QA"]        # unique, first-seen order
+    assert d["priorities"] == ["High", "Medium", "Low"]

@@ -399,3 +399,31 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "created_last_7d": c7,
             "created_last_30d": c30,
         }
+
+    @mcp.tool
+    async def cz_jira_project_meta() -> dict:
+        """Reference metadata for the Quench (QCH) project: {key, name, statuses, issue_types,
+        priorities}. Use it to build valid `conditions` for cz_jira_search / cz_jira_stats /
+        cz_jira_export. Read-only, no parameters."""
+        proj = await _get_json(client, f"/rest/api/3/project/{settings.project_key}")
+        status_groups = await _get_json(
+            client, f"/rest/api/3/project/{settings.project_key}/statuses")
+        priorities = await _get_json(client, "/rest/api/3/priority")
+
+        issue_types = [t.get("name") for t in (proj.get("issueTypes") or []) if t.get("name")]
+        statuses: list[str] = []
+        seen = set()
+        for grp in (status_groups or []):
+            for s in grp.get("statuses", []):
+                n = s.get("name")
+                if n and n not in seen:
+                    seen.add(n)
+                    statuses.append(n)
+        prio_names = [p.get("name") for p in (priorities or []) if p.get("name")]
+        return _drop_empty({
+            "key": settings.project_key,
+            "name": proj.get("name"),
+            "statuses": statuses,
+            "issue_types": issue_types,
+            "priorities": prio_names,
+        })

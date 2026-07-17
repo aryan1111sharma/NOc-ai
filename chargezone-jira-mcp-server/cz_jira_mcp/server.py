@@ -118,7 +118,8 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
 
 
 def _parse_csv(text: str) -> tuple[list[str], list[list[str]]]:
-    """Parse CSV text into (headers, rows). Empty text -> ([], [])."""
+    """Parse CSV text into (headers, rows). Empty text -> ([], []). Strips a leading UTF-8 BOM."""
+    text = text.lstrip("﻿")
     if not text.strip():
         return [], []
     reader = list(csv.reader(io.StringIO(text)))
@@ -221,6 +222,7 @@ def build_scoped_jql(conditions: str) -> str:
 
 _STATS_CAP = 2000
 _STATS_PAGE = 100
+assert _STATS_CAP % _STATS_PAGE == 0  # truncation math assumes the final page can't cross the cap
 _STATS_FIELDS = "status,issuetype,priority,assignee,created"
 
 
@@ -313,6 +315,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
         To give the user a downloadable file, pass the returned headers+rows to the docgen
         `create_excel` tool and present its download link. Read-only. `limit` caps rows
         (default 1000); truncated=true means more matched than were returned."""
+        limit = max(1, min(int(limit), 5000))
         jql = build_scoped_jql(conditions)
         variant = "searchrequest-csv-all-fields" if all_fields else "searchrequest-csv-current-fields"
         path = f"/sr/jira.issueviews:{variant}/temp/SearchRequest.csv"
@@ -367,7 +370,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
                 return None
             try:
                 return datetime.strptime(c, "%Y-%m-%dT%H:%M:%S.%f%z")
-            except ValueError:
+            except (ValueError, TypeError):
                 return None
 
         by_status: Counter = Counter()

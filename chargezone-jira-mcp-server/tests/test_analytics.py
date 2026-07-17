@@ -18,6 +18,12 @@ def test_parse_csv_empty():
     assert _parse_csv("") == ([], [])
 
 
+def test_parse_csv_strips_bom():
+    headers, rows = _parse_csv("﻿Issue key,Summary\r\nQCH-1,Offline\r\n")
+    assert headers == ["Issue key", "Summary"]
+    assert rows == [["QCH-1", "Offline"]]
+
+
 @pytest.mark.asyncio
 async def test_cz_jira_export_scopes_jql_and_parses(mock_client):
     captured = {}
@@ -58,6 +64,18 @@ async def test_cz_jira_export_all_fields_variant_and_truncation(mock_client):
     assert captured["path"] == "/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv"
     assert res.data["row_count"] == 2
     assert res.data["truncated"] is True   # row_count >= limit
+
+
+@pytest.mark.asyncio
+async def test_cz_jira_export_clamps_limit(mock_client):
+    seen = {}
+    def handler(request):
+        seen["tempMax"] = request.url.params.get("tempMax")
+        return httpx.Response(200, text="A,B\r\n", headers={"content-type": "text/csv"})
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        await c.call_tool("cz_jira_export", {"conditions": "", "limit": 0})
+    assert seen["tempMax"] == "1"     # clamped up from 0
 
 
 @pytest.mark.asyncio
@@ -115,6 +133,24 @@ async def test_cz_jira_stats_tallies_and_paginates(mock_client):
     assert d["top_assignees"] == {"Quench Support": 2, "Unassigned": 1}
     assert d["created_last_7d"] == 1             # only QCH-1 (2 days)
     assert d["created_last_30d"] == 2            # QCH-1 (2d) + QCH-2 (10d)
+
+
+@pytest.mark.asyncio
+async def test_cz_jira_stats_skips_unparseable_created(mock_client):
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    good = {"key": "QCH-1", "fields": {"status": {"name": "To Do"}, "issuetype": {"name": "Task"},
+            "priority": {"name": "Medium"}, "assignee": {"displayName": "Q"},
+            "created": (now - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S.000%z")}}
+    bad = {"key": "QCH-2", "fields": {"status": {"name": "QA"}, "issuetype": {"name": "Bug"},
+           "priority": {"name": "Medium"}, "assignee": {"displayName": "Q"}, "created": 12345}}
+    def handler(request):
+        return httpx.Response(200, json={"issues": [good, bad]})
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_stats", {"conditions": ""})
+    assert res.data["sampled"] == 2            # both counted in distributions
+    assert res.data["created_last_7d"] == 1    # only the good one; bad one skipped, no crash
 
 
 @pytest.mark.asyncio

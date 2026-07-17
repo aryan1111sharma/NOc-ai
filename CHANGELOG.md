@@ -5,6 +5,33 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.6.0] - 2026-07-17
+
+### Features
+
+- **cz-jira:** Scaffold package + QCH-scoped config ([`78dcfb4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/78dcfb4d40635d13a20ac87ad0550c452c28c2bc))
+- **cz-jira:** Basic-auth Jira client ([`61e60b2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/61e60b221ebcb990766bf093fced94dbda900952))
+- **cz-jira:** ADF-flatten + issue/comment shaping helpers ([`070af85`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/070af85115312fb4a585ee7b377f692cfe2eee20))
+- **cz-jira:** QCH key guard + project-scoped JQL builder ([`c4add1a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c4add1a11b29245204240040d365b700809cb748))
+- **cz-jira:** 4 read-only QCH-locked tools + server factory ([`15d5f06`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/15d5f063c2f9eed3c8ddc996026ffb87d84f9c5c))
+- **cz-jira:** Entrypoint, Dockerfile, README ([`1d2807d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1d2807da02ecc78c8a26a997262308dfe8c67b29))
+- **cz-jira:** Wire chargezone-jira into compose + librechat (:8105) ([`483a600`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/483a60001b08e5ad61dae3f0b0d5b674b5a15d82))
+- **cz-jira:** Attach cz_jira tools to NOC Engineer agent + allow :8105 ([`9830f8d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9830f8d279889dc33f5b90d0904350351ac8df64))
+
+### Bug Fixes
+
+- **cz-jira:** Block JQL scope-escape + read-only enforce + robustness (review fixes) ([`ac58f76`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ac58f761484528d10cd782b214c260b6209d0d8e))
+- **cz-jira:** Eliminate ORDER-BY split scope-escape; conditions are WHERE-only ([`7c771b2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7c771b2bdf0e84a3937349a16cbfe95bbeebc330))
+
+### Documentation
+
+- **spec:** Manthan nightly self-improvement loop design ([`0d0b123`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/0d0b123781ee66d99f863748e7864be1ebc45a99))
+- **spec:** Add propose-only feature-discovery to Manthan loop (D9/§12) ([`a7e6926`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a7e69263370c36e5037938da97cd46ff1be44384))
+- **spec:** ChargeZone (Quench-scoped) Jira MCP server design ([`dbf0412`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dbf0412f90def5832d2f88a5ed61375bd968a265))
+- **plan:** ChargeZone (Quench) Jira MCP server implementation plan ([`51c29dc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/51c29dc2c6f9ceaa1b9dfcd9b5b589e8ed6a0d1f))
+- **spec:** Slot-filling feature + switch Manthan loop reasoning to GLM 5.2 ([`5e80d83`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5e80d83172de6c424be94a900d73f34ca1f43469))
+- **cz-jira:** Add CZ_JIRA_* keys to .env.example ([`284fadb`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/284fadb9c99825ca8e728614758db64993b18ff5))
+
 ## [0.5.0] - 2026-07-16
 
 ### Features

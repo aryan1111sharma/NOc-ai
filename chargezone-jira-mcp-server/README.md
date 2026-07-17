@@ -11,6 +11,12 @@ tools. Scoped to QCH only — no other project is reachable. Mirrors `jira-mcp-s
 - `cz_jira_get_issue(key)` — full detail of one QCH issue (description flattened from ADF).
 - `cz_jira_get_comments(key, limit=50)` — comments (author, created, body text).
 - `cz_jira_get_issue_transitions(key)` — current status + *available* transitions (read only).
+- `cz_jira_export(conditions="", all_fields=False, limit=1000)` — export QCH issues as
+  {headers, rows, row_count, truncated}; pass to docgen `create_excel` for a download link.
+- `cz_jira_stats(conditions="")` — QCH analytics: totals + by status/type/priority/assignee +
+  created last 7/30 days (GET-only, samples up to 2000 issues).
+- `cz_jira_project_meta()` — QCH statuses, issue types, priorities.
+- `cz_jira_list_dashboards()` — dashboards + saved filters referencing QCH/Quench.
 
 By-key tools accept **only `QCH-####` keys**. Read-only by construction — there is no write tool.
 

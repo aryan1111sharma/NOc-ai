@@ -139,7 +139,8 @@ async def test_server_registers_only_read_tools(mock_client):
 
     assert names == {
         "cz_jira_search", "cz_jira_get_issue", "cz_jira_get_comments",
-        "cz_jira_get_issue_transitions",
+        "cz_jira_get_issue_transitions", "cz_jira_export", "cz_jira_stats",
+        "cz_jira_project_meta", "cz_jira_list_dashboards",
     }
     forbidden = ("create", "update", "delete", "add", "edit", "post", "assign", "move")
     assert not [n for n in names if any(f in n for f in forbidden)]

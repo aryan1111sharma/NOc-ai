@@ -44,10 +44,11 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D7 | **Analysis/improvement model** | The judge, diagnose, cluster, and draft reasoning all run on **GLM 5.2 (advanced)** via the z.ai API — keeps the whole loop on the same provider/residency as the production agents, needs no Claude key at runtime, and reuses the proven GLM+MCP tool-calling path. Claude Code is the **dev-time authoring tool**, not a runtime dependency. |
 | D7a | **Candidate replay fidelity** | The candidate-agent replay uses each agent's **own production model** (GLM `glm-4.7` / `glm-5.2` / `glm-5-turbo`) so a fix is tested on the model that will actually run it. |
 | D7b | **Self-grading caveat** | Judge and (some) agents share the GLM family, so the judge may grade its own family's output. Mitigated because verdicts are grounded in **re-querying MCP tools (ground truth)**, not model opinion. GLM-5.2 judging quality MUST be validated in a dry-run (`apply: off`) before auto-apply is enabled. |
-| D8 | **Escalation format** | Tool/code fixes become a **patch file + digest entry**; optionally a **draft GitHub PR**. Never auto-applied. |
+| D8 | **Escalation format** | Escalations become a **draft GitHub PR** (merge = approve) plus a patch file in `proposals/` and a digest/email entry. Never auto-applied. See §14. |
 | D9 | **Feature discovery** | The loop **detects capability gaps** from real sessions and writes **feature proposals** (propose-only). It **never auto-builds** new tools/skillsets/behaviors — those are human-decided and go through their own brainstorm → spec → build. See §12. |
 | D10 | **Daily email report** | The nightly run **emails a health+quality digest** to the maintainer via **Gmail SMTP** (Google Workspace, app password in a gitignored `.env`). The emailed report is the same digest rendered as HTML. See §13. |
-| D11 | **Tool health** | The report includes **MCP tool-health metrics** (per `cms_`/`noc_` tool: success / error / timeout / empty-response counts) aggregated from the day's session tool-calls **and** the judge's own re-query calls. Degraded tools are flagged and become **escalations** (tool/code class — never auto-fixed). See §13. |
+| D11 | **Tool health** | The report includes **MCP tool-health metrics** (per `cms_`/`noc_` tool: success / error / timeout / empty-response counts) aggregated from the day's session tool-calls **and** the judge's own re-query calls. Degraded tools are flagged **email-only** (no PR — nothing to merge) for manual investigation. See §13. |
+| D12 | **Approval channel** | The escalated set is approved via **GitHub draft PR** on `Quench-EV-Charger/noc-mcp-agent`: **merge = approve**, **close = reject**. Merging an instruction PR triggers `restore-agents.ps1`; production is untouched until a human merges (no auto-merge). See §14. |
 
 ---
 
@@ -97,6 +98,7 @@ manthan-review/
   extract.py        # Mongo → sessions.json for the target day (dedup via state)
   guard.py          # allow-list enforcement — THE safety boundary
   apply.py          # agents.json edit → git commit → restore-agents wrapper
+  pr.py             # push branch + open draft PR per escalation (D12)
   replay.py         # candidate-agent replay on the production GLM model + MCP
   regression/       # self-curated golden cases (question + verified answer)
     _index.json     #   registry with pinned/blocklisted flags
@@ -274,7 +276,8 @@ max_autoapplies_per_run: 3   # nightly cap on auto-applied clusters
 max_diff_lines: 15           # per-change instruction diff cap
 regression_sample: 20        # regression entries replayed per verify
 apply: on                    # overridden by MANTHAN_REVIEW_APPLY=off
-open_pr: false               # escalations as patch file only unless true
+github_repo: Quench-EV-Charger/noc-mcp-agent   # escalation PRs open here (D12)
+escalation_channel: github_pr # draft PR per escalation; merge=approve, close=reject
 
 email:                       # daily report (D10)
   enabled: true
@@ -312,6 +315,10 @@ health:                      # tool-health metrics (D11)
    a **sender** (a dedicated address like `manthan-noc@` is cleaner than a personal one)
    and a **Gmail app password** (requires 2FA on that account), stored only in
    `manthan-review/.env`. Verify the Windows host can reach `smtp.gmail.com:587`.
+7. **PR push access + merge→live (D12)** — provision an **SSH deploy key or `gh` token**
+   on the host so the nightly job can push branches/PRs. Decide **merge→live for
+   instruction PRs**: a GitHub Action on merge (near-immediate) vs. next-run detection
+   (no CI, but go-live waits until the next night).
 
 ---
 
@@ -422,3 +429,39 @@ on the sender account to mint an app password (§9 item 6).
   disk or a dev SMTP sink) — no real send in tests.
 - End-to-end dry-run: a full nightly run with `apply: off` produces a digest file and
   a well-formed email to the maintainer.
+
+---
+
+## 14. Approval Workflow — Escalations (D12)
+
+### 14.1 Scope
+Only the **escalated set** needs approval: tool/code fixes, and instruction edits that
+failed the allow-list (§6.4) or the verify gate (D5). Allow-listed instruction fixes
+that *passed* verify are auto-applied and merely reported — not part of this flow.
+Degraded-tool health alerts are **email-only** (D11) — no PR, nothing to merge.
+
+### 14.2 Mechanism
+1. **Notify** — the daily email's "Awaiting you" section lists each escalation: id,
+   type, why it was escalated, evidence (failing session), the proposed diff, and the
+   PR link.
+2. **Stage** — `pr.py` pushes each escalation as a branch
+   (`manthan-auto/<date>-<slug>`) and opens a **draft PR** on
+   `Quench-EV-Charger/noc-mcp-agent`. A copy of the patch is also written to
+   `proposals/` for local reference.
+3. **Decide (human):**
+   - **Merge = approve.** For an *instruction* change, merge triggers
+     `restore-agents.ps1` (a GitHub Action on merge, or detection at the next run's
+     start — §9 item 7) to push it live to Mongo. For a *code* change, merge → rebuild
+     / redeploy the affected MCP container (normal deploy).
+   - **Close = reject.** Recorded so the loop does not re-propose the same cluster.
+4. **No auto-merge, ever** — draft PRs never merge themselves; production is untouched
+   until a human merges.
+
+### 14.3 Prerequisites
+- **Push access** for the nightly job — an SSH deploy key or `gh` token on the Windows
+  host, since `origin` is `git@github.com:Quench-EV-Charger/noc-mcp-agent.git`.
+
+### 14.4 Decision memory
+Merges and rejections are recorded in `state/`, keyed by root-cause signature, so the
+loop learns your calls — it neither re-proposes a rejected change nor re-opens a merged
+one (dedup).

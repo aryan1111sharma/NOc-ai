@@ -102,3 +102,40 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
         )
     resp.raise_for_status()
     return resp.json() if resp.text.strip() else {}
+
+
+# ── Scope guards (QCH-only) ──────────────────────────────────────────────────────────────
+
+_KEY_RE = re.compile(rf"^{re.escape(settings.project_key)}-\d+$")
+_ORDER_BY_RE = re.compile(r"\border\s+by\b", re.IGNORECASE)
+
+
+def require_qch(key: str) -> str:
+    """Return the trimmed key iff it is a QCH issue key; otherwise raise. Runs before any call."""
+    k = key.strip() if isinstance(key, str) else key
+    if not isinstance(k, str) or not _KEY_RE.match(k):
+        raise ValueError(
+            f"Only {settings.project_key} (Quench) issues are accessible through this server; "
+            f"got {key!r}."
+        )
+    return k
+
+
+def build_scoped_jql(conditions: str) -> str:
+    """Prepend the QCH project filter so no query can leave the project.
+
+    Any user `ORDER BY` is kept OUTSIDE the parentheses (JQL forbids ORDER BY inside `()`).
+    Empty conditions → newest-first QCH listing. The result is always project-bounded, which
+    also satisfies Jira's "no unbounded JQL" rule on /rest/api/3/search/jql.
+    """
+    proj = f'project = "{settings.project_key}"'
+    conditions = (conditions or "").strip()
+    if not conditions:
+        return f"{proj} ORDER BY updated DESC"
+    m = _ORDER_BY_RE.search(conditions)
+    if m:
+        where = conditions[: m.start()].strip()
+        order = conditions[m.start():].strip()
+    else:
+        where, order = conditions, "ORDER BY updated DESC"
+    return f"{proj} AND ({where}) {order}" if where else f"{proj} {order}"

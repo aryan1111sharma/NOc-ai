@@ -5,6 +5,36 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.7.0] - 2026-07-17
+
+### Features
+
+- **cz-jira:** Cz_jira_export (QCH CSV export -> structured rows) ([`0c36d72`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/0c36d725c849a39b94171503c864760ed070a4b5))
+- **cz-jira:** Cz_jira_stats (GET-only paginated QCH analytics, cap 2000) ([`a7e84e9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a7e84e9b10b8b4e2f553e8c5149bcca00cd6b621))
+- **cz-jira:** Cz_jira_project_meta (QCH statuses/types/priorities) ([`b2a18b3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b2a18b3ab29a015885e19c5338d82cdb7ea5de63))
+- **cz-jira:** Cz_jira_list_dashboards (dashboards + QCH filters) ([`930effa`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/930effad3773c02c5a6b20a2082bcea763aa11bb))
+- **agents:** Add clarify-before-invoke (slot-filling) policy to all 4 NOC agents ([`77ebdc6`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/77ebdc62c0ea252a1aca2a4b2ba5e33efe702514))
+- **cz-jira:** Attach 4 analytics/export tools to NOC Engineer agent ([`a4fe425`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a4fe42583212d5fdccf9a91363020902c7b39424))
+
+### Bug Fixes
+
+- **cz-jira:** Strip CSV BOM, tolerate bad created dates, clamp export limit ([`3a4838e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3a4838e5ab48dbedf1ca3844d269727c77b30ee8))
+
+### Documentation
+
+- **spec:** Add daily email report + tool-health to Manthan loop (D10/D11/§13) ([`d1ad53c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d1ad53ccb84c9c69a5fe885f3bf2e872da2085f7))
+- **spec:** Add GitHub-PR approval workflow for escalations (D12/§14) ([`9ecbe8d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9ecbe8dd30366149b460c6245389927531d891d2))
+- **spec:** Add human steering channels for Hermes (D13/§15) ([`a21d168`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a21d1680dacf30baebb877651afc77c2ed05511a))
+- **spec:** Hybrid engines — GLM 5.2 reviews, local Claude Code develops (D14/§16) ([`d9d6333`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d9d633309d67a98d8833e570b784206b3642affb))
+- **spec:** Add program index — 3-feature Manthan improvement roadmap ([`c10598d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c10598d6e364ebcebe2f8ee67dde3d4338b46ef2))
+- **spec:** ChargeZone Jira analytics + export tools (QCH-scoped) ([`ea78c97`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ea78c973cfa1002f3fceedcc70e24f920bfc888e))
+- **plan:** Implementation plan for clarify-before-invoke slot-filling ([`dfeae30`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dfeae30d193ca035d3e2b90f921484524c67d8b5))
+- **plan:** ChargeZone Jira analytics + export tools implementation plan ([`e87a8d6`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e87a8d6ba5b1a8c510e9631b6af8a12183fabc1f))
+
+### Testing
+
+- **cz-jira:** Register 8 tools; document analytics/export in README ([`e7b2f2e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e7b2f2e97b1f7389c6af94bf3d7b0fd548530a0a))
+
 ## [0.6.0] - 2026-07-17
 
 ### Features

@@ -41,7 +41,9 @@ shrinking the maintainer's job from "review everything and fix everything" to
 | D4 | **"Hermes" role** | **Scheduler/orchestrator only** — a dumb nightly trigger. All intelligence lives in the pipeline it invokes. |
 | D5 | **Verify-before-apply** | **Always verify**: an auto-applied instruction change must (a) make the original failing question pass, and (b) not regress a sampled regression set — before it goes live. |
 | D6 | **Regression set** | **Self-curated**: the loop promotes judge-confirmed-correct sessions into a growing regression store; no manual upkeep required (entries can be pinned/blocklisted). |
-| D7 | **Candidate replay fidelity** | The judge is **Claude** (best reasoning); the candidate-agent replay uses the **production model** (GLM via z.ai) so a GLM agent's fix is tested on GLM. |
+| D7 | **Analysis/improvement model** | The judge, diagnose, cluster, and draft reasoning all run on **GLM 5.2 (advanced)** via the z.ai API — keeps the whole loop on the same provider/residency as the production agents, needs no Claude key at runtime, and reuses the proven GLM+MCP tool-calling path. Claude Code is the **dev-time authoring tool**, not a runtime dependency. |
+| D7a | **Candidate replay fidelity** | The candidate-agent replay uses each agent's **own production model** (GLM `glm-4.7` / `glm-5.2` / `glm-5-turbo`) so a fix is tested on the model that will actually run it. |
+| D7b | **Self-grading caveat** | Judge and (some) agents share the GLM family, so the judge may grade its own family's output. Mitigated because verdicts are grounded in **re-querying MCP tools (ground truth)**, not model opinion. GLM-5.2 judging quality MUST be validated in a dry-run (`apply: off`) before auto-apply is enabled. |
 | D8 | **Escalation format** | Tool/code fixes become a **patch file + digest entry**; optionally a **draft GitHub PR**. Never auto-applied. |
 | D9 | **Feature discovery** | The loop **detects capability gaps** from real sessions and writes **feature proposals** (propose-only). It **never auto-builds** new tools/skillsets/behaviors — those are human-decided and go through their own brainstorm → spec → build. See §12. |
 
@@ -79,7 +81,7 @@ production agent's data. This forces D3.
 |-----------|----------------|---------|
 | **Scheduler** (D4, "Hermes") | Wake once daily, invoke `run.ps1`, exit. No logic. | Container on the `chat` network **or** Windows Task Scheduler. |
 | **Harness** (`manthan-review/`) | Deterministic, safety-critical code: extract sessions, enforce the allow-list **guard**, edit `agents.json` + git commit + `restore`, manage the regression store, write the digest. | Python, headless. |
-| **Reasoning skill** (`.claude/skills/manthan-review/`) | The intelligence: **judge**, **diagnose**, **cluster**, **draft**. Invoked as `claude -p`. | Claude Code headless. |
+| **Reasoning** (`manthan-review/prompts/`) | The intelligence: **judge**, **diagnose**, **cluster**, **draft** — prompt templates the harness sends to **GLM 5.2** with the MCP tools bound. | GLM 5.2 via z.ai API (D7). |
 | **Verification tools** | Existing CMS/NOC MCP servers, called by the judge (for detection) and by candidate replay (for verify). | Local MCP containers. |
 
 **Design principle — the safety boundary is code, not prompt.** The decision to
@@ -99,11 +101,11 @@ manthan-review/
   proposals/        # escalated tool/code patches (patch files)
   state/            # reviewed-session cursor, run logs
   digest.py         # writes docs/manthan-review/YYYY-MM-DD.md
-  config.yaml       # caps, sampling, kill switch defaults
+  glm_client.py     # z.ai GLM 5.2 API wrapper (reasoning calls, MCP tools bound)
+  prompts/          # judge / diagnose / cluster / draft prompt templates (GLM 5.2)
+  config.yaml       # caps, sampling, model id, kill switch defaults
   run.ps1           # entrypoint the scheduler calls
   tests/            # unit tests for guard, apply, extract, regression store
-.claude/skills/manthan-review/
-  SKILL.md          # judge / diagnose / cluster / draft reasoning contract
 docs/manthan-review/
   YYYY-MM-DD.md     # daily digests (git-tracked history)
 ```
@@ -170,7 +172,7 @@ Harness.digest ── docs/manthan-review/YYYY-MM-DD.md
   (prioritizing sessions with user-dissatisfaction signals, then most recent) and
   records what was dropped in the digest (no silent truncation).
 
-### 6.2 Judge (in `SKILL.md`)
+### 6.2 Judge (GLM 5.2 prompt)
 - **Input:** one session record.
 - **Behavior:** determine what the agent claimed; for each *checkable* claim,
   independently call the relevant MCP tool and compare. Confabulation, wrong-charger,
@@ -179,7 +181,7 @@ Harness.digest ── docs/manthan-review/YYYY-MM-DD.md
 - **Guardrail:** claims that cannot be verified via tools are marked `unverifiable`
   and never drive an auto-apply (they may still be reported).
 
-### 6.3 Diagnose + Cluster (in `SKILL.md`)
+### 6.3 Diagnose + Cluster (GLM 5.2 prompt)
 - Classify each failure as `instruction` or `tool_code` from the tool-call trace.
 - Group failures with the same root cause into a single cluster carrying: the
   pattern description, representative failing session(s), target agent id, and the
@@ -254,6 +256,7 @@ Writes `docs/manthan-review/YYYY-MM-DD.md`:
 ## 8. Configuration (`manthan-review/config.yaml`)
 
 ```yaml
+analysis_model: glm-5.2      # GLM 5.2 (advanced) via z.ai — judge/diagnose/draft (D7)
 target: yesterday            # or an explicit date
 max_sessions_per_run: 100    # sample beyond this
 max_autoapplies_per_run: 3   # nightly cap on auto-applied clusters
@@ -275,6 +278,12 @@ open_pr: false               # escalations as patch file only unless true
    results are recoverable from the `messages` collection for a given session.
 3. **Scheduler choice (D4)** — Windows Task Scheduler vs. a compose container.
    Default to Task Scheduler for simplicity unless container is preferred.
+4. **GLM 5.2 reasoning access (D7)** — confirm the exact z.ai model id for "GLM 5.2
+   advanced," an API key/endpoint usable by the nightly job, and that GLM 5.2 supports
+   binding the CMS/NOC MCP tools for the judge's re-verification calls (LibreChat
+   already does this for the agents, so the path exists — confirm it outside LibreChat).
+5. **GLM-5.2 judging quality (D7b)** — dry-run (`apply: off`) to confirm GLM 5.2 is a
+   reliable judge before enabling auto-apply.
 
 ---
 

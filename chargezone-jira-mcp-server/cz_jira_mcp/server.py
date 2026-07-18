@@ -132,6 +132,49 @@ def _parse_csv(text: str) -> tuple[list[str], list[list[str]]]:
 
 _KEY_RE = re.compile(rf"^{re.escape(settings.project_key)}-[0-9]+$")
 
+_PRIORITY_LEVEL_FIELD = "customfield_10120"   # QCH "Priority Level" (P1/P2/P3)
+_OCPP_ID_FIELD = "customfield_10110"           # QCH "OCPP ID" (charger id)
+_CATEGORY_FIELD = "customfield_10156"          # QCH "Category"
+_HW_FAIL_FIELD = "customfield_10119"           # QCH "Hardware Failure Description"
+_PLEVEL_MAP = {"Priority Level - 01": "P1", "Priority Level - 02": "P2", "Priority Level - 03": "P3"}
+
+_ORDER_FIELD = r'(?:"[^"]+"|cf\[[0-9]+\]|[A-Za-z][A-Za-z0-9_]*)'
+_ORDER_RE = re.compile(
+    rf'^{_ORDER_FIELD}(?:\s+(?:ASC|DESC))?(?:\s*,\s*{_ORDER_FIELD}(?:\s+(?:ASC|DESC))?)*$',
+    re.IGNORECASE,
+)
+
+
+def _validate_order_by(order_by: str) -> str:
+    """Return a safe 'ORDER BY ...' clause. Empty -> default. Whitelist: comma-separated
+    <field> [ASC|DESC], where field is an identifier, cf[NNN], or a quoted name. Rejects
+    anything else (parens, operators, semicolons) so it can't widen scope."""
+    ob = (order_by or "").strip()
+    if not ob:
+        return "ORDER BY updated DESC"
+    ob = re.sub(r'^order\s+by\s+', '', ob, flags=re.IGNORECASE).strip()
+    if not _ORDER_RE.match(ob):
+        raise ValueError(
+            "Rejected order_by: use comma-separated '<field> [ASC|DESC]', e.g. "
+            "'cf[10120] ASC, assignee ASC'."
+        )
+    return f"ORDER BY {ob}"
+
+
+def _plevel(fields: dict) -> str:
+    """Map the QCH Priority Level field value to P1/P2/P3, or 'Unassigned'."""
+    v = fields.get(_PRIORITY_LEVEL_FIELD)
+    val = v.get("value") if isinstance(v, dict) else v
+    return _PLEVEL_MAP.get(val, "Unassigned")
+
+
+def _field_str(fields: dict, fid: str):
+    """Read a custom field as a string: select fields -> .value/.name; else the raw value."""
+    v = fields.get(fid)
+    if isinstance(v, dict):
+        return v.get("value") or v.get("name")
+    return v
+
 
 def _parens_balanced(s: str) -> bool:
     """True iff parentheses in s are balanced, ignoring parens inside quoted JQL string
@@ -197,27 +240,26 @@ def require_qch(key: str) -> str:
     return k
 
 
-def build_scoped_jql(conditions: str) -> str:
-    """Return a project-locked JQL query. User-supplied WHERE `conditions` are ALWAYS wrapped
-    whole in `project = "<KEY>" AND (...)`, and ordering is ALWAYS our fixed trailing clause —
-    user conditions may not contain ORDER BY. This makes it structurally impossible for any
-    clause to escape the project filter, and keeps every query bounded.
-    """
+def build_scoped_jql(conditions: str, order_by: str = "") -> str:
+    """Return a project-locked JQL query. `conditions` (WHERE only, no ORDER BY) are wrapped in
+    `project = "<KEY>" AND (...)`; ordering comes ONLY from the validated `order_by` (default
+    most-recently-updated). Structurally impossible for a clause to escape the project filter."""
     proj = f'project = "{settings.project_key}"'
+    order = _validate_order_by(order_by)
     conditions = (conditions or "").strip()
     if not conditions:
-        return f"{proj} ORDER BY updated DESC"
+        return f"{proj} {order}"
     if _contains_order_by(conditions):
         raise ValueError(
-            "Rejected search conditions: remove ORDER BY. Results are always ordered by most "
-            "recently updated; pass only filter conditions (the part after the project filter)."
+            "Rejected search conditions: remove ORDER BY from conditions; use the order_by "
+            "parameter instead. Pass only filter conditions."
         )
     if not _parens_balanced(conditions):
         raise ValueError(
             "Rejected search conditions: unbalanced parentheses. Pass a self-contained JQL "
             "filter fragment."
         )
-    return f"{proj} AND ({conditions}) ORDER BY updated DESC"
+    return f"{proj} AND ({conditions}) {order}"
 
 
 _STATS_CAP = 2000

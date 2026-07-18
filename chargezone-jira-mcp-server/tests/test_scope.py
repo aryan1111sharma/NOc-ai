@@ -67,3 +67,33 @@ def test_build_scoped_jql_allows_order_by_inside_quotes():
     # 'order by' inside a quoted string is data, not a clause — must be allowed and wrapped.
     assert build_scoped_jql('text ~ "please order by priority"') == \
         'project = "QCH" AND (text ~ "please order by priority") ORDER BY updated DESC'
+
+
+from cz_jira_mcp.server import _validate_order_by, _plevel, _field_str
+
+
+def test_validate_order_by_default_and_whitelist():
+    assert _validate_order_by("") == "ORDER BY updated DESC"
+    assert _validate_order_by("created DESC") == "ORDER BY created DESC"
+    assert _validate_order_by("cf[10120] ASC, assignee ASC") == "ORDER BY cf[10120] ASC, assignee ASC"
+    assert _validate_order_by("ORDER BY updated DESC") == "ORDER BY updated DESC"  # strips leading kw
+
+import pytest
+@pytest.mark.parametrize("bad", ["updated); DROP", "a OR b", "created DESC) OR (1=1", "assignee ASC; evil"])
+def test_validate_order_by_rejects_injection(bad):
+    with pytest.raises(ValueError, match="order_by"):
+        _validate_order_by(bad)
+
+def test_build_scoped_jql_with_order_by():
+    from cz_jira_mcp.server import build_scoped_jql
+    assert build_scoped_jql("statusCategory != Done", order_by="cf[10120] ASC") == \
+        'project = "QCH" AND (statusCategory != Done) ORDER BY cf[10120] ASC'
+    assert build_scoped_jql("", order_by="assignee ASC") == 'project = "QCH" ORDER BY assignee ASC'
+
+def test_plevel_and_field_str():
+    assert _plevel({"customfield_10120": {"value": "Priority Level - 02"}}) == "P2"
+    assert _plevel({"customfield_10120": None}) == "Unassigned"
+    assert _plevel({}) == "Unassigned"
+    assert _field_str({"customfield_10110": "CG0003"}, "customfield_10110") == "CG0003"
+    assert _field_str({"x": {"value": "Cat"}}, "x") == "Cat"
+    assert _field_str({}, "x") is None

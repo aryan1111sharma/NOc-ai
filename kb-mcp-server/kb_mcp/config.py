@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     chunk_max_chars: int = 1800                  # ~450 tokens
     chunk_overlap_chars: int = 200
     default_top_k: int = 5
+    # Relevance floor for kb_search. Below this a hit is noise, and returning noise
+    # defeats the "not in the knowledge base" contract in the tool docstring.
+    # Calibrated on the Phase-1 corpus: on-topic hits scored 0.58-0.83, off-topic 0.41-0.42.
+    min_score_default: float = 0.5
     knowledge_dir: str = "/knowledge"
 
     mcp_transport: str = "stdio"

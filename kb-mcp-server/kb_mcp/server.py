@@ -21,10 +21,12 @@ def build_server(store=None, embedder=None) -> FastMCP:
         relevant to the query. Returns up to top_k chunks, each with its source document,
         location, the matching text, and a relevance score (higher = closer). ALWAYS cite
         the returned `source` when you use a chunk. If this returns an empty list, the
-        knowledge base does not cover the question — say so; do NOT invent an answer."""
+        knowledge base does not cover the question — say so; do NOT invent an answer.
+
+        Hits scoring below min_score are dropped as noise. Omit min_score for the
+        calibrated default; pass 0 to see every hit (useful for debugging retrieval)."""
+        floor = settings.min_score_default if min_score is None else min_score
         hits = store.search(embedder.embed([query])[0], top_k=top_k)
-        if min_score is not None:
-            hits = [h for h in hits if h["score"] >= min_score]
-        return hits
+        return [h for h in hits if h["score"] >= floor]
 
     return mcp

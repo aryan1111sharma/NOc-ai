@@ -1,0 +1,5 @@
+fastmcp>=3.4
+pydantic-settings>=2.0
+qdrant-client>=1.12
+fastembed>=0.4
+pymupdf>=1.24

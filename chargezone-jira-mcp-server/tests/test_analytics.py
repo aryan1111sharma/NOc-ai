@@ -154,6 +154,26 @@ async def test_cz_jira_stats_skips_unparseable_created(mock_client):
 
 
 @pytest.mark.asyncio
+async def test_cz_jira_stats_by_priority_level(mock_client):
+    def mk(k, pl):
+        f = {"status": {"name": "To Do"}, "issuetype": {"name": "Task"},
+             "priority": {"name": "Medium"}, "assignee": {"displayName": "Q"},
+             "created": "2026-07-10T10:00:00.000+0000"}
+        if pl is not None:
+            f["customfield_10120"] = {"value": pl}
+        return {"key": k, "fields": f}
+    issues = [mk("QCH-1","Priority Level - 01"), mk("QCH-2","Priority Level - 02"),
+              mk("QCH-3","Priority Level - 02"), mk("QCH-4","Priority Level - 03"), mk("QCH-5", None)]
+    def handler(request):
+        assert "customfield_10120" in request.url.params.get("fields")
+        return httpx.Response(200, json={"issues": issues})
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_stats", {"conditions": "statusCategory != Done"})
+    assert res.data["by_priority_level"] == {"P1": 1, "P2": 2, "P3": 1, "Unassigned": 1}
+
+
+@pytest.mark.asyncio
 async def test_cz_jira_project_meta_flattens(mock_client):
     def handler(request: httpx.Request) -> httpx.Response:
         p = request.url.path

@@ -265,7 +265,7 @@ def build_scoped_jql(conditions: str, order_by: str = "") -> str:
 _STATS_CAP = 2000
 _STATS_PAGE = 100
 assert _STATS_CAP % _STATS_PAGE == 0  # truncation math assumes the final page can't cross the cap
-_STATS_FIELDS = "status,issuetype,priority,assignee,created"
+_STATS_FIELDS = "status,issuetype,priority,assignee,created,customfield_10120"
 
 
 # ── Client + server factories ────────────────────────────────────────────────────────────
@@ -418,6 +418,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
         by_status: Counter = Counter()
         by_type: Counter = Counter()
         by_priority: Counter = Counter()
+        by_plevel: Counter = Counter()
         by_assignee: Counter = Counter()
         c7 = c30 = 0
         for i in issues:
@@ -425,6 +426,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             by_status[(f.get("status") or {}).get("name") or "Unknown"] += 1
             by_type[(f.get("issuetype") or {}).get("name") or "Unknown"] += 1
             by_priority[(f.get("priority") or {}).get("name") or "None"] += 1
+            by_plevel[_plevel(f)] += 1
             by_assignee[(f.get("assignee") or {}).get("displayName") or "Unassigned"] += 1
             dt = _created(i)
             if dt:
@@ -440,6 +442,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             "by_status": dict(by_status.most_common()),
             "by_type": dict(by_type.most_common()),
             "by_priority": dict(by_priority.most_common()),
+            "by_priority_level": {k: by_plevel[k] for k in ("P1", "P2", "P3", "Unassigned") if by_plevel.get(k)},
             "top_assignees": dict(by_assignee.most_common(10)),
             "created_last_7d": c7,
             "created_last_30d": c30,

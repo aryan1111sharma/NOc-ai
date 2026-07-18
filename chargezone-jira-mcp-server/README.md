@@ -5,18 +5,31 @@ Self-hosted [FastMCP](https://github.com/jlowin/fastmcp) server exposing the **`
 tools. Scoped to QCH only — no other project is reachable. Mirrors `jira-mcp-server`.
 
 ## Tools
-- `cz_jira_search(conditions="", limit=50)` — search QCH issues by JQL filter *conditions*
-  only (no `ORDER BY` — results are always ordered by most recently updated). The server
-  prepends `project = "QCH"`; you cannot escape the project. Empty → newest QCH issues.
-- `cz_jira_get_issue(key)` — full detail of one QCH issue (description flattened from ADF).
+- `cz_jira_search(conditions="", limit=50, order_by="")` — search QCH issues by JQL filter
+  *conditions* only (no `ORDER BY` in conditions — pass the separate, whitelist-validated
+  `order_by`, e.g. `'cf[10120] ASC, assignee ASC'`; default is most-recently-updated). The
+  server prepends `project = "QCH"`; you cannot escape the project. Empty → newest QCH issues.
+  Results include `priority_level` (P1/P2/P3, from the real ChargeZone "Priority Level" custom
+  field — not Jira's built-in Priority) and `ocpp_id` (charger id) when set.
+- `cz_jira_get_issue(key)` — full detail of one QCH issue (description flattened from ADF);
+  also includes `priority_level` / `ocpp_id`.
 - `cz_jira_get_comments(key, limit=50)` — comments (author, created, body text).
 - `cz_jira_get_issue_transitions(key)` — current status + *available* transitions (read only).
-- `cz_jira_export(conditions="", all_fields=False, limit=1000)` — export QCH issues as
-  {headers, rows, row_count, truncated}; pass to docgen `create_excel` for a download link.
-- `cz_jira_stats(conditions="")` — QCH analytics: totals + by status/type/priority/assignee +
-  created last 7/30 days (GET-only, samples up to 2000 issues).
+- `cz_jira_export(conditions="", all_fields=False, limit=1000, order_by="")` — export QCH
+  issues as {headers, rows, row_count, truncated} via the REST search API (no CSV servlet).
+  Curated columns: Issue key, Issue Type, Summary, Status, Priority Level, Priority, Assignee,
+  Reporter, OCPP ID, Category, Hardware Failure Description, Created, Updated (plus
+  Description/Parent key/Due date when `all_fields=True`). Pass to docgen `create_excel` for a
+  download link.
+- `cz_jira_stats(conditions="")` — QCH analytics: totals + by status/type/priority/
+  **priority_level** (real P1/P2/P3)/assignee + created last 7/30 days (GET-only, samples up
+  to 2000 issues).
 - `cz_jira_project_meta()` — QCH statuses, issue types, priorities.
 - `cz_jira_list_dashboards()` — dashboards + saved filters referencing QCH/Quench.
+
+`order_by` (on search/export) is validated by a strict whitelist — comma-separated
+`<field> [ASC|DESC]`, where field is an identifier, `cf[NNN]`, or a quoted name — so it can
+never be used to escape the QCH project scope.
 
 By-key tools accept **only `QCH-####` keys**. Read-only by construction — there is no write tool.
 

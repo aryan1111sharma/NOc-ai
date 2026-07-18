@@ -4,89 +4,47 @@ import httpx
 import pytest
 from fastmcp import Client
 
-from cz_jira_mcp.server import build_server, _parse_csv
-
-
-def test_parse_csv_splits_headers_and_rows():
-    text = "Issue key,Summary,Status\r\nQCH-1,Charger offline,To Do\r\nQCH-2,Gun A fault,QA\r\n"
-    headers, rows = _parse_csv(text)
-    assert headers == ["Issue key", "Summary", "Status"]
-    assert rows == [["QCH-1", "Charger offline", "To Do"], ["QCH-2", "Gun A fault", "QA"]]
-
-
-def test_parse_csv_empty():
-    assert _parse_csv("") == ([], [])
-
-
-def test_parse_csv_strips_bom():
-    headers, rows = _parse_csv("﻿Issue key,Summary\r\nQCH-1,Offline\r\n")
-    assert headers == ["Issue key", "Summary"]
-    assert rows == [["QCH-1", "Offline"]]
+from cz_jira_mcp.server import build_server
 
 
 @pytest.mark.asyncio
-async def test_cz_jira_export_scopes_jql_and_parses(mock_client):
+async def test_cz_jira_export_rest_curated_columns(mock_client):
     captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["path"] = request.url.path
-        captured["jql"] = request.url.params.get("jqlQuery")
-        captured["tempMax"] = request.url.params.get("tempMax")
-        csv = "Issue key,Summary,Status\r\nQCH-1,Offline,To Do\r\n"
-        return httpx.Response(200, text=csv, headers={"content-type": "text/csv;charset=UTF-8"})
-
-    mcp = build_server(client=mock_client(handler))
-    async with Client(mcp) as c:
-        res = await c.call_tool("cz_jira_export", {"conditions": 'status = "To Do"', "limit": 500})
-
-    assert captured["path"] == "/sr/jira.issueviews:searchrequest-csv-current-fields/temp/SearchRequest.csv"
-    assert captured["jql"] == 'project = "QCH" AND (status = "To Do") ORDER BY updated DESC'
-    assert captured["tempMax"] == "500"
-    assert res.data["headers"] == ["Issue key", "Summary", "Status"]
-    assert res.data["rows"] == [["QCH-1", "Offline", "To Do"]]
-    assert res.data["row_count"] == 1
-    assert res.data["truncated"] is False
-
-
-@pytest.mark.asyncio
-async def test_cz_jira_export_all_fields_variant_and_truncation(mock_client):
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["path"] = request.url.path
-        return httpx.Response(200, text="A,B\r\n1,2\r\n3,4\r\n",
-                              headers={"content-type": "text/csv"})
-
-    mcp = build_server(client=mock_client(handler))
-    async with Client(mcp) as c:
-        res = await c.call_tool("cz_jira_export", {"all_fields": True, "limit": 2})
-
-    assert captured["path"] == "/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv"
-    assert res.data["row_count"] == 2
-    assert res.data["truncated"] is True   # row_count >= limit
-
-
-@pytest.mark.asyncio
-async def test_cz_jira_export_clamps_limit(mock_client):
-    seen = {}
     def handler(request):
-        seen["tempMax"] = request.url.params.get("tempMax")
-        return httpx.Response(200, text="A,B\r\n", headers={"content-type": "text/csv"})
+        captured["path"] = request.url.path
+        captured["jql"] = request.url.params.get("jql")
+        captured["fields"] = request.url.params.get("fields")
+        return httpx.Response(200, json={"issues": [{"key": "QCH-1", "fields": {
+            "issuetype": {"name": "Task"}, "summary": "Offline", "status": {"name": "To Do"},
+            "priority": {"name": "Medium"}, "assignee": {"displayName": "Q"},
+            "reporter": {"displayName": "R"}, "created": "c", "updated": "u",
+            "customfield_10120": {"value": "Priority Level - 01"}, "customfield_10110": "CG0003",
+            "customfield_10156": {"value": "Charger Software Issue"}, "customfield_10119": "NA"}}]})
     mcp = build_server(client=mock_client(handler))
     async with Client(mcp) as c:
-        await c.call_tool("cz_jira_export", {"conditions": "", "limit": 0})
-    assert seen["tempMax"] == "1"     # clamped up from 0
-
+        res = await c.call_tool("cz_jira_export", {"conditions": "statusCategory != Done", "limit": 500})
+    assert captured["path"] == "/rest/api/3/search/jql"
+    assert captured["jql"] == 'project = "QCH" AND (statusCategory != Done) ORDER BY updated DESC'
+    h = res.data["headers"]
+    assert h == ["Issue key","Issue Type","Summary","Status","Priority Level","Priority",
+                 "Assignee","Reporter","OCPP ID","Category","Hardware Failure Description",
+                 "Created","Updated"]
+    row = res.data["rows"][0]
+    assert row[0] == "QCH-1" and row[4] == "Priority Level - 01" and row[8] == "CG0003"
+    assert res.data["row_count"] == 1 and res.data["truncated"] is False
 
 @pytest.mark.asyncio
-async def test_cz_jira_export_non_csv_raises(mock_client):
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, text="<html>login</html>", headers={"content-type": "text/html"})
-
+async def test_cz_jira_export_all_fields_adds_columns_and_clamps(mock_client):
+    def handler(request):
+        return httpx.Response(200, json={"issues": [{"key": "QCH-2", "fields": {
+            "description": {"type":"doc","version":1,"content":[{"type":"paragraph",
+              "content":[{"type":"text","text":"boom"}]}]},
+            "parent": {"key": "QCH-1"}, "duedate": "2026-08-01"}}]})
     mcp = build_server(client=mock_client(handler))
     async with Client(mcp) as c:
-        with pytest.raises(Exception, match="CSV export"):
-            await c.call_tool("cz_jira_export", {"conditions": ""})
+        res = await c.call_tool("cz_jira_export", {"all_fields": True, "limit": 0})
+    assert res.data["headers"][-3:] == ["Description","Parent key","Due date"]
+    assert "boom" in res.data["rows"][0][-3]
 
 
 def _iso(dt):

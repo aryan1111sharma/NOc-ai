@@ -8,8 +8,6 @@ and every tool is locked to the QCH (Quench) project.
 
 from __future__ import annotations
 
-import csv
-import io
 import re
 from collections import Counter
 from datetime import datetime, timezone
@@ -118,17 +116,6 @@ async def _get_json(client: httpx.AsyncClient, path: str, params: Optional[dict]
             f"Jira returned a non-JSON response for {path} (status {resp.status_code}); "
             "the backend may be temporarily unavailable."
         ) from exc
-
-
-def _parse_csv(text: str) -> tuple[list[str], list[list[str]]]:
-    """Parse CSV text into (headers, rows). Empty text -> ([], []). Strips a leading UTF-8 BOM."""
-    text = text.lstrip("﻿")
-    if not text.strip():
-        return [], []
-    reader = list(csv.reader(io.StringIO(text)))
-    if not reader:
-        return [], []
-    return reader[0], [r for r in reader[1:]]
 
 
 # ── Scope guards (QCH-only) ──────────────────────────────────────────────────────────────
@@ -357,37 +344,67 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
 
     @mcp.tool
     async def cz_jira_export(conditions: str = "", all_fields: bool = False,
-                             limit: int = 1000) -> dict:
+                             limit: int = 1000, order_by: str = "") -> dict:
         """Export Quench (QCH) Jira issues as tabular data for download. Pass JQL filter
-        *conditions* only (no ORDER BY; always QCH-scoped), same as cz_jira_search. Returns
-        {headers, rows, row_count, truncated}. all_fields=False -> 14 tidy columns (key,
-        summary, assignee, status, priority, dates...); all_fields=True -> every field.
-        To give the user a downloadable file, pass the returned headers+rows to the docgen
-        `create_excel` tool and present its download link. Read-only. `limit` caps rows
-        (default 1000); truncated=true means more matched than were returned."""
+        *conditions* (no ORDER BY — use order_by) and optional order_by ('<field> [ASC|DESC]').
+        Returns {headers, rows, row_count, truncated} with columns: Issue key, Issue Type,
+        Summary, Status, Priority Level (P1/P2/P3 source value), Priority, Assignee, Reporter,
+        OCPP ID, Category, Hardware Failure Description, Created, Updated. all_fields=True also
+        appends Description, Parent key, Due date. To give the user a file, pass headers+rows to
+        docgen create_excel and return the link. Read-only; limit caps rows (default 1000)."""
         limit = max(1, min(int(limit), 5000))
-        jql = build_scoped_jql(conditions)
-        variant = "searchrequest-csv-all-fields" if all_fields else "searchrequest-csv-current-fields"
-        path = f"/sr/jira.issueviews:{variant}/temp/SearchRequest.csv"
-        resp = await client.get(path, params={"jqlQuery": jql, "tempMax": limit})
-        if resp.status_code in (401, 403):
-            raise RuntimeError(
-                f"Jira auth failed ({resp.status_code}) — check CZ_JIRA_EMAIL / CZ_JIRA_API_TOKEN."
-            )
-        resp.raise_for_status()
-        ctype = resp.headers.get("content-type", "")
-        if "csv" not in ctype.lower():
-            raise RuntimeError(
-                f"Jira CSV export failed — expected text/csv, got {ctype!r} "
-                "(likely an auth redirect to a login page)."
-            )
-        headers, rows = _parse_csv(resp.text)
-        return {
-            "headers": headers,
-            "rows": rows,
-            "row_count": len(rows),
-            "truncated": len(rows) >= limit,
-        }
+        jql = build_scoped_jql(conditions, order_by)
+        fetch = ("summary,status,issuetype,priority,assignee,reporter,created,updated,"
+                 f"{_PRIORITY_LEVEL_FIELD},{_OCPP_ID_FIELD},{_CATEGORY_FIELD},{_HW_FAIL_FIELD}")
+        if all_fields:
+            fetch += ",description,parent,duedate"
+        issues: list[dict] = []
+        token = None
+        while len(issues) < limit:
+            params = {"jql": jql, "maxResults": min(100, limit - len(issues)), "fields": fetch}
+            if token:
+                params["nextPageToken"] = token
+            data = await _get_json(client, "/rest/api/3/search/jql", params=params)
+            batch = data.get("issues", [])
+            issues.extend(batch)
+            token = data.get("nextPageToken")
+            if not token or not batch:
+                break
+        truncated = bool(token) and len(issues) >= limit
+        issues = issues[:limit]
+
+        headers = ["Issue key", "Issue Type", "Summary", "Status", "Priority Level", "Priority",
+                   "Assignee", "Reporter", "OCPP ID", "Category", "Hardware Failure Description",
+                   "Created", "Updated"]
+        if all_fields:
+            headers += ["Description", "Parent key", "Due date"]
+        rows = []
+        for i in issues:
+            f = i.get("fields", {}) or {}
+            pl = f.get(_PRIORITY_LEVEL_FIELD)
+            row = [
+                i.get("key"),
+                (f.get("issuetype") or {}).get("name"),
+                f.get("summary"),
+                (f.get("status") or {}).get("name"),
+                (pl.get("value") if isinstance(pl, dict) else pl),
+                (f.get("priority") or {}).get("name"),
+                (f.get("assignee") or {}).get("displayName"),
+                (f.get("reporter") or {}).get("displayName"),
+                _field_str(f, _OCPP_ID_FIELD),
+                _field_str(f, _CATEGORY_FIELD),
+                _field_str(f, _HW_FAIL_FIELD),
+                f.get("created"),
+                f.get("updated"),
+            ]
+            if all_fields:
+                row += [
+                    _adf_to_text(f.get("description")).strip(),
+                    (f.get("parent") or {}).get("key"),
+                    f.get("duedate"),
+                ]
+            rows.append(["" if c is None else c for c in row])
+        return {"headers": headers, "rows": rows, "row_count": len(rows), "truncated": truncated}
 
     @mcp.tool
     async def cz_jira_stats(conditions: str = "") -> dict:

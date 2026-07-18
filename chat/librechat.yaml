@@ -19,6 +19,7 @@ mcpSettings:
     - "docgen-mcp-server:8103"
     - "ecog-sd-mcp-server:8104"
     - "chargezone-jira-mcp-server:8105"
+    - "kb-mcp-server:8106"
 
 endpoints:
   custom:
@@ -85,4 +86,8 @@ mcpServers:
   docgen:
     type: streamable-http
     url: "http://docgen-mcp-server:8103/mcp"
+    timeout: 60000
+  kb:
+    type: streamable-http
+    url: "http://kb-mcp-server:8106/mcp"
     timeout: 60000

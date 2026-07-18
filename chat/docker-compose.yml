@@ -83,6 +83,29 @@ services:
       - MCP_PORT=8101
     restart: unless-stopped
 
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+
+  # Read-only RAG knowledge base over EV/SME docs (Qdrant + local BGE embedder).
+  kb-mcp-server:
+    build: ../kb-mcp-server
+    container_name: kb-mcp-server
+    depends_on:
+      - qdrant
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8106
+      - QDRANT_URL=http://qdrant:6333
+      - KNOWLEDGE_DIR=/knowledge
+    volumes:
+      - ../knowledge:/knowledge:ro
+    restart: unless-stopped
+
   # Read-only MCP server for Ecog's Atlassian Cloud Jira (vendor tracker).
   jira-mcp-server:
     build: ../jira-mcp-server
@@ -173,3 +196,4 @@ volumes:
   librechat-logs:
   ecog-sd-cookies:
   docgen-files:
+  qdrant-data:

@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.8.0] - 2026-07-18
+
+### Features
+
+- **agents:** Re-apply clarify-before-invoke block after cz-jira overwrite ([`d4505d7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d4505d75c669f9f8ec69ff26b50d8124b2196c8c))
+
 ## [0.7.0] - 2026-07-17
 
 ### Features

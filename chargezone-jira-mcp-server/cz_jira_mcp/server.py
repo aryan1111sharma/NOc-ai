@@ -66,9 +66,9 @@ def _issue_summary(issue: dict) -> dict:
         "assignee": (f.get("assignee") or {}).get("displayName"),
         "updated": f.get("updated"),
         "project": (f.get("project") or {}).get("key"),
-        "priority_level": (_PLEVEL_MAP.get((issue.get("fields", {}).get(_PRIORITY_LEVEL_FIELD) or {}).get("value"))
-                           if isinstance(issue.get("fields", {}).get(_PRIORITY_LEVEL_FIELD), dict) else None),
-        "ocpp_id": _field_str(issue.get("fields", {}) or {}, _OCPP_ID_FIELD),
+        "priority_level": (_PLEVEL_MAP.get((f.get(_PRIORITY_LEVEL_FIELD) or {}).get("value"))
+                           if isinstance(f.get(_PRIORITY_LEVEL_FIELD), dict) else None),
+        "ocpp_id": _field_str(f, _OCPP_ID_FIELD),
     })
 
 
@@ -155,6 +155,8 @@ def _plevel(fields: dict) -> str:
     """Map the QCH Priority Level field value to P1/P2/P3, or 'Unassigned'."""
     v = fields.get(_PRIORITY_LEVEL_FIELD)
     val = v.get("value") if isinstance(v, dict) else v
+    if not isinstance(val, str):
+        val = None
     return _PLEVEL_MAP.get(val, "Unassigned")
 
 
@@ -163,6 +165,9 @@ def _field_str(fields: dict, fid: str):
     v = fields.get(fid)
     if isinstance(v, dict):
         return v.get("value") or v.get("name")
+    if isinstance(v, list):
+        parts = [(x.get("value") or x.get("name")) if isinstance(x, dict) else str(x) for x in v]
+        return ", ".join(p for p in parts if p) or None
     return v
 
 

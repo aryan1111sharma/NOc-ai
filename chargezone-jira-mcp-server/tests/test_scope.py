@@ -97,3 +97,23 @@ def test_plevel_and_field_str():
     assert _field_str({"customfield_10110": "CG0003"}, "customfield_10110") == "CG0003"
     assert _field_str({"x": {"value": "Cat"}}, "x") == "Cat"
     assert _field_str({}, "x") is None
+
+
+# --- defensive guards (code-review findings) ---
+def test_issue_summary_handles_null_fields():
+    from cz_jira_mcp.server import _issue_summary
+    # Jira returning "fields": null must not crash (AttributeError guard)
+    assert _issue_summary({"key": "QCH-1", "fields": None}) == {"key": "QCH-1"}
+
+
+def test_plevel_tolerates_list_value():
+    from cz_jira_mcp.server import _plevel
+    # a list-shaped custom field must not raise TypeError (unhashable)
+    assert _plevel({"customfield_10120": ["x"]}) == "Unassigned"
+
+
+def test_field_str_joins_list_values():
+    from cz_jira_mcp.server import _field_str
+    assert _field_str({"c": [{"value": "A"}, {"value": "B"}]}, "c") == "A, B"
+    assert _field_str({"c": ["x", "y"]}, "c") == "x, y"
+    assert _field_str({"c": []}, "c") is None

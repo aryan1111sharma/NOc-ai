@@ -28,33 +28,25 @@ _Last updated: 2026-07-17_
 - **Size:** large.
 
 ### 3. EV / SME knowledge base (RAG `kb_search` MCP tool)
-- **Spec:** ⬜ **not yet — needs its own brainstorm.**
-- **Status:** requirement captured (document corpus: manuals, OCPP, runbooks).
-- **What (intended):** ingest a document corpus → chunk + embed → local vector store →
-  a `kb_search` MCP retrieval tool. Used by **the agent** (to answer domain questions)
-  and by **Hermes's judge** (to verify domain claims). New machinery — Hermes may
-  *propose* it and flag KB gaps, but it is built deliberately, not auto-built.
-- **Open questions for its brainstorm:**
-  - Embedding model + **residency** — z.ai embeddings vs. a fully-local embedder (must
-    respect the z.ai boundary).
-  - Vector store — Chroma / pgvector / Qdrant / LanceDB, running in the `chat` Docker network.
-  - New `kb-mcp-server` vs. extending the existing `mcp-server`.
-  - Ingestion + chunking strategy; re-index trigger; supported doc formats/sources.
-  - Which agents get the `kb` tool; **citation/grounding** to avoid confabulation (ties
-    to the existing anti-confabulation guardrails).
-  - How Hermes's judge queries it, and KB-gap detection via feature-discovery (§12).
-- **Size:** medium–large.
+- **Spec:** [`2026-07-18-ev-knowledge-base-rag-design.md`](./2026-07-18-ev-knowledge-base-rag-design.md) ✅
+- **Status:** spec done, ready to plan.
+- **What:** new `kb-mcp-server` + **Qdrant** vector store + **local BGE embedder**
+  (fastembed, in-boundary). Drop docs in `knowledge/` → `kb-ingest` → agents call a
+  read-only `kb_search` tool that returns cited chunks. All 4 agents get it. Self-hosted
+  + MCP so it's model-agnostic (GLM now / Claude later). Hermes's judge will reuse it.
+- **Decisions locked:** self-hosted+MCP (D1), Qdrant (D2), local BGE via fastembed (D3),
+  medium/evolving corpus (D4), all 4 agents (D5), fully in z.ai residency (D6).
+- **Prereqs (spec §9):** confirm bge-base vs bge-small; corpus formats (OCR?); the first
+  real doc set to ingest.
+- **Size:** medium.
 
 ---
 
 ## Suggested sequence
 
-1. **Slot-filling** — quick win, prompt-only, immediate user-facing value; becomes the
-   loop's first regression case.
-2. **Knowledge base** — the biggest capability jump for users, and it gives Hermes's
-   judge real domain ground truth.
-3. **The loop (Hermes)** — maintains and regression-tests the other two; most useful
-   once there's behavior + knowledge to review. (Can also be built earlier to start
-   capturing quality data — maintainer's call.)
+1. **Slot-filling** — ✅ SHIPPED v0.8.0.
+2. **Knowledge base** — spec done (2026-07-18); ready to plan. Biggest capability jump,
+   gives Hermes's judge real domain ground truth.
+3. **The loop (Hermes)** — spec done; needs external prereqs before planning.
 
 _This ordering is a recommendation, not a constraint — features are largely independent._

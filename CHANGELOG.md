@@ -5,6 +5,28 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.9.0] - 2026-07-18
+
+### Features
+
+- **cz-jira:** Custom-field helpers + safe order_by in build_scoped_jql ([`d42123f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d42123f71f53a7892c82826daf69e4d2367ec55d))
+- **cz-jira:** Cz_jira_stats by_priority_level (real P1/P2/P3) ([`1a405f4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1a405f4b5362014e3ee6354e2c43b2c0c672f689))
+- **cz-jira:** Search surfaces priority_level + ocpp_id; add order_by ([`2d58e3e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2d58e3eeb1907725f3ff182aa0bb7a4a6186e70e))
+- **cz-jira:** Rebuild export from REST with QCH custom columns; drop CSV servlet ([`b28d6dd`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b28d6dd776adcf0373378449f35ca0e8d732aa4c))
+- **cz-jira:** NOC Engineer QCH querying guide (Priority Level cf[10120], order_by, cheat-sheet) ([`c753254`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c75325466e5d391e25904235ea26e9caef7d4e3a))
+
+### Bug Fixes
+
+- **cz-jira:** Guard null fields, list-shaped priority/custom fields (review) ([`77c501d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/77c501d415027231cb8ebe220a32a8bc42095f81))
+
+### Documentation
+
+- **spec:** ChargeZone Jira Priority Level (P1/P2/P3) fix + QCH JQL guide ([`00af69e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/00af69eac817ecd277b0186b3f501d718a156159))
+- **plan:** ChargeZone Jira Priority Level fix + order_by implementation plan ([`5657635`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/56576352b14c9774ee9830b5037732c415dd86ac))
+- **spec:** EV/SME knowledge base (RAG) design ([`01e51cf`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/01e51cfb90cd9dde175ceefc98a897c36e2a3432))
+- **cz-jira:** Document priority_level, order_by, export columns ([`ac060cb`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ac060cb5450d1700a41990e257fcd1ed642c0897))
+- **spec:** Note staged (Phase 1 sample / Phase 2 real) KB testing approach ([`b7cb385`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b7cb385a849be8c94e35bb1d44b97b3737a9357c))
+
 ## [0.8.0] - 2026-07-18
 
 ### Features

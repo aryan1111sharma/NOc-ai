@@ -156,8 +156,10 @@ knowledge_dir: /knowledge            # mounted volume
    collection's vector size, so pick before creating the collection.
 2. **Document parsing coverage** — confirm the real corpus's formats (scanned PDFs need
    OCR; native-text PDFs don't). Decide whether OCR is in scope for v1.
-3. **First real corpus** — the maintainer provides the initial `knowledge/` doc set to
-   ingest and to validate retrieval quality against.
+3. **Corpus (staged — see §11).** *Phase 1 needs nothing from the maintainer:* build and
+   smoke-test the pipeline against a **sample corpus** (a public OCPP excerpt + a couple of
+   synthetic runbook/spec docs). *Phase 2:* the maintainer drops **3–5 representative real
+   docs** into `knowledge/` to validate retrieval quality and tune chunking.
 4. **Reranking** — deferred (YAGNI). Add a cross-encoder reranker later only if
    top-k precision proves insufficient.
 5. **Agent-instruction + `kb` registration edit** — apply mindful of the §6 concurrency
@@ -179,6 +181,12 @@ knowledge_dir: /knowledge            # mounted volume
 ---
 
 ## 11. Testing Strategy
+
+**Two phases.** *Phase 1 (no maintainer data)* proves the pipeline against a **sample
+corpus** built during implementation — a public OCPP excerpt plus 2–3 synthetic docs (a
+runbook, an error-code table). *Phase 2 (maintainer supplies 3–5 real docs)* validates
+retrieval quality on genuine questions and tunes chunking. Everything below runs in
+Phase 1 except the real-corpus quality pass.
 
 - **Unit:** chunking (sizes/overlap/boundaries), ingest idempotency (hash-skip and
   prune), `kb_search` output shape + score ordering + empty-result behavior.

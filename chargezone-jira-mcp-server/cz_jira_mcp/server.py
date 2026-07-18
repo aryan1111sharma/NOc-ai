@@ -68,6 +68,9 @@ def _issue_summary(issue: dict) -> dict:
         "assignee": (f.get("assignee") or {}).get("displayName"),
         "updated": f.get("updated"),
         "project": (f.get("project") or {}).get("key"),
+        "priority_level": (_PLEVEL_MAP.get((issue.get("fields", {}).get(_PRIORITY_LEVEL_FIELD) or {}).get("value"))
+                           if isinstance(issue.get("fields", {}).get(_PRIORITY_LEVEL_FIELD), dict) else None),
+        "ocpp_id": _field_str(issue.get("fields", {}) or {}, _OCPP_ID_FIELD),
     })
 
 
@@ -288,18 +291,23 @@ def build_server(client: Optional[JiraAuthClient] = None) -> FastMCP:
 
 def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
 
-    _SEARCH_FIELDS = "summary,status,issuetype,priority,assignee,updated,project"
+    _SEARCH_FIELDS = (
+        f"summary,status,issuetype,priority,assignee,updated,project,"
+        f"{_PRIORITY_LEVEL_FIELD},{_OCPP_ID_FIELD}"
+    )
 
     @mcp.tool
-    async def cz_jira_search(conditions: str = "", limit: int = 50) -> list[dict]:
+    async def cz_jira_search(conditions: str = "", limit: int = 50, order_by: str = "") -> list[dict]:
         """Search Quench (QCH) Jira issues. Pass JQL filter *conditions* only — the part AFTER
         the project filter — e.g. 'status = "To Do"' or 'text ~ "offline"'. Do NOT include
-        ORDER BY — results are always ordered by most recently updated. The server always
+        ORDER BY in conditions — use the separate `order_by` param instead (e.g.
+        'cf[10120] ASC, assignee ASC'); default is most-recently-updated. The server always
         scopes the query to project = QCH; you cannot query any other project. Empty
         conditions returns the most recently updated QCH issues. Returns a compact list: key,
-        summary, status, type, priority, assignee, updated, project. Read-only. Single page
-        only (Jira caps maxResults ~100)."""
-        jql = build_scoped_jql(conditions)
+        summary, status, type, priority, assignee, updated, project, priority_level (P1/P2/P3
+        from the Priority Level field), ocpp_id. Read-only. Single page only (Jira caps
+        maxResults ~100)."""
+        jql = build_scoped_jql(conditions, order_by)
         data = await _get_json(client, "/rest/api/3/search/jql", params={
             "jql": jql, "maxResults": limit, "fields": _SEARCH_FIELDS,
         })
@@ -307,7 +315,7 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
 
     _DETAIL_FIELDS = (
         "summary,status,issuetype,priority,assignee,reporter,created,updated,"
-        "labels,components,description"
+        f"labels,components,description,{_PRIORITY_LEVEL_FIELD},{_OCPP_ID_FIELD}"
     )
 
     @mcp.tool

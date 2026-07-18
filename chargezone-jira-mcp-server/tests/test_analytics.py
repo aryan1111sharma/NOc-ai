@@ -154,6 +154,27 @@ async def test_cz_jira_stats_skips_unparseable_created(mock_client):
 
 
 @pytest.mark.asyncio
+async def test_cz_jira_search_surfaces_priority_level_and_ocpp_and_orders(mock_client):
+    captured = {}
+    def handler(request):
+        captured["jql"] = request.url.params.get("jql")
+        captured["fields"] = request.url.params.get("fields")
+        return httpx.Response(200, json={"issues": [{"key": "QCH-1", "fields": {
+            "summary": "Offline", "status": {"name": "To Do"}, "issuetype": {"name": "Task"},
+            "priority": {"name": "Medium"}, "updated": "2026-07-10T10:00:00.000+0000",
+            "project": {"key": "QCH"}, "customfield_10120": {"value": "Priority Level - 01"},
+            "customfield_10110": "CG0003"}}]})
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("cz_jira_search", {"conditions": "statusCategory != Done",
+                                                   "order_by": "cf[10120] ASC"})
+    assert captured["jql"] == 'project = "QCH" AND (statusCategory != Done) ORDER BY cf[10120] ASC'
+    assert "customfield_10120" in captured["fields"] and "customfield_10110" in captured["fields"]
+    assert res.data[0]["priority_level"] == "P1"
+    assert res.data[0]["ocpp_id"] == "CG0003"
+
+
+@pytest.mark.asyncio
 async def test_cz_jira_stats_by_priority_level(mock_client):
     def mk(k, pl):
         f = {"status": {"name": "To Do"}, "issuetype": {"name": "Task"},

@@ -209,3 +209,45 @@ def test_scope_unused_by_any_profile_is_fine():
         source="test",
     )
     assert "unused" in cfg.scopes
+
+
+def test_profile_name_with_space_raises():
+    """server.py embeds profile.name verbatim into the MCP tool name
+    f"kb_search_{profile.name}"; FastMCP itself doesn't reject bad names, it
+    just warns and registers a mangled tool, so a bad name must fail loudly
+    here instead of surfacing as a silently-unreachable tool in production."""
+    bad = {
+        "scopes": {"a": {}},
+        "profiles": {"my profile": {"scopes": ["a"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="my profile"):
+        parse_scopes(bad, source="test")
+
+
+def test_profile_name_with_slash_raises():
+    bad = {
+        "scopes": {"a": {}},
+        "profiles": {"noc/l1": {"scopes": ["a"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="noc/l1"):
+        parse_scopes(bad, source="test")
+
+
+def test_profile_name_non_ascii_raises():
+    bad = {
+        "scopes": {"a": {}},
+        "profiles": {"café": {"scopes": ["a"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="allowed characters"):
+        parse_scopes(bad, source="test")
+
+
+def test_profile_name_with_underscore_and_hyphen_accepted():
+    cfg = parse_scopes(
+        {
+            "scopes": {"a": {}},
+            "profiles": {"noc_l1-tier": {"scopes": ["a"], "description": "d"}},
+        },
+        source="test",
+    )
+    assert "noc_l1-tier" in cfg.profiles

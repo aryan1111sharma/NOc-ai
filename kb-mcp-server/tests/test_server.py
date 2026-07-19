@@ -2,6 +2,7 @@ import json
 
 import pytest
 from fastmcp import Client
+from fastmcp.exceptions import ToolError
 from qdrant_client import QdrantClient
 
 from kb_mcp.config import settings
@@ -122,9 +123,44 @@ async def test_profile_min_score_overrides_global(monkeypatch):
     assert data == []
 
 
+async def test_build_server_gates_each_dependency_independently(monkeypatch):
+    """config, registry, and embedder are independent injection points: supplying
+    some subset of them must not drag in real wiring for the ones that WERE
+    supplied. Regression for a prior all-or-nothing guard
+    (`if config is None or registry is None or embedder is None`) that ran the
+    entire real-wiring block -- including warn_missing_folders against a
+    caller-supplied config -- whenever ANY single argument was missing."""
+    reg, emb = _seeded()
+
+    warn_calls = []
+    monkeypatch.setattr(
+        "kb_mcp.scopes.warn_missing_folders",
+        lambda cfg, knowledge_dir: warn_calls.append(cfg),
+    )
+
+    class BoomEmbedder:
+        def __init__(self, *a, **kw):
+            raise AssertionError("real embedder must not be constructed when one was supplied")
+
+    monkeypatch.setattr("kb_mcp.embed.FastembedEmbedder", BoomEmbedder)
+
+    # config and registry are supplied; embedder is intentionally omitted so
+    # the embedder-wiring branch runs on its own -- proving it's gated
+    # independently, and proving config/registry being supplied did NOT also
+    # re-trigger config loading or the filesystem warning check.
+    with pytest.raises(AssertionError, match="real embedder must not be constructed"):
+        build_server(config=CFG, registry=reg, embedder=None)
+
+    assert warn_calls == []
+
+
 async def test_store_failure_raises_rather_than_returning_empty():
     """An empty list means 'not in the knowledge base'. A search failure must
-    never be mistaken for that."""
+    never be mistaken for that. Matching on the underlying message (not just
+    "some ToolError was raised") matters: FastMCP wraps a missing tool name
+    in the same ToolError type with a generic "Unknown tool" message, so a
+    bare `pytest.raises(ToolError)` would pass just as happily for a typo'd
+    tool name as for the store error this test exists to pin."""
     reg, emb = _seeded()
 
     class Boom:
@@ -136,5 +172,5 @@ async def test_store_failure_raises_rather_than_returning_empty():
     reg._by_scope["ev-core"] = Boom()
     reg._by_collection["ev_kb"] = Boom()
     server = build_server(config=CFG, registry=reg, embedder=emb)
-    with pytest.raises(Exception):
+    with pytest.raises(ToolError, match="qdrant unreachable"):
         await _call(server, "kb_search_noc", {"query": "anything"})

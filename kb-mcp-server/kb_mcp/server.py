@@ -20,22 +20,31 @@ def _description(profile: Profile) -> str:
 
 
 def build_server(config: ScopesConfig | None = None, registry=None, embedder=None) -> FastMCP:
-    if config is None or registry is None or embedder is None:  # pragma: no cover - real wiring
+    """config, registry, and embedder are independent injection points: any
+    subset may be supplied (as tests do) and the rest are wired for real. Each
+    is gated on its own `is None` so passing two of three doesn't drag in the
+    third's real wiring too."""
+    if config is None:  # pragma: no cover - real wiring
+        from .scopes import load_scopes, warn_missing_folders
+
+        config = load_scopes(settings.scopes_file)
+        warn_missing_folders(config, settings.knowledge_dir)
+
+    if registry is None:  # pragma: no cover - real wiring
         from qdrant_client import QdrantClient
 
-        from .embed import FastembedEmbedder
-        from .scopes import load_scopes, warn_missing_folders
         from .store import StoreRegistry
 
-        config = config or load_scopes(settings.scopes_file)
-        warn_missing_folders(config, settings.knowledge_dir)
-        if registry is None:
-            registry = StoreRegistry(
-                QdrantClient(url=settings.qdrant_url), config,
-                settings.collection, settings.embed_dim,
-            )
-            registry.ensure_all()
-        embedder = embedder or FastembedEmbedder(settings.embed_model, settings.embed_dim)
+        registry = StoreRegistry(
+            QdrantClient(url=settings.qdrant_url), config,
+            settings.collection, settings.embed_dim,
+        )
+        registry.ensure_all()
+
+    if embedder is None:  # pragma: no cover - real wiring
+        from .embed import FastembedEmbedder
+
+        embedder = FastembedEmbedder(settings.embed_model, settings.embed_dim)
 
     mcp = FastMCP(name="EV Knowledge Base (read-only RAG)")
 

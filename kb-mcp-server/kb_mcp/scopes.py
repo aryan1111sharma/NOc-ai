@@ -6,12 +6,22 @@ corpus is walked. That keeps its validation rules cheap to test exhaustively.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 log = logging.getLogger(__name__)
+
+# server.py embeds profile.name verbatim into the MCP tool name
+# f"kb_search_{profile.name}". FastMCP does not validate tool names itself —
+# it just warns to stderr and registers whatever string it's given — so a
+# profile named e.g. "my profile" would silently produce a tool a strict MCP
+# client (LibreChat included) may reject or mangle, making that profile's
+# knowledge base unreachable in production while looking registered here.
+# Catching it at config-load time turns that into a loud startup error.
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class ScopesConfigError(ValueError):
@@ -106,6 +116,12 @@ def parse_scopes(raw, *, source: str) -> ScopesConfig:
     profiles: dict[str, Profile] = {}
     for name, body in raw_profiles.items():
         name = str(name)
+        if not _SAFE_NAME.match(name):
+            raise ScopesConfigError(
+                f"{source}: profile name {name!r} is not a valid MCP tool-name "
+                f"fragment (it becomes 'kb_search_{name}'); allowed characters "
+                "are letters, digits, '_', and '-'"
+            )
         if not isinstance(body, dict):
             raise ScopesConfigError(f"{source}: profile '{name}' must be a mapping")
 

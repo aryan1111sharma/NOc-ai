@@ -7,7 +7,7 @@ from qdrant_client.models import (
     Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, MatchAny,
 )
 
-from .scopes import Scope, ScopesConfig
+from .scopes import Scope, ScopesConfig, ScopesConfigError
 
 _NS = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -57,6 +57,10 @@ class KbStore:
         return pts[0].payload.get("doc_hash") if pts else None
 
     def known_sources(self) -> set[str]:
+        """Union of `source` across every payload in this collection. When
+        several non-confidential scopes share a collection, this returns
+        sources from ALL of them, not just one scope — callers that need a
+        single scope's sources must filter the result themselves."""
         seen, offset = set(), None
         while True:
             pts, offset = self.c.scroll(self.collection, limit=256, offset=offset, with_payload=True)
@@ -67,8 +71,16 @@ class KbStore:
         return seen
 
     def search(self, vector: list[float], top_k: int, scopes: list[str] | None = None) -> list[dict]:
+        # A scope-less collection (declared in config but never ingested) has
+        # no collection yet; that reads as "nothing in the KB", not a crash.
+        # Only this specific, checked condition returns [] — any other
+        # failure (connection, timeout, malformed response) must propagate.
+        if not self.c.collection_exists(self.collection):
+            return []
         flt = None
-        if scopes:
+        if scopes is not None:
+            # Explicit empty list must filter to nothing, not be treated as
+            # "no filter" — MatchAny(any=[]) correctly matches zero points.
             flt = Filter(must=[FieldCondition(key="scope", match=MatchAny(any=list(scopes)))])
         res = self.c.query_points(
             self.collection, query=vector, limit=top_k, with_payload=True, query_filter=flt
@@ -89,14 +101,41 @@ class StoreRegistry:
                  shared_collection: str, dim: int):
         self._by_collection: dict[str, KbStore] = {}
         self._by_scope: dict[str, KbStore] = {}
+        # A confidential scope's collection name is derived by slugifying —
+        # two scope names can slugify to the same string, or coincide with
+        # shared_collection (an env-configurable name). Either would silently
+        # defeat the isolation this class exists to guarantee, so both are
+        # config errors, not runtime surprises. scopes.py can't check this
+        # itself: it knows nothing about Qdrant or collection naming.
+        confidential_owner: dict[str, str] = {}  # collection name -> owning scope
         for name, scope in config.scopes.items():
             coll = collection_for(scope, shared_collection)
+            if scope.confidential:
+                if coll == shared_collection:
+                    raise ScopesConfigError(
+                        f"confidential scope '{name}' resolves to collection '{coll}', "
+                        "which collides with the shared collection — no filter bug "
+                        "should be able to expose confidential data, so this must "
+                        "not overlap; rename the scope or the shared collection"
+                    )
+                if coll in confidential_owner:
+                    raise ScopesConfigError(
+                        f"confidential scopes '{confidential_owner[coll]}' and '{name}' "
+                        f"both resolve to collection '{coll}' — rename one so their "
+                        "slugified names no longer collide"
+                    )
+                confidential_owner[coll] = name
             if coll not in self._by_collection:
                 self._by_collection[coll] = KbStore(client, coll, dim)
             self._by_scope[name] = self._by_collection[coll]
 
     def for_scope(self, scope_name: str) -> KbStore:
-        return self._by_scope[scope_name]
+        try:
+            return self._by_scope[scope_name]
+        except KeyError:
+            raise ScopesConfigError(
+                f"unknown scope '{scope_name}'; known scopes: {sorted(self._by_scope)}"
+            ) from None
 
     def stores(self) -> list[KbStore]:
         return list(self._by_collection.values())
@@ -105,17 +144,17 @@ class StoreRegistry:
         for store in self._by_collection.values():
             store.ensure_collection()
 
-    def group(self, scope_names) -> list[tuple[KbStore, list[str]]]:
+    def group(self, scope_names: list[str]) -> list[tuple[KbStore, list[str]]]:
         """Group scopes by the store that holds them, so each collection is
         queried once with all of its relevant scopes."""
         grouped: dict[str, list[str]] = {}
         for name in scope_names:
-            grouped.setdefault(self._by_scope[name].collection, []).append(name)
+            grouped.setdefault(self.for_scope(name).collection, []).append(name)
         return [(self._by_collection[coll], names) for coll, names in grouped.items()]
 
 
 def search_many(pairs: list[tuple[KbStore, list[str]]], vector: list[float],
-                *, top_k: int, min_score: float) -> list[dict]:
+                *, top_k: int, min_score: float = 0.0) -> list[dict]:
     """Query each (store, scopes) pair with limit=top_k, then merge and truncate
     to top_k overall. Over-fetching per collection is what lets one collection
     supply all top_k results when it holds the best matches."""

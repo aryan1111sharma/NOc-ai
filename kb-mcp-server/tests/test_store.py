@@ -38,7 +38,9 @@ def test_doc_hash_lookup():
     assert s.current_doc_hash("missing.md") is None
 
 
-from kb_mcp.scopes import parse_scopes
+import pytest
+
+from kb_mcp.scopes import ScopesConfigError, parse_scopes
 from kb_mcp.store import StoreRegistry, collection_for, search_many
 
 CFG = parse_scopes(
@@ -133,3 +135,69 @@ def test_search_many_applies_min_score_and_top_k():
     assert len(capped) == 2
     assert search_many(reg.group(["ev-core"]), e.embed(["text 1"])[0],
                        top_k=5, min_score=1.1) == []
+
+
+def test_registry_rejects_slug_collision_between_confidential_scopes():
+    """'a-b' and 'a_b' both slugify to 'kb_a_b' — that must not silently merge
+    two confidential corpora into one collection."""
+    cfg = parse_scopes(
+        {
+            "scopes": {"a-b": {"confidential": True}, "a_b": {"confidential": True}},
+            "profiles": {"p": {"scopes": ["a-b"], "description": "d"}},
+        },
+        source="test",
+    )
+    with pytest.raises(ScopesConfigError):
+        StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=8)
+
+
+def test_registry_rejects_confidential_collection_colliding_with_shared():
+    """A confidential scope named 'hr' resolves to 'kb_hr'; if the shared
+    collection is configured as 'kb_hr' the confidential data would land in
+    the shared, non-isolated collection."""
+    cfg = parse_scopes(
+        {
+            "scopes": {"hr": {"confidential": True}},
+            "profiles": {"p": {"scopes": ["hr"], "description": "d"}},
+        },
+        source="test",
+    )
+    with pytest.raises(ScopesConfigError):
+        StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="kb_hr", dim=8)
+
+
+def test_search_empty_scope_list_does_not_fail_open():
+    """scopes=[] must filter to nothing, not be treated as 'no filter'."""
+    e = FakeEmbedder()
+    s = KbStore(QdrantClient(":memory:"), collection="t2", dim=e.dim)
+    s.ensure_collection()
+    chunks = [
+        _chunk("ev-core/a.md", "ev-core", "connector lock failure", 0),
+        _chunk("hr/b.md", "hr", "connector lock failure", 1),
+    ]
+    s.upsert(chunks, e.embed([c["text"] for c in chunks]))
+    assert s.search(e.embed(["connector lock failure"])[0], top_k=5, scopes=[]) == []
+
+
+def test_search_on_missing_collection_returns_empty_not_crash():
+    """A confidential scope declared in config but never ingested has no
+    collection yet; querying it must read as 'nothing in the KB', not crash
+    the MCP tool."""
+    client = QdrantClient(":memory:")
+    reg = StoreRegistry(client, CFG, shared_collection="ev_kb", dim=FakeEmbedder().dim)
+    hr_store = reg.for_scope("hr")  # collection "kb_hr" never created
+    assert hr_store.search(FakeEmbedder().embed(["x"])[0], top_k=5) == []
+
+
+def test_for_scope_unknown_raises_named_error():
+    client = QdrantClient(":memory:")
+    reg = StoreRegistry(client, CFG, shared_collection="ev_kb", dim=FakeEmbedder().dim)
+    with pytest.raises(ScopesConfigError):
+        reg.for_scope("does-not-exist")
+
+
+def test_group_unknown_raises_named_error():
+    client = QdrantClient(":memory:")
+    reg = StoreRegistry(client, CFG, shared_collection="ev_kb", dim=FakeEmbedder().dim)
+    with pytest.raises(ScopesConfigError):
+        reg.group(["does-not-exist"])

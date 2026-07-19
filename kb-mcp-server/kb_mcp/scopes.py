@@ -31,7 +31,15 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class ScopesConfigError(ValueError):
-    """scopes.yaml is missing, malformed, or internally inconsistent."""
+    """The scope configuration is unusable.
+
+    Raised for three related cases: scopes.yaml is missing or malformed; a name
+    or reference in it is invalid (unsafe identifier, undeclared scope,
+    duplicate); or a resolved artefact collides (two confidential scopes
+    slugifying to one collection — see store.collection_for). StoreRegistry also
+    raises it for a lookup of a scope it does not hold, which parse-time
+    validation should already make unreachable.
+    """
 
 
 @dataclass(frozen=True)

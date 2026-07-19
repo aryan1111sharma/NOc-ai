@@ -357,7 +357,7 @@ def warn_missing_folders(config: ScopesConfig, knowledge_dir) -> None:
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `./.venv/Scripts/python.exe -m pytest tests/test_scopes.py -q`
-Expected: `14 passed`
+Expected: `13 passed`
 
 - [ ] **Step 5: Add the config setting**
 
@@ -380,7 +380,7 @@ pyyaml>=6.0
 - [ ] **Step 7: Run the whole suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -q`
-Expected: `31 passed` (17 existing + 14 new)
+Expected: `30 passed` (17 existing + 13 new)
 
 - [ ] **Step 8: Commit**
 
@@ -650,7 +650,7 @@ Expected: `9 passed` (3 existing + 6 new)
 - [ ] **Step 5: Run the whole suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -q`
-Expected: `37 passed`
+Expected: `36 passed`
 
 - [ ] **Step 6: Commit**
 
@@ -946,7 +946,7 @@ Expected: `9 passed`
 - [ ] **Step 5: Run the whole suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -q`
-Expected: `43 passed`
+Expected: `42 passed`
 
 - [ ] **Step 6: Commit**
 
@@ -1197,7 +1197,7 @@ Expected: `9 passed`
 - [ ] **Step 5: Run the whole suite**
 
 Run: `./.venv/Scripts/python.exe -m pytest -q`
-Expected: `49 passed`
+Expected: `48 passed`
 
 - [ ] **Step 6: Commit**
 
@@ -1545,7 +1545,7 @@ git commit -m "docs(kb): document scopes, profiles, and adding a new agent's kno
 
 ## Verification checklist
 
-- [ ] `./.venv/Scripts/python.exe -m pytest -q` → **49 passed**, no Qdrant container, no model download
+- [ ] `./.venv/Scripts/python.exe -m pytest -q` → **48 passed**, no Qdrant container, no model download
 - [ ] `test_same_filename_in_two_scopes_does_not_collide` passes (the data-loss regression)
 - [ ] `test_profile_cannot_retrieve_another_scopes_chunk` passes (the isolation claim)
 - [ ] `test_store_failure_raises_rather_than_returning_empty` passes (failure ≠ "not in KB")

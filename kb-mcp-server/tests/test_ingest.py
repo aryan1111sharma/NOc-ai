@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from qdrant_client import QdrantClient
@@ -150,3 +151,49 @@ def test_prune_does_not_delete_docs_of_other_scope_sharing_collection(tmp_path: 
     assert r["pruned_docs"] == 1
     assert reg.for_scope("cms").known_sources() == {"cms/b.md"}
     assert reg.for_scope("ev-core").known_sources() == {"cms/b.md"}
+
+
+def test_reingest_after_chunk_shrinkage_leaves_no_stale_chunks(tmp_path: Path):
+    """delete_source-before-re-upsert must remove ALL old chunk points for a
+    source, including high-index ones. A document that shrinks from many
+    chunks to one must not leave the old version's tail chunks behind."""
+    reg, emb = _registry()
+    many_paras = "\n\n".join(f"paragraph {i} filler text to force a new chunk" for i in range(12))
+    _write(tmp_path, "ev-core/r.md", many_paras)
+    r1 = ingest(str(tmp_path), CFG, reg, emb, max_chars=40, overlap=0)
+    assert r1["indexed_docs"] == 1
+    store = reg.for_scope("ev-core")
+    count_before = store.c.count(store.collection, count_filter=store._source_filter("ev-core/r.md")).count
+    assert count_before > 5  # confirm the first version genuinely chunked into many pieces
+
+    _write(tmp_path, "ev-core/r.md", "one short paragraph")
+    r2 = ingest(str(tmp_path), CFG, reg, emb, max_chars=40, overlap=0)
+    assert r2["indexed_docs"] == 1
+    count_after = store.c.count(store.collection, count_filter=store._source_filter("ev-core/r.md")).count
+    assert count_after == r2["chunks"]
+    assert count_after < count_before
+
+
+def test_prune_false_does_not_remove_stale_sources(tmp_path: Path):
+    _write(tmp_path, "ev-core/r.md", "body")
+    reg, emb = _registry()
+    _ingest(tmp_path, reg, emb)
+    (tmp_path / "ev-core" / "r.md").unlink()
+    r = _ingest(tmp_path, reg, emb, prune=False)
+    assert r["pruned_docs"] == 0
+    assert reg.for_scope("ev-core").known_sources() == {"ev-core/r.md"}
+
+
+def test_prune_removes_entire_deleted_scope_folder(tmp_path: Path):
+    """Distinct from test_prune_removes_deleted_files_per_collection, which
+    removes one file but leaves the folder in place: here the whole scope
+    folder disappears between runs, so it never even appears in the walk."""
+    _write(tmp_path, "ev-core/r.md", "body")
+    _write(tmp_path, "hr/p.md", "policy")
+    reg, emb = _registry()
+    _ingest(tmp_path, reg, emb)
+    shutil.rmtree(tmp_path / "hr")
+    r = _ingest(tmp_path, reg, emb, prune=True)
+    assert r["pruned_docs"] == 1
+    assert reg.for_scope("hr").known_sources() == set()
+    assert reg.for_scope("ev-core").known_sources() == {"ev-core/r.md"}

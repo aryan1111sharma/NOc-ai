@@ -18,7 +18,14 @@ def _doc_hash(path: Path) -> str:
 def _collect(root: Path, config: ScopesConfig) -> tuple[list[tuple[Path, Scope]], int, int]:
     """Walk the corpus. A document's top-level folder is its scope; files
     outside any declared scope folder are skipped so misplaced files stay
-    visible instead of being silently indexed."""
+    visible instead of being silently indexed.
+
+    Note: folder-to-scope matching (`scope_for_folder`) is an exact string
+    compare, so on a case-insensitive filesystem (Windows, default macOS) a
+    folder named e.g. `EV-Core` against a declared scope `ev-core` is silently
+    treated as unscoped. Not a production issue (deployment target is
+    Docker/Linux) but worth knowing when testing locally.
+    """
     files: list[tuple[Path, Scope]] = []
     skipped_root = skipped_unscoped = 0
 
@@ -86,10 +93,10 @@ def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
         stats["chunks"] += len(chunks)
 
     if prune:
-        for store in registry.stores():
-            present = on_disk_by_collection.get(store.collection, set())
-            for source in store.known_sources() - present:
-                store.delete_source(source)
+        for collection_store in registry.stores():
+            present = on_disk_by_collection.get(collection_store.collection, set())
+            for source in collection_store.known_sources() - present:
+                collection_store.delete_source(source)
                 stats["pruned_docs"] += 1
 
     return stats

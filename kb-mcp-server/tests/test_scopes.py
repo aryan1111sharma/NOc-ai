@@ -251,3 +251,63 @@ def test_profile_name_with_underscore_and_hyphen_accepted():
         source="test",
     )
     assert "noc_l1-tier" in cfg.profiles
+
+
+def test_scope_name_with_space_raises():
+    """Scope names are identifiers (payload filter values, and collection-name
+    material for confidential scopes), not filenames. An unsafe-but-unique
+    name previously slugified to a working, merely odd collection name with
+    no error at all -- so this must be caught at parse time, not left to
+    StoreRegistry's collision detection, which only catches TWO unsafe names
+    colliding, not one unsafe name on its own."""
+    bad = {
+        "scopes": {"my scope": {}},
+        "profiles": {"p": {"scopes": ["my scope"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="my scope"):
+        parse_scopes(bad, source="test")
+
+
+def test_scope_name_with_slash_raises():
+    bad = {
+        "scopes": {"ev/core": {}},
+        "profiles": {"p": {"scopes": ["ev/core"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="ev/core"):
+        parse_scopes(bad, source="test")
+
+
+def test_scope_name_non_ascii_raises():
+    bad = {
+        "scopes": {"héllo": {}},
+        "profiles": {"p": {"scopes": ["héllo"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="allowed characters"):
+        parse_scopes(bad, source="test")
+
+
+def test_scope_name_with_underscore_and_hyphen_accepted():
+    cfg = parse_scopes(
+        {
+            "scopes": {"ev-core_v2": {}},
+            "profiles": {"p": {"scopes": ["ev-core_v2"], "description": "d"}},
+        },
+        source="test",
+    )
+    assert "ev-core_v2" in cfg.scopes
+
+
+def test_confidential_scope_with_unsafe_but_unique_name_raises():
+    """Regression: a confidential scope named 'my scope' previously built with
+    NO error at all -- StoreRegistry only raises when two DIFFERENT unsafe
+    names slugify to the SAME collection (e.g. 'my scope' and 'my-scope' both
+    -> kb_my_scope); a lone unsafe-but-unique name like 'my scope' or 'héllo'
+    slugified to a working, merely odd collection name (kb_my_scope,
+    kb_h_llo) and nothing ever caught it. It must now fail at parse time,
+    before StoreRegistry is even built."""
+    bad = {
+        "scopes": {"my scope": {"confidential": True}},
+        "profiles": {"p": {"scopes": ["my scope"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="my scope"):
+        parse_scopes(bad, source="test")

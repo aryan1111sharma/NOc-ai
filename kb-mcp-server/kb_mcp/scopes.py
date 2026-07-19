@@ -14,13 +14,19 @@ import yaml
 
 log = logging.getLogger(__name__)
 
-# server.py embeds profile.name verbatim into the MCP tool name
-# f"kb_search_{profile.name}". FastMCP does not validate tool names itself —
-# it just warns to stderr and registers whatever string it's given — so a
-# profile named e.g. "my profile" would silently produce a tool a strict MCP
-# client (LibreChat included) may reject or mangle, making that profile's
-# knowledge base unreachable in production while looking registered here.
-# Catching it at config-load time turns that into a loud startup error.
+# Scope and profile names are identifiers, not filenames: profile names are
+# embedded verbatim into the MCP tool name (f"kb_search_{profile.name}" in
+# server.py), and scope names are stored as payload filter values and — for
+# confidential scopes — become collection-name material via collection_for's
+# slugify. FastMCP does not validate tool names itself (it warns to stderr
+# and registers whatever it's given), and an unsafe-but-unique scope name
+# slugifies to a working, merely odd collection name with no error at all —
+# so unsafe identifiers fail silently downstream rather than loudly here.
+# Constraining both to a safe charset at config-load time turns that into a
+# startup error. The `folder` field is deliberately NOT constrained by this:
+# it's a real filesystem path and may contain spaces or anything the OS
+# allows — a scope can declare folder: "EV Core (2026)" while its own name
+# stays a safe identifier.
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -94,6 +100,13 @@ def parse_scopes(raw, *, source: str) -> ScopesConfig:
     folder_owners: dict[str, str] = {}
     for name, body in raw_scopes.items():
         name = str(name)
+        if not _SAFE_NAME.match(name):
+            raise ScopesConfigError(
+                f"{source}: scope name {name!r} is not a valid identifier "
+                "(it is used as a payload filter value and, for confidential "
+                "scopes, as collection-name material); allowed characters "
+                "are letters, digits, '_', and '-'"
+            )
         body = body or {}
         if not isinstance(body, dict):
             raise ScopesConfigError(f"{source}: scope '{name}' must be a mapping")

@@ -1,0 +1,30 @@
+# Knowledge scopes and the profiles that bundle them.
+#
+# A document's top-level folder under knowledge/ is its scope. Files sitting at
+# the root belong to no scope and are skipped (which is why MANIFEST.md and this
+# file are not indexed as knowledge).
+#
+# Each profile becomes one MCP tool, kb_search_<profile>, with its scope filter
+# bound server-side. An agent is granted knowledge by being given that tool —
+# the model never passes a scope and cannot request one it wasn't granted.
+#
+# Non-confidential scopes share the ev_kb collection, separated by a payload
+# filter. A scope marked `confidential: true` gets its own Qdrant collection so
+# no filter defect can expose it.
+#
+# Run `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` after changing
+# this file or the corpus. Names must match ^[A-Za-z0-9_-]+$; the `folder` field
+# is unconstrained and may contain spaces.
+#
+# See docs/superpowers/specs/2026-07-19-agent-centric-knowledge-scopes-design.md
+
+scopes:
+  ev-core:
+    folder: ev-core
+
+profiles:
+  noc:
+    scopes: [ev-core]
+    description: >-
+      EV/OCPP protocol reference, charger model specs and firmware notes, and
+      NOC operational runbooks.

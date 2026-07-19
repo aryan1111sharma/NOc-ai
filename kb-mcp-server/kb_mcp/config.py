@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Calibrated on the Phase-1 corpus: on-topic hits scored 0.58-0.83, off-topic 0.41-0.42.
     min_score_default: float = 0.5
     knowledge_dir: str = "/knowledge"
+    scopes_file: str = "/knowledge/scopes.yaml"
 
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"

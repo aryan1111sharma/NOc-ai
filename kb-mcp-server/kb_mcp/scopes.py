@@ -81,29 +81,49 @@ def parse_scopes(raw, *, source: str) -> ScopesConfig:
     raw_profiles = _require_mapping(raw.get("profiles"), "profiles", source)
 
     scopes: dict[str, Scope] = {}
+    folder_owners: dict[str, str] = {}
     for name, body in raw_scopes.items():
+        name = str(name)
         body = body or {}
         if not isinstance(body, dict):
             raise ScopesConfigError(f"{source}: scope '{name}' must be a mapping")
-        scopes[name] = Scope(
-            name=name,
-            folder=str(body.get("folder", name)),
-            confidential=bool(body.get("confidential", False)),
-        )
+
+        confidential = body.get("confidential", False)
+        if not isinstance(confidential, bool):
+            raise ScopesConfigError(
+                f"{source}: scope '{name}' confidential must be a boolean, got {confidential!r}"
+            )
+
+        folder = str(body.get("folder", name))
+        if folder in folder_owners:
+            raise ScopesConfigError(
+                f"{source}: scopes '{folder_owners[folder]}' and '{name}' both claim folder '{folder}'"
+            )
+        folder_owners[folder] = name
+
+        scopes[name] = Scope(name=name, folder=folder, confidential=confidential)
 
     profiles: dict[str, Profile] = {}
     for name, body in raw_profiles.items():
+        name = str(name)
         if not isinstance(body, dict):
             raise ScopesConfigError(f"{source}: profile '{name}' must be a mapping")
 
         names = body.get("scopes") or []
         if not isinstance(names, list) or not names:
             raise ScopesConfigError(f"{source}: profile '{name}' must list at least one scope")
+        names = [str(n) for n in names]
+        seen_scopes: set = set()
         for scope_name in names:
             if scope_name not in scopes:
                 raise ScopesConfigError(
                     f"{source}: profile '{name}' references undeclared scope '{scope_name}'"
                 )
+            if scope_name in seen_scopes:
+                raise ScopesConfigError(
+                    f"{source}: profile '{name}' lists scope '{scope_name}' more than once"
+                )
+            seen_scopes.add(scope_name)
 
         description = body.get("description")
         if not isinstance(description, str) or not description.strip():
@@ -136,8 +156,10 @@ def load_scopes(path) -> ScopesConfig:
         raise ScopesConfigError(f"scopes config not found: {p}")
     try:
         raw = yaml.load(p.read_text(encoding="utf-8"), Loader=_DupCheckLoader)
-    except ScopesConfigError:
-        raise
+    except ScopesConfigError as exc:
+        # Raised inside the YAML constructor, which has no access to `source` —
+        # re-raise here so every error out of this module identifies the file.
+        raise ScopesConfigError(f"{p}: {exc}") from exc
     except yaml.YAMLError as exc:
         raise ScopesConfigError(f"{p} is not valid YAML: {exc}") from exc
     return parse_scopes(raw, source=str(p))

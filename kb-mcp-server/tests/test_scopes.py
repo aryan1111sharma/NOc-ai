@@ -130,3 +130,82 @@ def test_warn_missing_folders_warns_but_does_not_raise(tmp_path, caplog):
     with caplog.at_level(logging.WARNING):
         warn_missing_folders(cfg, tmp_path)
     assert "ghost" in caplog.text
+
+
+def test_confidential_quoted_string_raises():
+    # YAML `confidential: "false"` is a non-empty string -> truthy if bool()-coerced.
+    # That would silently flip a non-confidential scope into a confidential one.
+    bad = {
+        "scopes": {"hr": {"confidential": "false"}},
+        "profiles": {"p": {"scopes": ["hr"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="confidential"):
+        parse_scopes(bad, source="test")
+
+
+def test_confidential_bool_still_accepted():
+    cfg = parse_scopes(
+        {"scopes": {"hr": {"confidential": True}}, "profiles": {"p": {"scopes": ["hr"], "description": "d"}}},
+        source="test",
+    )
+    assert cfg.scopes["hr"].confidential is True
+
+
+def test_profile_duplicate_scope_raises():
+    bad = {
+        "scopes": {"a": {}},
+        "profiles": {"p": {"scopes": ["a", "a"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="a"):
+        parse_scopes(bad, source="test")
+
+
+def test_duplicate_folder_raises():
+    bad = {
+        "scopes": {"a": {"folder": "shared"}, "b": {"folder": "shared"}},
+        "profiles": {"p": {"scopes": ["a"], "description": "d"}},
+    }
+    with pytest.raises(ScopesConfigError, match="shared"):
+        parse_scopes(bad, source="test")
+
+
+def test_numeric_scope_name_becomes_string():
+    cfg = parse_scopes(
+        {"scopes": {123: {}}, "profiles": {"p": {"scopes": [123], "description": "d"}}},
+        source="test",
+    )
+    assert "123" in cfg.scopes
+    assert isinstance(cfg.scopes["123"].name, str)
+
+
+def test_duplicate_key_error_names_source_file(tmp_path):
+    p = tmp_path / "scopes.yaml"
+    p.write_text(
+        "scopes:\n  a: {}\n  a: {}\nprofiles:\n  p:\n    scopes: [a]\n    description: d\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ScopesConfigError, match=r"duplicate.*scopes\.yaml|scopes\.yaml.*duplicate"):
+        load_scopes(p)
+
+
+def test_min_score_boundary_values_accepted():
+    for boundary in (0.0, 1.0):
+        cfg = parse_scopes(
+            {
+                "scopes": {"a": {}},
+                "profiles": {"p": {"scopes": ["a"], "description": "d", "min_score": boundary}},
+            },
+            source="test",
+        )
+        assert cfg.profiles["p"].min_score == boundary
+
+
+def test_scope_unused_by_any_profile_is_fine():
+    cfg = parse_scopes(
+        {
+            "scopes": {"a": {}, "unused": {}},
+            "profiles": {"p": {"scopes": ["a"], "description": "d"}},
+        },
+        source="test",
+    )
+    assert "unused" in cfg.scopes

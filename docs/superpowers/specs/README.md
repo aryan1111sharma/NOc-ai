@@ -3,7 +3,7 @@
 A program of improvements to the Manthan NOC agent. Each feature follows
 **brainstorm → spec → plan → build**. This index tracks all of them and their status.
 
-_Last updated: 2026-07-17_
+_Last updated: 2026-07-19_
 
 ---
 
@@ -29,7 +29,9 @@ _Last updated: 2026-07-17_
 
 ### 3. EV / SME knowledge base (RAG `kb_search` MCP tool)
 - **Spec:** [`2026-07-18-ev-knowledge-base-rag-design.md`](./2026-07-18-ev-knowledge-base-rag-design.md) ✅
-- **Status:** spec done, ready to plan.
+- **Status:** ✅ **BUILT & LIVE** (2026-07-18, commits `98c62be`..`084555a`). All 10 plan
+  tasks done; 17 tests; `qdrant` + `kb-mcp-server` up; `kb_search` wired into the 3
+  MCP-enabled agents. Corpus is still the 3 synthetic samples — real docs pending.
 - **What:** new `kb-mcp-server` + **Qdrant** vector store + **local BGE embedder**
   (fastembed, in-boundary). Drop docs in `knowledge/` → `kb-ingest` → agents call a
   read-only `kb_search` tool that returns cited chunks. All 4 agents get it. Self-hosted
@@ -40,13 +42,30 @@ _Last updated: 2026-07-17_
   real doc set to ingest.
 - **Size:** medium.
 
+### 3a. Agent-centric knowledge scopes
+- **Spec:** [`2026-07-19-agent-centric-knowledge-scopes-design.md`](./2026-07-19-agent-centric-knowledge-scopes-design.md) ✅
+- **Status:** spec done, ready to plan. Extends feature 3.
+- **What:** folder-per-scope corpus + `knowledge/scopes.yaml` defining scopes and
+  **profiles**; the server generates one `kb_search_<profile>` tool per profile with its
+  scope filter baked in server-side. Shared scopes are filtered within `ev_kb`; scopes
+  marked `confidential` get their own collection. Lets future agents (HR, per-customer,
+  other technical domains) each hold their own knowledge.
+- **Decisions locked:** relevance-first (D1), mixed opt-in isolation (D2), folder=scope
+  (D3), profiles compose scopes (D4), enforcement via tool presence (D5), single server
+  instance (D6), relative-path document identity (D7).
+- **Also fixes two live bugs:** bare-filename collision (`ev-core/README.md` vs
+  `hr/README.md` overwrite each other) and `MANIFEST.md` being indexed as knowledge.
+- **Size:** medium. Cheap now (3 sample docs); becomes a migration once real docs land.
+
 ---
 
 ## Suggested sequence
 
 1. **Slot-filling** — ✅ SHIPPED v0.8.0.
-2. **Knowledge base** — spec done (2026-07-18); ready to plan. Biggest capability jump,
-   gives Hermes's judge real domain ground truth.
-3. **The loop (Hermes)** — spec done; needs external prereqs before planning.
+2. **Knowledge base** — ✅ BUILT & LIVE (2026-07-18). Biggest capability jump; gives
+   Hermes's judge real domain ground truth.
+3. **Agent-centric scopes** — spec done (2026-07-19); ready to plan. Do this **before**
+   loading real documents, while re-foldering is one re-ingest rather than a migration.
+4. **The loop (Hermes)** — spec done; needs external prereqs before planning.
 
 _This ordering is a recommendation, not a constraint — features are largely independent._

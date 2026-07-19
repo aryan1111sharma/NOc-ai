@@ -154,14 +154,22 @@ curator cannot forget to re-index the scope they touched.
 agent calls kb_search_chargezone("SLA response time")
   → profile "chargezone" → scopes [ev-core, chargezone]
   → embed query
-  → query ev_kb filtered to scope IN [ev-core, chargezone]
-  → (plus each confidential collection the profile includes)
-  → merge → sort by score → drop below min_score → take top_k
+  → query ev_kb filtered to scope IN [ev-core, chargezone], limit=top_k
+  → (plus each confidential collection the profile includes, limit=top_k)
+  → merge → sort by score → drop below min_score → truncate to top_k
   → return chunks with source paths for citation
 ```
 
+Each collection is queried with `limit=top_k`, then results are merged and truncated to
+`top_k` overall. Over-fetching per collection is what allows one collection to supply all
+`top_k` results when it genuinely holds the best matches — a global limit applied per
+collection would instead reserve slots for weaker hits.
+
 The model passes only `query` and optionally `top_k`. Scope is never a parameter, so it
 cannot be hallucinated or argued with.
+
+**The generic `kb_search` tool ceases to exist.** Every tool is generated from a profile;
+there is no unscoped fallback, because an unscoped tool would defeat the entire design.
 
 ---
 
@@ -258,7 +266,9 @@ Small today — the reason for doing it now.
    `.gitignore` exception so it is tracked.
 3. Drop and rebuild the `ev_kb` collection — 5 chunks, seconds.
 4. Rewire the 3 MCP-enabled agents from `kb_search` to `kb_search_noc` and **restore to
-   Mongo in the same step**.
+   Mongo in the same step**. In `agents.json` these appear with LibreChat's server suffix,
+   so the edit is `kb_search_mcp_kb` → `kb_search_noc_mcp_kb`. The KNOWLEDGE BASE
+   instruction block added in `084555a` must be updated to name the new tool.
 
 ⚠️ Step 4 carries a known hazard: `agents.json` is regenerated from Mongo by
 `export-agents`, so a file edit not promptly restored is silently dropped by any

@@ -20,5 +20,35 @@ Run `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` after changing t
 | `ev-core/runbook-stuck-connector.md` | ev-core | Synthetic | Runbook: connector lock failure / stuck cable |
 | `ev-core/charger-spec-sample.md` | ev-core | Synthetic | Example DC charger model spec + firmware notes |
 
-## Phase 2 — real docs (to be added by maintainer)
-_(Drop 3–5 representative real docs here and add their rows.)_
+## Phase 2 — OCPP 1.6J specification (official reference)
+
+Full OCPP 1.6J spec (edition 2, 2017-09-28, Open Charge Alliance) as structured Markdown,
+sourced from the internal `ocpp-parser` repo (`knowledge/standards/ocpp-1.6/`). The
+inline `<json-schema>` blocks were stripped for clean operator retrieval; YAML frontmatter
+retained (carries the OCA attribution — spec is **CC BY-ND 4.0**, internal reference use).
+
+| File | Scope | Notes |
+|------|-------|-------|
+| `ev-core/ocpp-1.6-spec/00-Table-of-Contents.md` | ev-core | Spec index |
+| `ev-core/ocpp-1.6-spec/02-Terminology-and-Conventions.md` | ev-core | Terminology |
+| `ev-core/ocpp-1.6-spec/03-Introduction.md` | ev-core | Introduction / concepts |
+| `ev-core/ocpp-1.6-spec/04-Operations-Initiated-by-Charge-Point.md` | ev-core | CP→CMS operations |
+| `ev-core/ocpp-1.6-spec/05-Operations-Initiated-by-Central-System.md` | ev-core | CMS→CP operations |
+| `ev-core/ocpp-1.6-spec/06-Messages.md` | ev-core | All message PDUs (fields, cardinality) |
+| `ev-core/ocpp-1.6-spec/07-Types.md` | ev-core | Data types + enums |
+| `ev-core/ocpp-1.6-spec/08-Firmware-and-Diagnostics-File-Transfer.md` | ev-core | Firmware/diagnostics transfer |
+| `ev-core/ocpp-1.6-spec/09-Configuration-Keys.md` | ev-core | Configuration keys |
+| `ev-core/ocpp-1.6-spec/J03–J07-*.md` | ev-core | JSON/WebSocket annex (connection, RPC, security, config) |
+
+## Phase 3 — customer/hardware docs (to be added by maintainer)
+_(Drop real charger manuals / customer runbooks here and add their rows.)_
+
+---
+
+### Future track (not yet in the KB) — `ocpp-parser` tooling
+
+The `ocpp-parser` repo also contains **tools** (not knowledge): a client-log Parser, a
+CMS Excel-log parser for customer logs (CZ/Chargezone live; Mahindra, MSIL planned), and
+an OCPP transaction simulator ("training emulator" productization planned). These are
+candidate **NOC solutions / future MCP integrations**, not KB documents. Revisit as a
+separate feature if we want Manthan to drive or expose them.

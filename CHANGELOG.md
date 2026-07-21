@@ -5,6 +5,53 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.10.0] - 2026-07-21
+
+### Features
+
+- **kb:** Scaffold kb-mcp-server package, config, and text chunking ([`98c62be`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/98c62be2ea4b17b900f9e73be4eb03efb6f66a45))
+- **kb:** Embedder protocol + fastembed impl + deterministic test fake ([`adc0e10`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/adc0e100c1cffb511f89564a8301ea8b62d6ad06))
+- **kb:** Qdrant store wrapper (ensure/upsert/search/delete/hash lookup) ([`4b2d5aa`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4b2d5aa749aefdc495ae47c4698aa4f86559aa12))
+- **kb:** Document parsing for pdf/md/html/txt into located segments ([`4ecba6c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4ecba6ca2fe8fb1475f60ad100dd213871a27e18))
+- **kb:** Idempotent ingest CLI (hash-skip, re-index, prune) ([`ec6b6c0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ec6b6c0a550c43251f6dfe1a9a1fa38e2a88aa5b))
+- **kb:** FastMCP server with read-only kb_search tool (cited chunks) ([`cca9678`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/cca9678750ba1ec57f1d4ae441f95279355ea289))
+- **kb:** Packaging — requirements, Dockerfile, dockerignore, env example, README ([`6c0435e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6c0435e27665010b8fddf4edfb9620c1d60981d5))
+- **kb:** Wire kb-mcp-server + qdrant into compose and register kb in librechat ([`ab65074`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ab65074afb00d84f6f4cae38b5b3fc1c37297c42))
+- **kb:** Phase-1 sample corpus manifest + gitignore (docs untracked) ([`4ad3804`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4ad380476f7f0edca29da127023569776a9df886))
+- **kb:** Attach kb_search to the three MCP-enabled NOC agents ([`084555a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/084555aeb3b1e770fa81deb2d211b3b3cf0afc67))
+- **kb:** Scopes.yaml config module with validation ([`cbdf186`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/cbdf18624e8a9b0cb6eb3eb05fc8891701f180ae))
+- **kb:** Scope filtering, store registry, cross-collection search ([`20d7a10`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/20d7a10f10e9c8d20f6a946a173abd721bcdc67a))
+- **kb:** Scope-aware ingest keyed by relative path ([`754be5a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/754be5a01a5925902d1f64d1a517c3371095674b))
+- **kb:** Generate one kb_search tool per profile ([`c9f073a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c9f073a2690df41e9082ada2c01465368608214d))
+- **kb:** Migrate sample corpus into the ev-core scope ([`dcb3a82`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dcb3a82c98c476f9be3de115867f415c30bae256))
+- **kb:** Point NOC agents at the profile-scoped kb_search_noc tool ([`6358e53`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6358e53fc38b3463e987e1be69cef1c1a8175e2a))
+- **kb:** Add full OCPP 1.6J specification to the knowledge base ([`766ede5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/766ede5be4210f6c125fab0de0ce6628a9630cbb))
+
+### Bug Fixes
+
+- **agent:** Force NOC Engineer to emit a visible final answer (not only in reasoning) ([`769e4e9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/769e4e998a3e48ae709d6f7d9d215bc422af14fd))
+- **agent:** Switch NOC Engineer to glm-5.2 (glm-4.7 emitted final answer only in reasoning) ([`1fd5fa9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1fd5fa9d7b9d1588f7d5a338d8b50db326bf19ac))
+- **kb:** Apply a calibrated relevance floor to kb_search ([`b16e272`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b16e272a15c83ea010a03193ff81a70b3c5b79b2))
+- **kb:** Close silent-failure gaps in scopes.yaml validation ([`ad916a1`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ad916a18f1fb13fd5271e08ae58529f7c9712219))
+- **kb:** Close confidentiality gaps in store registry from code review ([`9bed8e5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9bed8e5b450db1febed9b2a9d9c04c6b661b092f))
+- **kb:** Address code review on per-profile tool generation ([`106d061`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/106d0618e7e3e7fbe0fdd70b9ae6c47296f7c94c))
+- **kb:** Validate all scope names, not just confidential ones ([`b85240c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b85240c1b72fc8c95e191aa506b146930f846fbf))
+- **kb:** Replace residual bare kb_search mentions in agent instructions ([`1de8a26`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1de8a26cc2c4a438275358dedc697bf9420091ea))
+
+### Documentation
+
+- **plan:** EV knowledge base (RAG) implementation plan ([`4c1e2a0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/4c1e2a088d2a4999865f647381ee0429c5cd5c95))
+- **kb:** Design spec for agent-centric knowledge scopes ([`6387e6b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6387e6b19d06da68e04754601b97e7b7bf0966aa))
+- **kb:** Clarify top_k merge semantics, tool naming, and removal of generic kb_search ([`59a1580`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/59a158026a9a929856f7a92ee9abe9e65c902696))
+- **kb:** Implementation plan for agent-centric knowledge scopes ([`f2d9f74`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f2d9f740bd3c4e2c802b9883a53d11dc1c7e4b0a))
+- **kb:** Document scopes, profiles, and adding a new agent's knowledge ([`59a409a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/59a409acca3dddb826a5de5eb0d2fbe324c6695d))
+- **kb:** Widen ScopesConfigError docstring; correct plan test counts ([`3781a33`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3781a33167752311aba99fa5a73a5d04579ede87))
+- Whole-system Manthan overview (Notion-import reference) ([`c3fcb5e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c3fcb5e409c6ce6782b83c7b9734430162ef177f))
+
+### Testing
+
+- **kb:** Pin delete-then-upsert and prune-guard regressions in ingest ([`061323e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/061323ee2d5063ae0107e0dc5304108810786db4))
+
 ## [0.9.0] - 2026-07-18
 
 ### Features

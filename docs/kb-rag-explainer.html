@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}</style>
+<title>How our knowledge base works — and where OKF fits</title>
+
+<style>
+  :root {
+    --ground:   #F7F9FA;
+    --panel:    #FFFFFF;
+    --ink:      #12171C;
+    --steel:    #5A6773;
+    --hairline: #D9E0E6;
+    --accent:   #0F7A8C;
+    --accent-soft: #E2F0F2;
+    --warn:     #B25916;
+    --warn-soft:#F7EBE1;
+    --shadow:   0 1px 2px rgba(18,23,28,.05), 0 8px 24px -12px rgba(18,23,28,.12);
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    --measure: 68ch;
+    --step--1: clamp(.78rem, .76rem + .1vw, .84rem);
+    --step-0:  clamp(1rem, .97rem + .16vw, 1.09rem);
+    --step-1:  clamp(1.2rem, 1.13rem + .34vw, 1.42rem);
+    --step-2:  clamp(1.5rem, 1.36rem + .68vw, 2rem);
+    --step-3:  clamp(2rem, 1.7rem + 1.5vw, 3.1rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:   #0E1216;
+      --panel:    #161C22;
+      --ink:      #E3E9EE;
+      --steel:    #8B98A5;
+      --hairline: #2A333C;
+      --accent:   #35B4C6;
+      --accent-soft: #14323A;
+      --warn:     #DE9350;
+      --warn-soft:#33241A;
+      --shadow:   0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0E1216; --panel:#161C22; --ink:#E3E9EE; --steel:#8B98A5;
+    --hairline:#2A333C; --accent:#35B4C6; --accent-soft:#14323A;
+    --warn:#DE9350; --warn-soft:#33241A;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"] {
+    --ground:#F7F9FA; --panel:#FFFFFF; --ink:#12171C; --steel:#5A6773;
+    --hairline:#D9E0E6; --accent:#0F7A8C; --accent-soft:#E2F0F2;
+    --warn:#B25916; --warn-soft:#F7EBE1;
+    --shadow: 0 1px 2px rgba(18,23,28,.05), 0 8px 24px -12px rgba(18,23,28,.12);
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1.1rem, 4vw, 2.5rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3rem, 6vw, 5rem);
+  }
+
+  .prose { max-width: var(--measure); display: flex; flex-direction: column; gap: 1.1rem; }
+
+  h1, h2, h3 { text-wrap: balance; line-height: 1.18; margin: 0; font-weight: 600; }
+  h1 { font-size: var(--step-3); letter-spacing: -.022em; }
+  h2 { font-size: var(--step-2); letter-spacing: -.016em; }
+  h3 { font-size: var(--step-1); letter-spacing: -.008em; }
+  p  { margin: 0; }
+  strong { font-weight: 620; }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0;
+  }
+
+  /* ---------- header ---------- */
+  header { display: flex; flex-direction: column; gap: 1.1rem; }
+  header .standfirst {
+    max-width: 58ch; font-size: var(--step-1); color: var(--steel); line-height: 1.5;
+  }
+  .rule { height: 1px; background: var(--hairline); border: 0; margin: 0; }
+
+  /* ---------- section scaffolding ---------- */
+  section { display: flex; flex-direction: column; gap: 1.8rem; }
+  .sec-head { display: flex; flex-direction: column; gap: .6rem; max-width: var(--measure); }
+
+  /* ---------- signal chain ---------- */
+  .chain-scroll { overflow-x: auto; padding-bottom: .5rem; }
+  .chain {
+    display: flex; align-items: stretch; gap: 0; min-width: min-content;
+  }
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: 1rem .95rem 1.1rem;
+    display: flex; flex-direction: column; gap: .5rem;
+    flex: 1 1 0; min-width: 148px;
+    box-shadow: var(--shadow);
+  }
+  .stage .idx {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .stage .what { font-weight: 600; font-size: .96rem; line-height: 1.3; }
+  .stage .how {
+    font-family: var(--mono); font-size: .72rem; color: var(--steel);
+    line-height: 1.45; word-break: break-word;
+  }
+  .link {
+    flex: 0 0 30px; align-self: center;
+    display: grid; place-items: center;
+    color: var(--hairline); font-size: 1.1rem;
+  }
+  .link::before { content: "\2192"; }
+
+  @media (max-width: 760px) {
+    .chain { flex-direction: column; }
+    .link { flex-basis: 26px; }
+    .link::before { content: "\2193"; }
+  }
+
+  /* ---------- callout ---------- */
+  .callout {
+    background: var(--warn-soft);
+    border: 1px solid color-mix(in srgb, var(--warn) 28%, transparent);
+    border-radius: 3px;
+    padding: 1.15rem 1.25rem;
+    display: flex; flex-direction: column; gap: .5rem;
+    max-width: var(--measure);
+  }
+  .callout .eyebrow { color: var(--warn); }
+
+  /* ---------- query trace ---------- */
+  .trace {
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .trace-row {
+    display: grid; grid-template-columns: 130px 1fr; gap: 1rem;
+    padding: .95rem 1.15rem; border-bottom: 1px solid var(--hairline);
+    align-items: baseline;
+  }
+  .trace-row:last-child { border-bottom: 0; }
+  .trace-row .k {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--steel);
+  }
+  .trace-row .v { font-size: .95rem; }
+  .trace-row .v code {
+    font-family: var(--mono); font-size: .84em;
+    background: var(--accent-soft); color: var(--accent);
+    padding: .1em .38em; border-radius: 2px;
+  }
+  .trace-row.hit { background: var(--accent-soft); }
+  .trace-row.hit .k { color: var(--accent); }
+
+  /* ---------- layer stack (the centerpiece) ---------- */
+  .stack-scroll { overflow-x: auto; }
+  .stack {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--hairline);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    min-width: 560px;
+    box-shadow: var(--shadow);
+  }
+  .stack > * { background: var(--panel); padding: .85rem 1rem; }
+  .stack .hd {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--steel);
+  }
+  .stack .layer { font-weight: 600; font-size: .92rem; }
+  .stack .cell { font-family: var(--mono); font-size: .76rem; color: var(--steel); line-height: 1.4; }
+  .stack .cell.on { color: var(--ink); }
+  .stack .cell.okf { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .stack .cell.none { color: color-mix(in srgb, var(--steel) 45%, transparent); }
+
+  /* ---------- chunk comparison ---------- */
+  .split {
+    display: grid; gap: 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(288px, 1fr));
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    padding: 1.15rem 1.25rem 1.3rem; display: flex; flex-direction: column; gap: .8rem;
+    box-shadow: var(--shadow);
+  }
+  .card h3 { font-size: 1.02rem; }
+  .doc {
+    font-family: var(--mono); font-size: .74rem; line-height: 1.75;
+    border: 1px solid var(--hairline); border-radius: 2px; overflow: hidden;
+  }
+  .doc div { padding: .1rem .6rem; }
+  .doc .cut {
+    border-top: 2px dashed var(--warn); color: var(--warn);
+    font-size: .68rem; letter-spacing: .06em; padding-top: .2rem;
+  }
+  .doc .ok {
+    border-top: 2px solid var(--accent); color: var(--accent);
+    font-size: .68rem; letter-spacing: .06em; padding-top: .2rem;
+  }
+  .verdict { font-size: .9rem; color: var(--steel); }
+
+  /* ---------- recommendation ---------- */
+  .rec {
+    border-left: 3px solid var(--accent);
+    padding-left: 1.25rem;
+    display: flex; flex-direction: column; gap: .7rem;
+    max-width: var(--measure);
+  }
+
+  footer {
+    border-top: 1px solid var(--hairline); padding-top: 1.5rem;
+    color: var(--steel); font-size: .88rem; max-width: var(--measure);
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 3px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Manthan · Knowledge Base · kb-mcp-server</p>
+    <h1>How our knowledge base actually works</h1>
+    <p class="standfirst">
+      A plain-language walkthrough of the retrieval pipeline we built — and an honest
+      read on whether Google's Open Knowledge Format has anything to do with it.
+    </p>
+    <hr class="rule">
+  </header>
+
+  <!-- ============ 1. THE PIPELINE ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 1 — The build</p>
+      <h2>Six stages, once per document</h2>
+      <p>
+        This runs when you add documents, not when you ask a question. It's a one-way
+        chain: a PDF goes in the left, and searchable numbers come out the right.
+      </p>
+    </div>
+
+    <div class="chain-scroll">
+      <div class="chain">
+        <div class="stage">
+          <span class="idx">01</span>
+          <span class="what">Collect</span>
+          <span class="how">manuals, OCPP spec, runbooks → /knowledge</span>
+        </div>
+        <span class="link" aria-hidden="true"></span>
+        <div class="stage">
+          <span class="idx">02</span>
+          <span class="what">Read the pages</span>
+          <span class="how">PyMuPDF pulls raw text out of the PDF</span>
+        </div>
+        <span class="link" aria-hidden="true"></span>
+        <div class="stage">
+          <span class="idx">03</span>
+          <span class="what">Cut into slices</span>
+          <span class="how">every 1800 chars, 200 char overlap</span>
+        </div>
+        <span class="link" aria-hidden="true"></span>
+        <div class="stage">
+          <span class="idx">04</span>
+          <span class="what">Turn into numbers</span>
+          <span class="how">bge-base-en-v1.5 → 768 numbers per slice, runs locally</span>
+        </div>
+        <span class="link" aria-hidden="true"></span>
+        <div class="stage">
+          <span class="idx">05</span>
+          <span class="what">File them away</span>
+          <span class="how">Qdrant, collection ev_kb, cosine distance</span>
+        </div>
+        <span class="link" aria-hidden="true"></span>
+        <div class="stage">
+          <span class="idx">06</span>
+          <span class="what">Expose one tool</span>
+          <span class="how">FastMCP · kb_search() · port 8106</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>The one idea that makes it work:</strong> stage 04 converts a piece of text into a
+        long list of numbers that captures roughly <em>what it's about</em>. Two slices about
+        the same topic end up with similar numbers, even if they share no words. That's the
+        whole trick — and it's also the source of the weakness further down.
+      </p>
+      <p>
+        Worth noting: those numbers are computed <strong>on our own machine</strong>. Documents never
+        leave the box to get embedded, which is why the knowledge base sidesteps the z.ai
+        data-residency question entirely.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 2. ONE QUESTION ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 2 — The ask</p>
+      <h2>What happens when someone asks something</h2>
+      <p>The agent never searches text. It compares numbers to numbers.</p>
+    </div>
+
+    <div class="trace">
+      <div class="trace-row">
+        <span class="k">Question</span>
+        <span class="v">"Why would a charger report a ground fault mid-session?"</span>
+      </div>
+      <div class="trace-row">
+        <span class="k">Converted</span>
+        <span class="v">the same model turns the question into <strong>768 numbers</strong></span>
+      </div>
+      <div class="trace-row">
+        <span class="k">Compared</span>
+        <span class="v">Qdrant finds the slices whose numbers sit closest</span>
+      </div>
+      <div class="trace-row">
+        <span class="k">Filtered</span>
+        <span class="v">keep the top <code>5</code>, drop anything scoring under <code>0.5</code></span>
+      </div>
+      <div class="trace-row hit">
+        <span class="k">Returned</span>
+        <span class="v">5 slices, each with its <code>source</code>, <code>location</code> and <code>score</code></span>
+      </div>
+      <div class="trace-row">
+        <span class="k">Answered</span>
+        <span class="v">the agent reads those 5 and writes the reply, citing each one</span>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        The <code style="font-family:var(--mono);font-size:.85em">0.5</code> cutoff isn't a guess —
+        on the sample corpus, on-topic slices scored 0.58–0.83 and off-topic ones 0.41–0.42,
+        so the line sits in the gap. It will need re-checking once real manuals go in.
+      </p>
+      <p>
+        If nothing clears the bar, the tool returns an empty list and the agent is instructed
+        to say the knowledge base doesn't cover it. That instruction is the only thing standing
+        between us and a confidently invented answer.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 3. WEAK SPOT ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 3 — The known gap</p>
+      <h2>Where matching-by-meaning falls down</h2>
+    </div>
+
+    <div class="callout">
+      <p class="eyebrow">The failure case</p>
+      <p>
+        Ask <strong>"what does error code 1079 mean?"</strong> and the system converts your question
+        into numbers that mean roughly <em>"a question about charger errors."</em> The specific
+        token <strong>1079</strong> barely survives that conversion — it carries almost no
+        <em>meaning</em>, only <em>identity</em>.
+      </p>
+      <p>
+        So it returns five slices about errors in general, and the one slice that literally
+        contains 1079 may not be among them.
+      </p>
+    </div>
+
+    <div class="prose">
+      <p>
+        This is the predictable weak point for our corpus specifically, because our corpus is
+        <strong>full of exact tokens</strong>: error codes, OCPP configuration keys, part numbers,
+        firmware versions, OCPP IDs. Those are lexical needles, not semantic ones.
+      </p>
+      <p>
+        Two standard fixes exist and we've built neither yet — a <strong>keyword search arm</strong>
+        running alongside the number-matching, and a <strong>second-pass re-ranker</strong>. Both
+        are deliberate deferrals, not oversights. I'd reach for the keyword arm first.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 4. OKF ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 4 — The comparison you asked for</p>
+      <h2>OKF isn't a competitor. It's a different floor of the building.</h2>
+      <p>
+        This is the whole answer in one picture. OKF only occupies the top two rows —
+        everything below it, we would still need exactly as built.
+      </p>
+    </div>
+
+    <div class="stack-scroll">
+      <div class="stack">
+        <div class="hd">Layer</div>
+        <div class="hd">What we built</div>
+        <div class="hd">What OKF covers</div>
+
+        <div class="layer">Source documents</div>
+        <div class="cell on">PDFs — vendor manuals, OCPP spec</div>
+        <div class="cell okf">markdown, one file per concept</div>
+
+        <div class="layer">Document structure</div>
+        <div class="cell on">none — whatever the PDF happens to be</div>
+        <div class="cell okf">YAML labels: type, tags, title, date</div>
+
+        <div class="layer">Parsing</div>
+        <div class="cell on">PyMuPDF</div>
+        <div class="cell none">— not covered</div>
+
+        <div class="layer">Chunking</div>
+        <div class="cell on">1800 chars, 200 overlap</div>
+        <div class="cell none">— not covered</div>
+
+        <div class="layer">Embedding</div>
+        <div class="cell on">bge-base-en-v1.5, local</div>
+        <div class="cell none">— not covered</div>
+
+        <div class="layer">Storage</div>
+        <div class="cell on">Qdrant</div>
+        <div class="cell none">— not covered</div>
+
+        <div class="layer">Retrieval</div>
+        <div class="cell on">dense kNN, top 5, floor 0.5</div>
+        <div class="cell none">— not covered</div>
+
+        <div class="layer">Serving</div>
+        <div class="cell on">FastMCP · kb_search</div>
+        <div class="cell none">— not covered</div>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        OKF is a <strong>way of writing the source documents</strong>: a folder of markdown files,
+        one topic per file, each with a short label block at the top. It performs no search,
+        stores nothing, and answers nothing.
+      </p>
+      <p>
+        So "OKF versus our RAG" isn't a real choice. The real question is narrower:
+        <strong>should the documents we write ourselves be authored in that shape before they
+        enter our pipeline?</strong>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 5. WOULD IT HELP ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 5 — Would it help</p>
+      <h2>One place it genuinely would</h2>
+      <p>Stage 03 — the slicing — is where neater source documents pay off.</p>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <h3>Today: cut by character count</h3>
+        <div class="doc">
+          <div>Error Code Table</div>
+          <div>1077 — Over-temperature</div>
+          <div>1078 — Contactor weld</div>
+          <div>1079 — Ground fault</div>
+          <div class="cut">✂ 1800 chars — cut lands here</div>
+          <div>&nbsp;&nbsp;&nbsp;Action: isolate, then…</div>
+        </div>
+        <p class="verdict">
+          The slicer counts characters. It has no idea it just separated an error code
+          from the instructions for fixing it.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>With one topic per file</h3>
+        <div class="doc">
+          <div>type: error-code</div>
+          <div>code: 1079</div>
+          <div>─────────────</div>
+          <div>1079 — Ground fault</div>
+          <div>Action: isolate, then…</div>
+          <div class="ok">✓ file ends — natural boundary</div>
+        </div>
+        <p class="verdict">
+          The boundary is meaningful, so the code and its fix stay together. The labels
+          become things we can filter on.
+        </p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <p class="eyebrow">The catch</p>
+      <p>
+        Nobody is going to retype the OCPP specification and the vendor manuals into this
+        format — and those are the bulk of the library. OKF realistically only covers the
+        documents <strong>you write</strong>: runbooks, RCA writeups, the tribal knowledge
+        currently in your head.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ 6. RECOMMENDATION ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Part 6 — Recommendation</p>
+      <h2>Steal the idea, skip the spec</h2>
+    </div>
+
+    <div class="rec">
+      <p>
+        <strong>Add labels to the slices we already make.</strong> Fields like
+        <code style="font-family:var(--mono);font-size:.85em">doc_type</code>,
+        <code style="font-family:var(--mono);font-size:.85em">charger_model</code>,
+        <code style="font-family:var(--mono);font-size:.85em">ocpp_version</code>, and let
+        <code style="font-family:var(--mono);font-size:.85em">kb_search</code> filter on them.
+        Narrow the pile first, then match. This captures most of OKF's retrieval benefit,
+        works on PDFs too, and commits us to nothing.
+      </p>
+      <p>
+        <strong>Write new runbooks as markdown with a label block on top.</strong> Whether or not
+        that's formally OKF, it costs nothing over Word or Confluence and keeps the door open.
+      </p>
+      <p>
+        <strong>Don't restructure the corpus around an early-stage spec.</strong> I read the
+        specification but haven't verified how widely OKF is adopted — and a plain folder of
+        labelled markdown carries none of that risk.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      One honest caveat on all of the above: the knowledge base currently holds only the
+      Phase-1 sample documents. We're comparing filing systems before anything real is on
+      the shelves. Loading actual manuals and watching where retrieval fails would settle
+      these questions faster than any further analysis.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

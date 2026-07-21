@@ -1,0 +1,990 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adore Manthan.AI — Platform Requirements Brief</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --ground:    #FBFCFD;
+    --panel:     #FFFFFF;
+    --panel-alt: #F2F5F7;
+    --ink:       #0F1418;
+    --steel:     #56626D;
+    --hairline:  #DBE2E8;
+    --accent:    #005E7A;
+    --accent-soft: #E1EFF3;
+    --live:      #0C7561;
+    --live-soft: #E0F0EC;
+    --gate:      #A8541A;
+    --gate-soft: #F8EDE3;
+    --shadow:    0 1px 2px rgba(15,20,24,.05), 0 10px 28px -16px rgba(15,20,24,.16);
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+
+    --measure: 66ch;
+    --s--1: clamp(.76rem, .74rem + .1vw, .82rem);
+    --s-0:  clamp(1rem, .97rem + .15vw, 1.07rem);
+    --s-1:  clamp(1.18rem, 1.11rem + .32vw, 1.38rem);
+    --s-2:  clamp(1.45rem, 1.3rem + .7vw, 1.95rem);
+    --s-3:  clamp(1.9rem, 1.55rem + 1.6vw, 2.9rem);
+    --s-4:  clamp(2.4rem, 1.8rem + 2.8vw, 4rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0D1216; --panel:#151B21; --panel-alt:#1B232A; --ink:#E2E8EE;
+      --steel:#8996A3; --hairline:#28313A; --accent:#3FA8C4; --accent-soft:#10303B;
+      --live:#3BAF95; --live-soft:#10302A; --gate:#D08A4E; --gate-soft:#332315;
+      --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 28px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D1216; --panel:#151B21; --panel-alt:#1B232A; --ink:#E2E8EE;
+    --steel:#8996A3; --hairline:#28313A; --accent:#3FA8C4; --accent-soft:#10303B;
+    --live:#3BAF95; --live-soft:#10302A; --gate:#D08A4E; --gate-soft:#332315;
+    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 28px -16px rgba(0,0,0,.7);
+  }
+  :root[data-theme="light"] {
+    --ground:#FBFCFD; --panel:#FFFFFF; --panel-alt:#F2F5F7; --ink:#0F1418;
+    --steel:#56626D; --hairline:#DBE2E8; --accent:#005E7A; --accent-soft:#E1EFF3;
+    --live:#0C7561; --live-soft:#E0F0EC; --gate:#A8541A; --gate-soft:#F8EDE3;
+    --shadow: 0 1px 2px rgba(15,20,24,.05), 0 10px 28px -16px rgba(15,20,24,.16);
+  }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: var(--s-0); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1120px; margin: 0 auto;
+    padding: clamp(2rem,5vw,4rem) clamp(1.1rem,4vw,2.75rem) 5rem;
+    display: flex; flex-direction: column; gap: clamp(3rem,6vw,5rem);
+  }
+
+  h1,h2,h3,h4 { margin: 0; font-weight: 600; line-height: 1.16; text-wrap: balance; }
+  h1 { font-size: var(--s-4); letter-spacing: -.028em; }
+  h2 { font-size: var(--s-2); letter-spacing: -.018em; }
+  h3 { font-size: var(--s-1); letter-spacing: -.01em; }
+  h4 { font-size: 1rem; letter-spacing: -.004em; }
+  p { margin: 0; }
+  strong { font-weight: 620; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: var(--s--1); letter-spacing: .13em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+  .prose { max-width: var(--measure); display: flex; flex-direction: column; gap: 1rem; }
+  .rule { height:1px; background: var(--hairline); border:0; margin:0; }
+
+  /* ---------------- header ---------------- */
+  header { display: flex; flex-direction: column; gap: 1.3rem; }
+  .thesis {
+    font-size: var(--s-1); color: var(--steel); max-width: 62ch; line-height: 1.5;
+  }
+  .meta {
+    font-family: var(--mono); font-size: var(--s--1); color: var(--steel);
+    display: flex; flex-wrap: wrap; gap: .4rem 1.4rem;
+  }
+
+  /* ---------------- stat band ---------------- */
+  .stats {
+    display: grid; gap: 1px; background: var(--hairline);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+  .stat {
+    background: var(--panel); padding: 1.25rem 1.15rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .stat .n {
+    font-size: var(--s-3); font-weight: 600; letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat .l {
+    font-family: var(--mono); font-size: .71rem; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--steel);
+  }
+  .stat.is-live .n { color: var(--live); }
+  .stat.is-gate .n { color: var(--gate); }
+
+  /* ---------------- section ---------------- */
+  section { display: flex; flex-direction: column; gap: 1.7rem; }
+  .sec-head { display: flex; flex-direction: column; gap: .55rem; max-width: var(--measure); }
+
+  /* ---------------- systems grid ---------------- */
+  .systems {
+    display: grid; gap: .8rem;
+    grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
+  }
+  .sys {
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    padding: .9rem 1rem 1rem; display: flex; flex-direction: column; gap: .35rem;
+    box-shadow: var(--shadow);
+  }
+  .sys .n { font-weight: 600; font-size: .95rem; }
+  .sys .d { font-size: .84rem; color: var(--steel); line-height: 1.45; }
+  .sys .p {
+    font-family: var(--mono); font-size: .69rem; color: var(--accent);
+    letter-spacing: .05em;
+  }
+
+  /* ---------------- department model ---------------- */
+  .deptwrap { overflow-x: auto; padding-bottom: .4rem; }
+  .depts {
+    display: flex; gap: .85rem; min-width: min-content; align-items: stretch;
+  }
+  .dept {
+    flex: 1 1 0; min-width: 168px;
+    border-radius: 3px; padding: .95rem 1rem 1.1rem;
+    display: flex; flex-direction: column; gap: .55rem;
+  }
+  .dept.live {
+    background: var(--panel); border: 1px solid var(--live);
+    box-shadow: var(--shadow);
+  }
+  .dept.future {
+    background: transparent; border: 1px dashed var(--hairline);
+  }
+  .dept .tag {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .dept.live .tag { color: var(--live); }
+  .dept.future .tag { color: var(--steel); }
+  .dept .name { font-weight: 600; font-size: 1rem; }
+  .dept ul { margin: 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: .22rem; }
+  .dept li { font-size: .8rem; color: var(--steel); line-height: 1.4; }
+  .dept.future li { opacity: .72; }
+
+  .foundation {
+    margin-top: .85rem; background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 3px; padding: .9rem 1.1rem;
+    display: flex; flex-direction: column; gap: .3rem;
+  }
+  .foundation .t {
+    font-family: var(--mono); font-size: .69rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .foundation .d { font-size: .88rem; }
+
+  /* ---------------- requirement rows ---------------- */
+  .reqs {
+    display: grid; gap: 1px; background: var(--hairline);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+  }
+  .req {
+    background: var(--panel); padding: 1.05rem 1.2rem;
+    display: grid; grid-template-columns: 54px 1fr auto; gap: .5rem 1.1rem;
+    align-items: start;
+  }
+  .req .id {
+    font-family: var(--mono); font-size: .82rem; font-weight: 600;
+    color: var(--accent); letter-spacing: .04em; padding-top: .1rem;
+  }
+  .req .body { display: flex; flex-direction: column; gap: .28rem; min-width: 0; }
+  .req .t { font-weight: 600; font-size: .96rem; }
+  .req .d { font-size: .88rem; color: var(--steel); line-height: 1.5; }
+  .pill {
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .09em;
+    text-transform: uppercase; padding: .25rem .55rem; border-radius: 2px;
+    white-space: nowrap; font-weight: 600; align-self: start;
+  }
+  .pill.live { background: var(--live-soft); color: var(--live); }
+  .pill.gate { background: var(--gate-soft); color: var(--gate); }
+  .pill.plan { background: var(--panel-alt); color: var(--steel); }
+
+  @media (max-width: 620px) {
+    .req { grid-template-columns: 48px 1fr; }
+    .req .pill { grid-column: 2; }
+  }
+
+  /* ---------------- gates ---------------- */
+  .gates { display: grid; gap: 1.1rem; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); }
+  .gate-card {
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-top: 3px solid var(--gate); border-radius: 3px;
+    padding: 1.15rem 1.25rem 1.3rem; display: flex; flex-direction: column; gap: .6rem;
+    box-shadow: var(--shadow);
+  }
+  .gate-card .num {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--gate); font-variant-numeric: tabular-nums;
+  }
+  .gate-card .d { font-size: .89rem; color: var(--steel); line-height: 1.5; }
+  .gate-card .need {
+    font-size: .85rem; padding-top: .55rem; border-top: 1px solid var(--hairline);
+  }
+  .gate-card .need b { color: var(--ink); }
+
+  /* ---------------- two-col lists ---------------- */
+  .cols { display: grid; gap: 1.6rem; grid-template-columns: repeat(auto-fit, minmax(290px,1fr)); }
+  .listcard { display: flex; flex-direction: column; gap: .7rem; }
+  .listcard ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .5rem; }
+  .listcard li { font-size: .9rem; line-height: 1.5; }
+  .listcard li span { color: var(--steel); }
+
+  /* ---------------- ask ---------------- */
+  .ask {
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--accent); border-radius: 3px;
+    padding: 1.4rem 1.5rem; display: flex; flex-direction: column; gap: .8rem;
+    box-shadow: var(--shadow);
+  }
+  .ask h3 { font-size: var(--s-1); }
+  .ask p { max-width: var(--measure); }
+
+  footer {
+    border-top: 1px solid var(--hairline); padding-top: 1.4rem;
+    color: var(--steel); font-size: .85rem; max-width: var(--measure);
+    display: flex; flex-direction: column; gap: .5rem;
+  }
+
+  /* ---------------- architecture ---------------- */
+  .archwrap {
+    display: grid; gap: 1rem;
+    grid-template-columns: minmax(0,1fr) 208px;
+    align-items: start;
+  }
+  @media (max-width: 780px) { .archwrap { grid-template-columns: minmax(0,1fr); } }
+
+  .arch { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+
+  .band {
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    display: grid; grid-template-columns: 128px minmax(0,1fr);
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  @media (max-width: 620px) { .band { grid-template-columns: minmax(0,1fr); } }
+
+  .band .rail {
+    background: var(--panel-alt); padding: .9rem .8rem;
+    display: flex; flex-direction: column; gap: .2rem; justify-content: center;
+    border-right: 1px solid var(--hairline);
+  }
+  @media (max-width: 620px) {
+    .band .rail { border-right: 0; border-bottom: 1px solid var(--hairline); }
+  }
+  .band .rail .rn {
+    font-family: var(--mono); font-size: .64rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--steel); font-variant-numeric: tabular-nums;
+  }
+  .band .rail .rt { font-weight: 600; font-size: .88rem; line-height: 1.25; }
+
+  .band .items {
+    padding: .85rem .9rem; display: flex; flex-wrap: wrap; gap: .45rem; align-items: center;
+  }
+  .chip {
+    font-size: .8rem; padding: .38rem .65rem; border-radius: 2px;
+    border: 1px solid var(--hairline); background: var(--ground);
+    line-height: 1.3;
+  }
+  .chip.on   { border-color: color-mix(in srgb, var(--live) 55%, transparent); background: var(--live-soft); color: var(--live); font-weight: 600; }
+  .chip.key  { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .chip.ghost{ border-style: dashed; color: var(--steel); }
+  .band .note {
+    flex-basis: 100%; font-size: .78rem; color: var(--steel); line-height: 1.45; margin-top: .1rem;
+  }
+
+  .drop {
+    height: 22px; display: grid; place-items: center;
+    color: var(--hairline); font-size: 1rem; line-height: 1;
+  }
+  .drop::before { content: "\2193"; }
+
+  .crosscut {
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 3px; padding: 1rem 1.05rem;
+    display: flex; flex-direction: column; gap: .75rem;
+  }
+  .crosscut .t {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .crosscut .cc { display: flex; flex-direction: column; gap: .18rem; }
+  .crosscut .cc b { font-size: .85rem; font-weight: 600; }
+  .crosscut .cc span { font-size: .78rem; color: var(--steel); line-height: 1.4; }
+
+  /* ---------------- walkthrough ---------------- */
+  .walk {
+    display: grid; gap: 1px; background: var(--hairline);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+  }
+  .step {
+    background: var(--panel); padding: .9rem 1.15rem;
+    display: grid; grid-template-columns: 34px 122px minmax(0,1fr); gap: .35rem 1rem;
+    align-items: baseline;
+  }
+  .step .sn {
+    font-family: var(--mono); font-size: .8rem; font-weight: 600; color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .step .sl {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--steel);
+  }
+  .step .sd { font-size: .9rem; line-height: 1.5; }
+  .step.emph { background: var(--accent-soft); }
+  .step.emph .sl { color: var(--accent); }
+  @media (max-width: 620px) {
+    .step { grid-template-columns: 34px minmax(0,1fr); }
+    .step .sd { grid-column: 2; }
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+
+  @media print {
+    :root { --ground:#fff; --panel:#fff; --shadow:none; }
+    body { font-size: 10.5pt; }
+    .wrap { gap: 2rem; padding: 0; max-width: none; }
+    section, .gate-card, .req, .stat, .band, .step { break-inside: avoid; }
+    .archwrap { grid-template-columns: minmax(0,1fr); }
+    h2 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Adore Manthan.AI · Platform Requirements Brief</p>
+    <h1>One assistant platform, every department.</h1>
+    <p class="thesis">
+      A role-gated AI assistant where each department gets its own agents, tools and knowledge
+      base over shared, hardened, audit-friendly infrastructure. Built and proven for one
+      department today — with licensing, enforcement and hardening as the three gates before
+      company-wide rollout.
+    </p>
+    <p class="meta">
+      <span>Prepared for: Management</span>
+      <span>Status: Pilot proven, rollout gated</span>
+      <span>QuenchNOC / Quench Chargers</span>
+    </p>
+    <hr class="rule">
+  </header>
+
+  <!-- ================= AT A GLANCE ================= -->
+  <section>
+    <div class="stats">
+      <div class="stat is-live">
+        <span class="n">1</span>
+        <span class="l">Department live</span>
+      </div>
+      <div class="stat">
+        <span class="n">7</span>
+        <span class="l">Systems connected</span>
+      </div>
+      <div class="stat">
+        <span class="n">191</span>
+        <span class="l">Tools exposed</span>
+      </div>
+      <div class="stat is-gate">
+        <span class="n">3</span>
+        <span class="l">Gates to rollout</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= WHAT IT IS ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 1 — What exists today</p>
+      <h2>A working assistant for the NOC</h2>
+      <p>
+        Staff ask questions in a web chat. The assistant reasons, then calls the operations
+        systems directly to fetch real answers — live charger state, open tickets, firmware
+        versions — instead of guessing. Every connection is read-only by construction.
+      </p>
+    </div>
+
+    <div class="systems">
+      <div class="sys">
+        <span class="n">Live fleet</span>
+        <span class="d">Current NOC backend — chargers, sessions, alarms, telemetry.</span>
+        <span class="p">read-only</span>
+      </div>
+      <div class="sys">
+        <span class="n">Legacy fleet (CMS)</span>
+        <span class="d">Older charge-management system still holding active estate.</span>
+        <span class="p">read + gated writes</span>
+      </div>
+      <div class="sys">
+        <span class="n">Ecog Jira</span>
+        <span class="d">Vendor engineering tracker.</span>
+        <span class="p">read-only</span>
+      </div>
+      <div class="sys">
+        <span class="n">Ecog Service Desk</span>
+        <span class="d">Vendor customer-facing tickets.</span>
+        <span class="p">read-only</span>
+      </div>
+      <div class="sys">
+        <span class="n">ChargeZone Jira</span>
+        <span class="d">Customer tracker, hard-scoped to Quench's own project.</span>
+        <span class="p">read-only</span>
+      </div>
+      <div class="sys">
+        <span class="n">Knowledge base</span>
+        <span class="d">Manuals, OCPP spec and runbooks, searched with citations.</span>
+        <span class="p">read-only</span>
+      </div>
+      <div class="sys">
+        <span class="n">Document generation</span>
+        <span class="d">Turns results into downloadable spreadsheets and reports.</span>
+        <span class="p">output only</span>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>The safety model is structural, not procedural.</strong> The connections are
+        built so that write operations are impossible rather than merely discouraged. The one
+        deliberate exception — commands that reach a live charger — requires two-step
+        confirmation and is fully audited.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= ARCHITECTURE ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 2 — How it works</p>
+      <h2>High-level architecture</h2>
+      <p>
+        Five layers. A person never touches a business system directly — every request passes
+        through a controlled tool layer that decides what is permitted, records what happened,
+        and returns only real data.
+      </p>
+    </div>
+
+    <div class="archwrap">
+      <div class="arch">
+
+        <div class="band">
+          <div class="rail">
+            <span class="rn">Layer 1</span>
+            <span class="rt">People</span>
+          </div>
+          <div class="items">
+            <span class="chip on">NOC staff</span>
+            <span class="chip ghost">Service</span>
+            <span class="chip ghost">Sales</span>
+            <span class="chip ghost">HR</span>
+            <span class="chip key">Management</span>
+            <span class="note">Every user carries a role. The role decides which department they belong to.</span>
+          </div>
+        </div>
+
+        <span class="drop" aria-hidden="true"></span>
+
+        <div class="band">
+          <div class="rail">
+            <span class="rn">Layer 2</span>
+            <span class="rt">Access</span>
+          </div>
+          <div class="items">
+            <span class="chip on">Web chat</span>
+            <span class="chip">Company sign-in</span>
+            <span class="chip">Role gate</span>
+            <span class="note">One interface for everyone. What you see inside it depends entirely on your role.</span>
+          </div>
+        </div>
+
+        <span class="drop" aria-hidden="true"></span>
+
+        <div class="band">
+          <div class="rail">
+            <span class="rn">Layer 3</span>
+            <span class="rt">Assistants</span>
+          </div>
+          <div class="items">
+            <span class="chip on">NOC agents</span>
+            <span class="chip ghost">Service agents</span>
+            <span class="chip ghost">Sales agents</span>
+            <span class="chip key">Language models — swappable</span>
+            <span class="note">An agent is a job description: which model it uses, which tools it may call, how it should behave. Each is scoped to one department.</span>
+          </div>
+        </div>
+
+        <span class="drop" aria-hidden="true"></span>
+
+        <div class="band">
+          <div class="rail">
+            <span class="rn">Layer 4</span>
+            <span class="rt">Tool layer</span>
+          </div>
+          <div class="items">
+            <span class="chip key">Read-only by construction</span>
+            <span class="chip key">Two-step confirm for writes</span>
+            <span class="chip key">Per-department credentials</span>
+            <span class="chip key">Audit trail</span>
+            <span class="note">The control point of the whole platform. Nothing reaches a business system except through here — which is why security is enforced at this layer rather than in the interface.</span>
+          </div>
+        </div>
+
+        <span class="drop" aria-hidden="true"></span>
+
+        <div class="band">
+          <div class="rail">
+            <span class="rn">Layer 5</span>
+            <span class="rt">Systems &amp; knowledge</span>
+          </div>
+          <div class="items">
+            <span class="chip on">Live fleet</span>
+            <span class="chip on">Legacy fleet</span>
+            <span class="chip on">Ticketing ×3</span>
+            <span class="chip on">Knowledge base</span>
+            <span class="chip on">Reports</span>
+            <span class="chip ghost">ERP</span>
+            <span class="chip ghost">CRM</span>
+            <span class="chip ghost">HR systems</span>
+            <span class="note">The company's real systems of record. The platform reads from them; it does not become another place data lives.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <aside class="crosscut">
+        <span class="t">Applies to every layer</span>
+        <span class="cc">
+          <b>Identity &amp; roles</b>
+          <span>Who you are travels with the request, top to bottom.</span>
+        </span>
+        <span class="cc">
+          <b>Audit trail</b>
+          <span>Which tool ran, for whom, with what result.</span>
+        </span>
+        <span class="cc">
+          <b>Secrets</b>
+          <span>System credentials held centrally, never by the model.</span>
+        </span>
+        <span class="cc">
+          <b>Data residency</b>
+          <span>Where prompts and results are permitted to travel.</span>
+        </span>
+      </aside>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>The important consequence:</strong> because Layer 4 sits between the assistant and
+        every business system, adding a department means adding tools and a knowledge base — not
+        rebuilding the platform. The same control point serves all of them.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= WALKTHROUGH ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 3 — One request, end to end</p>
+      <h2>What actually happens when someone asks a question</h2>
+      <p>A real example: an engineer asks how many high-priority tickets are open.</p>
+    </div>
+
+    <div class="walk">
+      <div class="step">
+        <span class="sn">1</span>
+        <span class="sl">People</span>
+        <span class="sd">An NOC engineer signs in and types the question in plain English.</span>
+      </div>
+      <div class="step">
+        <span class="sn">2</span>
+        <span class="sl">Access</span>
+        <span class="sd">Their role is checked. They are shown the NOC assistants — and no others.</span>
+      </div>
+      <div class="step">
+        <span class="sn">3</span>
+        <span class="sl">Assistant</span>
+        <span class="sd">The agent's model reads the question and decides which tools can answer it.</span>
+      </div>
+      <div class="step emph">
+        <span class="sn">4</span>
+        <span class="sl">Tool layer</span>
+        <span class="sd">The request is checked against what that department is permitted to do, run with that department's own credentials, and recorded in the audit trail.</span>
+      </div>
+      <div class="step">
+        <span class="sn">5</span>
+        <span class="sl">Systems</span>
+        <span class="sd">The ticketing system is queried live. Real numbers come back — nothing is recalled from memory or estimated.</span>
+      </div>
+      <div class="step">
+        <span class="sn">6</span>
+        <span class="sl">Assistant</span>
+        <span class="sd">The agent turns the result into an answer, citing where each figure came from.</span>
+      </div>
+      <div class="step">
+        <span class="sn">7</span>
+        <span class="sl">People</span>
+        <span class="sd">The engineer gets the answer in seconds, with the source shown so it can be checked.</span>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>Step 4 is where the platform earns its trust.</strong> The model never holds a
+        password and never talks to a business system directly. It can only ask the tool layer,
+        which decides whether the request is allowed — and writes down that it happened.
+      </p>
+      <p>
+        This is also why a request that has no answer in our systems returns nothing rather than
+        a plausible guess. The assistant reports what the systems said, or reports that it
+        does not know.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= TARGET ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 4 — Target state</p>
+      <h2>The same pattern, repeated per department</h2>
+      <p>
+        Nothing about the design is NOC-specific. Each department gets its own agents, its own
+        tools pointed at its own systems, and its own knowledge base — sitting on one shared
+        foundation.
+      </p>
+    </div>
+
+    <div class="deptwrap">
+      <div class="depts">
+        <div class="dept live">
+          <span class="tag">Live today</span>
+          <span class="name">NOC</span>
+          <ul>
+            <li>4 agents in production</li>
+            <li>7 tool servers</li>
+            <li>EV / OCPP knowledge base</li>
+            <li>Role-scoped access proven</li>
+          </ul>
+        </div>
+        <div class="dept future">
+          <span class="tag">Next</span>
+          <span class="name">Service</span>
+          <ul>
+            <li>Field-service agents</li>
+            <li>Service systems + ERP</li>
+            <li>Service manuals KB</li>
+          </ul>
+        </div>
+        <div class="dept future">
+          <span class="tag">Planned</span>
+          <span class="name">Sales</span>
+          <ul>
+            <li>Sales agents</li>
+            <li>CRM / pipeline tools</li>
+            <li>Product &amp; pricing KB</li>
+          </ul>
+        </div>
+        <div class="dept future">
+          <span class="tag">Planned</span>
+          <span class="name">HR</span>
+          <ul>
+            <li>HR agents</li>
+            <li>HR systems</li>
+            <li>Policy KB</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="foundation">
+      <span class="t">Shared foundation</span>
+      <span class="d">
+        One chat platform · one hardened tool layer · one identity and role model ·
+        one audit trail · pluggable models
+      </span>
+    </div>
+
+    <div class="prose">
+      <p>
+        A user is bound to a role; the role decides which department's agents they see.
+        Management holds a role that spans all of them. Adding a department becomes a
+        documented recipe rather than a fresh build.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= FUNCTIONAL ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 5 — What the platform must do</p>
+      <h2>Functional requirements</h2>
+    </div>
+
+    <div class="reqs">
+      <div class="req">
+        <span class="id">R1</span>
+        <span class="body">
+          <span class="t">One platform, many departments</span>
+          <span class="d">The same chat platform serves Service, Sales, HR and others — not a separate tool per team.</span>
+        </span>
+        <span class="pill live">Proven</span>
+      </div>
+      <div class="req">
+        <span class="id">R2</span>
+        <span class="body">
+          <span class="t">Per-department tooling</span>
+          <span class="d">Each department gets its own tools and knowledge base, talking to that department's systems.</span>
+        </span>
+        <span class="pill live">Proven</span>
+      </div>
+      <div class="req">
+        <span class="id">R3</span>
+        <span class="body">
+          <span class="t">Per-department agents</span>
+          <span class="d">Agents are scoped to a department and carry only that department's tools and knowledge.</span>
+        </span>
+        <span class="pill live">Proven</span>
+      </div>
+      <div class="req">
+        <span class="id">R4</span>
+        <span class="body">
+          <span class="t">Role-based user assignment</span>
+          <span class="d">Users are bound to roles; a role sees only its own department's agents.</span>
+        </span>
+        <span class="pill gate">Visibility only</span>
+      </div>
+      <div class="req">
+        <span class="id">R5</span>
+        <span class="body">
+          <span class="t">Management override</span>
+          <span class="d">Top management holds a role granting access across all departments' agents.</span>
+        </span>
+        <span class="pill live">Proven</span>
+      </div>
+      <div class="req">
+        <span class="id">R6</span>
+        <span class="body">
+          <span class="t">Updatable knowledge bases</span>
+          <span class="d">Each knowledge base can be refreshed over time — ideally self-service, not developer-only.</span>
+        </span>
+        <span class="pill plan">Developer-run</span>
+      </div>
+      <div class="req">
+        <span class="id">R7</span>
+        <span class="body">
+          <span class="t">Pluggable models</span>
+          <span class="d">Models can be added or swapped centrally; different agents may run different models.</span>
+        </span>
+        <span class="pill live">Proven</span>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        <strong>R4 carries the one caveat that matters.</strong> Today the role controls what a
+        user <em>sees</em>. It does not yet stop a determined user from reaching another
+        department's data underneath. Closing that gap is Gate 2 below, and it is the single
+        most important item on this page.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= NON-FUNCTIONAL ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 6 — What it must satisfy</p>
+      <h2>Non-functional requirements</h2>
+    </div>
+
+    <div class="reqs">
+      <div class="req">
+        <span class="id">N1</span>
+        <span class="body">
+          <span class="t">Multi-user licensing</span>
+          <span class="d">Model access licensed for company-wide concurrent use. The current plan does not permit it.</span>
+        </span>
+        <span class="pill gate">Gate 1</span>
+      </div>
+      <div class="req">
+        <span class="id">N2</span>
+        <span class="body">
+          <span class="t">Real data isolation</span>
+          <span class="d">Department separation enforced in the tool layer — per-user identity and per-department credentials — not just hidden in the interface.</span>
+        </span>
+        <span class="pill gate">Gate 2</span>
+      </div>
+      <div class="req">
+        <span class="id">N3</span>
+        <span class="body">
+          <span class="t">Security baseline</span>
+          <span class="d">TLS, company SSO with closed registration, database authentication, managed secrets, internal-only service ports, protected file downloads.</span>
+        </span>
+        <span class="pill gate">Gate 3</span>
+      </div>
+      <div class="req">
+        <span class="id">N4</span>
+        <span class="body">
+          <span class="t">Data residency compliance</span>
+          <span class="d">Prompts and results — including HR data — must not leave approved jurisdictions. Needs provider sign-off or self-hosted models.</span>
+        </span>
+        <span class="pill gate">Decision open</span>
+      </div>
+      <div class="req">
+        <span class="id">N5</span>
+        <span class="body">
+          <span class="t">Auditability</span>
+          <span class="d">Tool calls logged, especially writes. Today only charger commands and legacy-system writes are audited; this must generalise.</span>
+        </span>
+        <span class="pill plan">Partial</span>
+      </div>
+      <div class="req">
+        <span class="id">N6</span>
+        <span class="body">
+          <span class="t">Repeatable onboarding</span>
+          <span class="d">Adding a department follows a documented recipe rather than bespoke engineering each time.</span>
+        </span>
+        <span class="pill plan">To document</span>
+      </div>
+      <div class="req">
+        <span class="id">N7</span>
+        <span class="body">
+          <span class="t">Scalability path</span>
+          <span class="d">Single host for the pilot; cloud infrastructure once department count or availability demands it. Direction already agreed.</span>
+        </span>
+        <span class="pill plan">Decided</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= GATES ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 7 — The decision</p>
+      <h2>Three gates stand between pilot and rollout</h2>
+      <p>
+        The platform works. These are not engineering unknowns — each one needs a commercial
+        or organisational decision before it can be closed.
+      </p>
+    </div>
+
+    <div class="gates">
+      <div class="gate-card">
+        <span class="num">Gate 1</span>
+        <h4>Licensing</h4>
+        <p class="d">
+          The model plan powering the assistant today is licensed for individual development
+          use, not company-wide concurrent access. Rolling out to multiple departments on the
+          current plan would breach its terms.
+        </p>
+        <p class="need"><b>Needs:</b> an enterprise model agreement, budgeted per seat or per usage.</p>
+      </div>
+
+      <div class="gate-card">
+        <span class="num">Gate 2</span>
+        <h4>Enforcement</h4>
+        <p class="d">
+          Department separation is currently enforced by what each role can see. Before HR or
+          Sales data enters the platform, separation must be enforced where the data actually
+          lives — carrying each user's identity through to the tool layer, with credentials
+          scoped per department.
+        </p>
+        <p class="need"><b>Needs:</b> engineering time, plus a decision on the shared-identity model.</p>
+      </div>
+
+      <div class="gate-card">
+        <span class="num">Gate 3</span>
+        <h4>Hardening</h4>
+        <p class="d">
+          The pilot runs on a single internal host with development-grade settings. Company-wide
+          use requires encrypted traffic, sign-in through company accounts with open
+          registration closed, authenticated databases and managed secrets.
+        </p>
+        <p class="need"><b>Needs:</b> engineering time and IT coordination for SSO and certificates.</p>
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>
+        Running alongside these is <strong>data residency</strong>: confirming that prompts and
+        results stay within approved jurisdictions. That is a provider question first and an
+        engineering one second — and it becomes non-negotiable the moment HR data is in scope.
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= DECISIONS / SCOPE ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 8 — Boundaries</p>
+      <h2>Decisions already taken, and what is deliberately excluded</h2>
+    </div>
+
+    <div class="cols">
+      <div class="listcard">
+        <h3>Settled principles</h3>
+        <ul>
+          <li><strong>Read-only first.</strong> <span>Writes are two-step, confirmed, audited and never retried automatically.</span></li>
+          <li><strong>Customer data stays separate.</strong> <span>Each ticketing tenant keeps its own connection; they are never blended.</span></li>
+          <li><strong>Capabilities arrive as tools.</strong> <span>The platform extends one way, which keeps the security review surface small.</span></li>
+          <li><strong>Knowledge stays on our machines.</strong> <span>Document indexing runs locally — knowledge-base content is never sent out for processing.</span></li>
+          <li><strong>Cloud when justified.</strong> <span>Single host for the pilot, cloud infrastructure once scale demands it.</span></li>
+        </ul>
+      </div>
+
+      <div class="listcard">
+        <h3>Out of scope for now</h3>
+        <ul>
+          <li><strong>Filtering individual tools in the interface.</strong> <span>Not possible at this layer; it has to be enforced in the tool layer instead — which is Gate 2.</span></li>
+          <li><strong>Autonomous alarm handling.</strong> <span>Would conflict with the read-only posture; held pending a separate decision.</span></li>
+          <li><strong>Self-service knowledge upload.</strong> <span>Content is loaded by a developer today. Worth building, not yet built.</span></li>
+          <li><strong>ERP integration.</strong> <span>Blocked on programmatic access. Driving the ERP's screens automatically was considered and rejected as too fragile.</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= ASK ================= -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Section 9 — What we need</p>
+      <h2>Where this needs a management decision</h2>
+    </div>
+
+    <div class="ask">
+      <h3>Three asks, in order</h3>
+      <p>
+        <strong>1. Approve an enterprise model licence.</strong> Nothing rolls out beyond the NOC
+        pilot without it, and it sets the per-seat cost basis for every department that follows.
+      </p>
+      <p>
+        <strong>2. Confirm which department goes second.</strong> The pattern is proven once;
+        proving it a second time is what turns it from a working system into a repeatable one.
+        Service is the natural candidate.
+      </p>
+      <p>
+        <strong>3. Rule on data residency before HR is in scope.</strong> This determines whether
+        we can use a hosted model at all, or must run models on our own infrastructure — a
+        materially different cost and timeline.
+      </p>
+      <p style="padding-top:.55rem;border-top:1px solid var(--hairline);">
+        Engineering work for enforcement and hardening can begin in parallel and does not block
+        on these decisions — but rollout does.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      <strong>Status summary.</strong> The platform is built, running and in daily use by the NOC
+      team against live operational systems. What remains before company-wide rollout is not
+      proving the concept — it is licensing it correctly, enforcing separation properly, and
+      hardening it for production.
+    </p>
+    <p>Adore Manthan.AI · internal document · prepared for management review.</p>
+  </footer>
+
+</div>
+</body>
+</html>

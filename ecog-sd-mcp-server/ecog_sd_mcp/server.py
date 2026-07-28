@@ -98,12 +98,16 @@ def _register_tools(mcp: FastMCP, client: CookieAuthClient) -> None:
 
     @mcp.tool
     async def sd_list_requests(search: Optional[str] = None, status: str = "ALL",
-                               ownership: str = "OWNED", limit: int = 50) -> list[dict]:
-        """List/search your Ecog Service Desk tickets. `status` ∈ OPEN|CLOSED|ALL,
+                               ownership: str = "ALL", limit: int = 50) -> list[dict]:
+        """List/search Ecog Service Desk tickets. `status` ∈ OPEN|CLOSED|ALL,
         `ownership` ∈ OWNED|PARTICIPATED|ALL, `search` = free-text. Returns key, summary,
-        status, created, reporter, serviceDesk. Read-only."""
+        status, created, reporter, serviceDesk. Read-only.
+
+        `ownership` defaults to ALL: this MCP runs as a shared read-only NOC account that
+        OWNS no requests, so OWNED would return an empty list even when the fleet has open
+        tickets. Use status=OPEN to get currently-open Ecog tickets."""
         params = {
-            "requestOwnership": _OWN.get(ownership.upper(), "OWNED_REQUESTS"),
+            "requestOwnership": _OWN.get(ownership.upper(), "ALL_REQUESTS"),
             "requestStatus": _STAT.get(status.upper(), "ALL_REQUESTS"),
             "limit": limit,
             "expand": "serviceDesk",

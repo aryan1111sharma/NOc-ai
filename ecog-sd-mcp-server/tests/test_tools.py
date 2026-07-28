@@ -45,6 +45,29 @@ async def test_sd_list_requests_maps_params_and_trims():
 
 
 @pytest.mark.asyncio
+async def test_sd_list_requests_defaults_to_all_ownership():
+    """With no ownership arg the tool must query ALL_REQUESTS, not OWNED_REQUESTS.
+
+    This account is a shared, read-only NOC session that OWNS no Service Desk requests,
+    so the old OWNED default returned an empty list and the assistant fell back to the
+    wrong ticket source. ALL surfaces the fleet's actual open Ecog tickets.
+    """
+    cap = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        cap["ownership"] = request.url.params.get("requestOwnership")
+        cap["status"] = request.url.params.get("requestStatus")
+        return httpx.Response(200, json={"values": []})
+
+    mcp = build_server(client=_client(handler))
+    async with Client(mcp) as c:
+        await c.call_tool("sd_list_requests", {})
+
+    assert cap["ownership"] == "ALL_REQUESTS"
+    assert cap["status"] == "ALL_REQUESTS"
+
+
+@pytest.mark.asyncio
 async def test_sd_get_request_returns_detail():
     cap = {}
 

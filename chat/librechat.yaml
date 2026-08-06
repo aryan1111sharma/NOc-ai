@@ -49,6 +49,30 @@ endpoints:
       titleModel: "glm-4.6"
       modelDisplayLabel: "GLM (NOC Assistant)"
 
+    # Kimi (Moonshot AI) - OpenAI-compatible API. Key comes from chat/.env (KIMI_API_KEY).
+    # Added alongside GLM, not replacing it: GLM resumes working the moment its z.ai
+    # balance is topped up, and the two can be A/B'd on the same NOC questions.
+    - name: "Kimi"
+      apiKey: "${KIMI_API_KEY}"
+      # International endpoint. api.moonshot.cn is the SEPARATE mainland platform with its
+      # own account and its own key - the two are not interchangeable.
+      baseURL: "https://api.moonshot.ai/v1"
+      models:
+        # k2.6 is the default: 262k context, automatic context caching (covers tool
+        # definitions), native tool calling. Our ~43k-token tool block fits with room to
+        # spare, so k3's 1M window buys nothing while costing ~3x input / ~4x output.
+        # k3 is listed so a hard reasoning question can switch per-conversation.
+        # moonshot-v1-* is deliberately omitted - that series is sunset on 2026-08-31.
+        default:
+          - "kimi-k2.6"
+          - "kimi-k3"
+          - "kimi-k2.5"
+          - "kimi-k2.7-code"
+        fetch: false
+      titleConvo: true
+      titleModel: "kimi-k2.6"
+      modelDisplayLabel: "Kimi (NOC Assistant)"
+
 # NOC read-only MCP server (this repo, mcp-server/). Its 153 GET tools become available
 # to LibreChat Agents. Build a LibreChat Agent using the GLM model + this server's tools.
 mcpServers:

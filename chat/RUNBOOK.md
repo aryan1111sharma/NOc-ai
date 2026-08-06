@@ -64,6 +64,46 @@ MCP tools only work through a LibreChat **Agent**, not the bare GLM endpoint:
 
 **Test prompt:** "How many chargers are online vs offline?" → should call `dashboard_summary`.
 
+## LLM providers — GLM and Kimi
+
+Two OpenAI-compatible endpoints are configured in `librechat.yaml`. Pick one per agent:
+
+| Endpoint | Base URL | Default model | Key in `.env` |
+|---|---|---|---|
+| **GLM** (Zhipu / z.ai) | `https://api.z.ai/api/coding/paas/v4` | `glm-5.2` | `GLM_API_KEY` |
+| **Kimi** (Moonshot AI) | `https://api.moonshot.ai/v1` | `kimi-k2.6` | `KIMI_API_KEY` |
+
+Add the Kimi key to `chat/.env` (no `docker-compose.yml` change needed — the `api` service
+already loads the whole file via `env_file`):
+
+```
+KIMI_API_KEY=your_kimi_api_key_here
+```
+
+Then **recreate** — a plain `restart` will NOT pick up a new `.env` value:
+
+```powershell
+docker compose up -d --force-recreate api
+```
+
+Verify the key reaches the provider before blaming the stack:
+
+```powershell
+docker exec noc-librechat node -e "fetch('https://api.moonshot.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+process.env.KIMI_API_KEY},body:JSON.stringify({model:'kimi-k2.6',messages:[{role:'user',content:'hi'}],max_tokens:5})}).then(r=>r.text().then(t=>console.log(r.status,t.slice(0,200))))"
+```
+
+`200` = good. `401` = bad/absent key. `429` = the account is out of balance (this is billing,
+not throttling — LibreChat mislabels every 429 with a LangChain `MODEL_RATE_LIMIT` link).
+
+**Model notes**
+- `kimi-k2.6` (262k ctx) is the default. Automatic context caching covers tool definitions,
+  which matters: the agent's 196 enabled tools are **~43k tokens of schema on every request**.
+- `kimi-k3` (1M ctx) costs ~3x input / ~4x output. Listed for hard reasoning, not the default —
+  our tool block fits k2.6 comfortably.
+- `moonshot-v1-*` is **not** listed: that series is sunset on **2026-08-31**.
+- On GLM stay on `glm-5.2`. `glm-4.7` buries its answer in `reasoning_content`, so the reply
+  renders as an empty message under a collapsed "Thought" block.
+
 ## Agents — capture & restore (config as code)
 
 Agents live in **MongoDB**, so `docker compose down -v` wipes them (the Artifacts toggle,

@@ -54,23 +54,33 @@ endpoints:
     # balance is topped up, and the two can be A/B'd on the same NOC questions.
     - name: "Kimi"
       apiKey: "${KIMI_API_KEY}"
-      # International endpoint. api.moonshot.cn is the SEPARATE mainland platform with its
-      # own account and its own key - the two are not interchangeable.
-      baseURL: "https://api.moonshot.ai/v1"
+      # "Kimi For Coding" subscription endpoint - this is what an sk-kimi-* key binds to.
+      # NOT https://api.moonshot.ai/v1 (pay-as-you-go platform) and NOT api.moonshot.cn
+      # (mainland platform). All three are separate accounts with non-interchangeable
+      # keys; an sk-kimi-* key returns 401 "Invalid Authentication" on the other two.
+      # Same trap as the GLM coding-plan endpoint above.
+      baseURL: "https://api.kimi.com/coding/v1"
       models:
-        # k2.6 is the default: 262k context, automatic context caching (covers tool
-        # definitions), native tool calling. Our ~43k-token tool block fits with room to
-        # spare, so k3's 1M window buys nothing while costing ~3x input / ~4x output.
-        # k3 is listed so a hard reasoning question can switch per-conversation.
-        # moonshot-v1-* is deliberately omitted - that series is sunset on 2026-08-31.
+        # These are the canonical ids from GET /coding/v1/models. Verified 2026-08-06:
+        # all four return finish_reason "tool_calls" correctly. Measured round-trip on a
+        # single-tool prompt: highspeed 1.0s, kimi-for-coding 2.8s, k3 7.1s, k3-256k 24.5s.
+        #
+        # kimi-for-coding (K2.7 Coding, 262k) is the default - the best latency/capability
+        # balance for multi-hop NOC tool chains, where per-turn latency compounds. Our
+        # ~43k-token tool block leaves ample room in 262k, so k3's 1M window is not needed.
+        #
+        # Do NOT use kimi-k2.6 / kimi-k3 / kimi-k2.5 / kimi-k2.7-code here: they are
+        # accepted and echoed back, but absent from /models, so they are undocumented
+        # aliases that can disappear without notice.
         default:
-          - "kimi-k2.6"
-          - "kimi-k3"
-          - "kimi-k2.5"
-          - "kimi-k2.7-code"
+          - "kimi-for-coding"
+          - "kimi-for-coding-highspeed"
+          - "k3"
+          - "k3-256k"
         fetch: false
       titleConvo: true
-      titleModel: "kimi-k2.6"
+      # Titles are throwaway one-liners - use the fastest model.
+      titleModel: "kimi-for-coding-highspeed"
       modelDisplayLabel: "Kimi (NOC Assistant)"
 
 # NOC read-only MCP server (this repo, mcp-server/). Its 153 GET tools become available

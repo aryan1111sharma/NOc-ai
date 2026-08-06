@@ -21,9 +21,41 @@ Add **Kimi (Moonshot AI)** as a *second* custom endpoint alongside GLM rather th
 GLM stays configured and resumes working the moment it is recharged, and the two can be
 A/B'd on identical NOC questions.
 
-Default model: **`kimi-k2.6`**.
+Default model: **`kimi-for-coding`** (K2.7 Coding).
 
-## Why k2.6 over k3
+## Correction applied during implementation
+
+The design was first written against the **pay-as-you-go** platform (`api.moonshot.ai/v1`) and
+chose `kimi-k2.6` on a per-token cost argument. On applying it, the supplied key turned out to
+be an **`sk-kimi-*` "Kimi For Coding" subscription key**, which returns
+`401 Invalid Authentication` on both `api.moonshot.ai/v1` and `api.moonshot.cn/v1`. It binds to
+**`https://api.kimi.com/coding/v1`** — the same coding-plan-vs-general-endpoint split already
+documented for GLM.
+
+Two consequences:
+
+1. **The per-token cost table below does not apply to this key.** A subscription is flat-rate
+   with rate limits, so cost no longer discriminates between models. Latency and capability do.
+2. **`kimi-k2.6` is not a real model id on this endpoint.** `GET /coding/v1/models` returns only
+   `kimi-for-coding`, `kimi-for-coding-highspeed`, `k3`, `k3-256k`. The `kimi-k2.6` / `kimi-k3` /
+   `kimi-k2.5` / `kimi-k2.7-code` ids are accepted and echoed back but absent from `/models`,
+   i.e. undocumented aliases. The config uses canonical ids only.
+
+Measured 2026-08-06, single-tool prompt, all returning `finish_reason: "tool_calls"` correctly:
+
+| Model | Context | Round-trip |
+|---|---:|---:|
+| `kimi-for-coding-highspeed` | 262,144 | 967 ms |
+| `kimi-for-coding` (K2.7) | 262,144 | 2,795 ms |
+| `k3` | 1,048,576 | 7,099 ms |
+| `k3-256k` | 262,144 | 24,530 ms |
+
+`kimi-for-coding` is the default: per-turn latency compounds across a multi-hop tool answer, and
+the ~43k-token tool block fits 262k with ample room, so `k3`'s 1M window buys nothing. All four
+are `supports_reasoning: true` thinking models — they spend completion budget on
+`reasoning_content` before `content`, so a tight max-output cap yields an empty reply.
+
+## Original rationale (pay-as-you-go; retained for the tool-bloat measurements)
 
 The dominant cost driver is not the model — it is tool-schema bloat. Measured against the
 live MCP servers on 2026-08-06:
@@ -69,8 +101,9 @@ flagship rates for an unusable feature is not justified.
    `env_file: - .env`, so any variable there reaches the container.
 
 2. **`chat/librechat.yaml`** — new `endpoints.custom` entry after the GLM block:
-   `baseURL: https://api.moonshot.ai/v1`, models `kimi-k2.6`, `kimi-k3`, `kimi-k2.5`,
-   `kimi-k2.7-code`; `titleModel: kimi-k2.6`. GLM's block is untouched.
+   `baseURL: https://api.kimi.com/coding/v1`, models `kimi-for-coding` (default),
+   `kimi-for-coding-highspeed`, `k3`, `k3-256k`; `titleModel: kimi-for-coding-highspeed`
+   (titles are throwaway, use the fastest). GLM's block is untouched.
 
 3. **`chat/agents/agents.json`** — new `NOC Engineer (Kimi)` agent cloned from `NOC Engineer`:
    identical instructions, identical 196-tool list, `maxContextTokens: 120000` held at parity

@@ -71,7 +71,13 @@ Two OpenAI-compatible endpoints are configured in `librechat.yaml`. Pick one per
 | Endpoint | Base URL | Default model | Key in `.env` |
 |---|---|---|---|
 | **GLM** (Zhipu / z.ai) | `https://api.z.ai/api/coding/paas/v4` | `glm-5.2` | `GLM_API_KEY` |
-| **Kimi** (Moonshot AI) | `https://api.moonshot.ai/v1` | `kimi-k2.6` | `KIMI_API_KEY` |
+| **Kimi** (Moonshot AI) | `https://api.kimi.com/coding/v1` | `kimi-for-coding` | `KIMI_API_KEY` |
+
+⚠ **Both providers ship two incompatible endpoints and it is easy to pick the wrong one.**
+An `sk-kimi-*` key is a **Kimi For Coding subscription** key and is bound to
+`api.kimi.com/coding/v1`. It returns `401 Invalid Authentication` against
+`api.moonshot.ai/v1` (pay-as-you-go) and `api.moonshot.cn/v1` (mainland) — those are separate
+accounts with their own keys. A 401 here means *wrong endpoint or wrong key*, never no balance.
 
 Add the Kimi key to `chat/.env` (no `docker-compose.yml` change needed — the `api` service
 already loads the whole file via `env_file`):
@@ -89,18 +95,32 @@ docker compose up -d --force-recreate api
 Verify the key reaches the provider before blaming the stack:
 
 ```powershell
-docker exec noc-librechat node -e "fetch('https://api.moonshot.ai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+process.env.KIMI_API_KEY},body:JSON.stringify({model:'kimi-k2.6',messages:[{role:'user',content:'hi'}],max_tokens:5})}).then(r=>r.text().then(t=>console.log(r.status,t.slice(0,200))))"
+docker exec noc-librechat node -e "fetch('https://api.kimi.com/coding/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+process.env.KIMI_API_KEY},body:JSON.stringify({model:'kimi-for-coding',messages:[{role:'user',content:'hi'}],max_tokens:200})}).then(r=>r.text().then(t=>console.log(r.status,t.slice(0,200))))"
 ```
 
-`200` = good. `401` = bad/absent key. `429` = the account is out of balance (this is billing,
-not throttling — LibreChat mislabels every 429 with a LangChain `MODEL_RATE_LIMIT` link).
+`200` = good. `401` = wrong endpoint or bad key. `429` = plan quota/rate limit. Note LibreChat
+mislabels **every** 429 with a LangChain `MODEL_RATE_LIMIT` link, including pure billing errors.
+
+To list the models a key can actually reach:
+
+```powershell
+docker exec noc-librechat node -e "fetch('https://api.kimi.com/coding/v1/models',{headers:{Authorization:'Bearer '+process.env.KIMI_API_KEY}}).then(r=>r.json()).then(j=>j.data.forEach(m=>console.log(m.id,m.context_length,m.display_name)))"
+```
 
 **Model notes**
-- `kimi-k2.6` (262k ctx) is the default. Automatic context caching covers tool definitions,
-  which matters: the agent's 196 enabled tools are **~43k tokens of schema on every request**.
-- `kimi-k3` (1M ctx) costs ~3x input / ~4x output. Listed for hard reasoning, not the default —
-  our tool block fits k2.6 comfortably.
-- `moonshot-v1-*` is **not** listed: that series is sunset on **2026-08-31**.
+- Use only the **canonical ids** from `/models`. `kimi-k2.6`, `kimi-k3`, `kimi-k2.5` and
+  `kimi-k2.7-code` are accepted and echoed back but do not appear in `/models` — undocumented
+  aliases that can disappear without notice.
+- `kimi-for-coding` (K2.7 Coding, 262k) is the default: the best latency/capability balance for
+  multi-hop tool chains. Measured 2026-08-06 on a single-tool prompt — `-highspeed` 1.0s,
+  `kimi-for-coding` 2.8s, `k3` 7.1s, `k3-256k` 24.5s. Per-turn latency compounds across a
+  multi-tool answer, so the fast models matter more than the big ones here.
+- `k3` is the only 1M-context option. Our 196 enabled tools are **~43k tokens of schema on every
+  request**, which still leaves ample room inside 262k — so reach for `k3` for hard reasoning,
+  not for context.
+- These are **thinking models** (`supports_reasoning: true`). They spend real completion budget
+  on `reasoning_content` before emitting `content` — a 10-token cap produced an *empty* answer
+  in testing. Keep max-output generous or replies come back blank.
 - On GLM stay on `glm-5.2`. `glm-4.7` buries its answer in `reasoning_content`, so the reply
   renders as an empty message under a collapsed "Thought" block.
 

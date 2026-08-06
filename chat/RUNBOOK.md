@@ -138,6 +138,14 @@ and restore after a fresh start with the scripts in **`chat/agents/`**:
 - **What's captured** (`agents.json`): the full agent — model, **Artifacts** setting,
   **maxContextTokens**, the tool list (including docgen), and instructions. The owner is stored
   as an **email**, not a raw ObjectId, so it re-links correctly on a fresh database.
+- **Permissions are captured too**, as `__acl`. LibreChat v0.8.x gates agent visibility on the
+  **`aclentries`** collection keyed by the agent's Mongo `_id` — *not* on the agent document.
+  An agent with no acl entries is **invisible to everyone, including its own author**, and the
+  failure is silent: the agent exists, is correctly configured, and simply never appears in the
+  picker. Principals are stored portably (users as emails, roles as role names, access role as
+  `agent_owner` / `agent_viewer`). An entry with no `__acl` gets owner grants synthesised on
+  restore. This is why a role grant matters: `NOC Engineer` is usable by NOC Tester only
+  because it carries `agent / role:noc-engineer permBits=1`.
 - **Owner resolution on restore:** matches the emailed owner, falling back to the first `ADMIN`
   user — so **register the admin first**, then restore.
 - **Idempotent:** re-running `restore` updates in place. Commit `agents.json` whenever it changes.

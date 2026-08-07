@@ -118,9 +118,23 @@ docker exec noc-librechat node -e "fetch('https://api.kimi.com/coding/v1/models'
 - `k3` is the only 1M-context option. Our 196 enabled tools are **~43k tokens of schema on every
   request**, which still leaves ample room inside 262k — so reach for `k3` for hard reasoning,
   not for context.
-- These are **thinking models** (`supports_reasoning: true`). They spend real completion budget
-  on `reasoning_content` before emitting `content` — a 10-token cap produced an *empty* answer
-  in testing. Keep max-output generous or replies come back blank.
+- These are **thinking models** (`supports_reasoning: true`, `supports_thinking_type: "only"`).
+  They always spend completion budget on `reasoning_content` before emitting `content`.
+- ⚠ **`kimi-for-coding-highspeed` is not a safe default.** Verified end-to-end on 2026-08-07:
+  on a *hard/ambiguous* question ("synopsis of all chargers offline on manthan today") it
+  returned a **single `think` block with no tool call and no answer** — twice, with
+  `error: false` and `unfinished: false`, so the UI shows an empty reply and nothing is logged.
+  It answers simple questions ("how many chargers online vs offline") correctly. Direct API
+  calls always return `finish_reason: tool_calls` even with all 207 tool schemas attached, so
+  this only reproduces through the LibreChat agent loop. **`kimi-for-coding` handled both
+  questions correctly** (2 tool calls, real answer) and is the default. `k3` also works and
+  went deepest — 8 tool calls across NOC and CMS — but is the slowest.
+- Debugging an empty reply: the answer lives in the message's **`content` parts array**, not the
+  top-level `text` field, which is `""` for agent messages. A healthy run looks like
+  `think, tool_call, think, text`; a failed one is `think` alone.
+  ```powershell
+  docker exec noc-librechat-mongo mongosh LibreChat --quiet --eval "const m=db.messages.findOne({conversationId:'<id>',isCreatedByUser:false}); print((m.content||[]).map(c=>c.type).join(', '))"
+  ```
 - On GLM stay on `glm-5.2`. `glm-4.7` buries its answer in `reasoning_content`, so the reply
   renders as an empty message under a collapsed "Thought" block.
 

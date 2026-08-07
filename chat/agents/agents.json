@@ -2591,7 +2591,7 @@
       "kb",
       "chargezone"
     ],
-    "model": "kimi-for-coding-highspeed",
+    "model": "kimi-for-coding",
     "model_parameters": {
       "maxContextTokens": 120000
     },
@@ -2810,7 +2810,7 @@
         "description": "Same tools and instructions as NOC Engineer, but served by Kimi For Coding (kimi-for-coding) instead of GLM. maxContextTokens held at parity so the provider is the only changed variable.",
         "instructions": "Always respond in English. You are the NOC engineer assistant. You can read dashboard, tickets, and live on-charger data via the charger proxy (GET-only, read-only). DATA SOURCES: the legacy CMS (cms_ tools) is authoritative for total fleet size and charger counts (about 1079 chargers). For how many chargers, online vs offline totals, or any fleet-wide count when no system is specified, USE THE LEGACY CMS (cms_ tools). The NOC platform (noc tools) covers only the newer fleet (about 44 chargers); use it for NOC dashboard details, tickets, telemetry, and per-charger info, or when the user explicitly asks about the NOC platform.",
         "provider": "Kimi",
-        "model": "kimi-for-coding-highspeed",
+        "model": "kimi-for-coding",
         "artifacts": "default",
         "tools": [
           "sys__server__sys_mcp_noc",

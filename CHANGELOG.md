@@ -5,6 +5,28 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.0] - 2026-08-07
+
+### Features
+
+- **chat:** Add Kimi (Moonshot) as a second LLM endpoint ([`7e1be85`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7e1be85f1d040afe97ef22bf58901046929d3325))
+
+### Bug Fixes
+
+- **ecog-sd:** Default ticket ownership to ALL, not OWNED ([`c63a320`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c63a32069ad4afc9d32452656644018460930351))
+- **chat:** Point Kimi endpoint at the coding-plan URL and canonical model ids ([`5752299`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/57522992d0d6510a0b99bcd54b7fbe321e81d309))
+- **chat:** Carry agent permissions through export/restore ([`3074cb9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3074cb9b0700987234804730a82dee615811b3c9))
+- **chat:** Revert Kimi NOC agent to kimi-for-coding, not -highspeed ([`1072a10`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1072a10681be5b78bf350d70917de8a48b2f6696))
+
+### Documentation
+
+- **admin:** Follow-along administrator manual (flows + role/department onboarding) ([`d80c7f7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d80c7f71920b177f369b8724b7d5f427b33b18c4))
+- Management + infra briefs (platform requirements, cloud estimation, KB/OKF explainer) ([`20d3a7e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/20d3a7eadaf7f10418f0296e4fb2223268229730))
+
+### Chores
+
+- **chat:** Point the Kimi NOC agent at kimi-for-coding-highspeed ([`7e2762a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7e2762aa377a45e479d99aa1f8bc93e3927446a0))
+
 ## [0.10.0] - 2026-07-21
 
 ### Features

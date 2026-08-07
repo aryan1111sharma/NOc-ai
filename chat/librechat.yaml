@@ -8,7 +8,7 @@ cache: true
 # interface.customFooter is ignored. This welcome greets the new-chat screen
 # with the release version; the version token is bumped by scripts/bump-version.
 interface:
-  customWelcome: "Welcome to Ador Manthan.AI v0.10.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
+  customWelcome: "Welcome to Ador Manthan.AI v0.11.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
 
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:

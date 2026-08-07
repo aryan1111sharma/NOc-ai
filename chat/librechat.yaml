@@ -10,6 +10,43 @@ cache: true
 interface:
   customWelcome: "Welcome to Ador Manthan.AI v0.11.0 - ask about chargers, tickets, and alarms. Chat through a GLM Agent with the noc tools enabled."
 
+# Which agent a NEW chat starts on. Without this, LibreChat carries over whatever agent was
+# used last, which is why sessions kept landing back on the GLM agent after it ran out of
+# z.ai balance.
+#
+#   prioritize: true   -> new chats open on the `default: true` spec below.
+#   enforce:    false  -> users can still switch agent/endpoint freely. Do NOT set this true:
+#                         it locks everyone to this list, and any agent not listed becomes
+#                         unreachable.
+#
+# Listing an agent here does not grant access to it - the agent ACL (aclentries) is still
+# enforced server-side, so an unauthorised pick fails at the API, not silently.
+modelSpecs:
+  prioritize: true
+  enforce: false
+  list:
+    - name: "noc-engineer-kimi"
+      label: "NOC Engineer (Kimi)"
+      default: true
+      description: "NOC engineer assistant on Kimi (kimi-for-coding). Default."
+      preset:
+        endpoint: "agents"
+        agent_id: "agent_kimi26NOCEngineerV1"
+    # Kept reachable so GLM can be compared side by side once its balance is topped up.
+    - name: "noc-engineer-glm"
+      label: "NOC Engineer (GLM)"
+      description: "Same agent on GLM glm-5.2. Fails while the z.ai account is out of balance."
+      preset:
+        endpoint: "agents"
+        agent_id: "agent_HFlnDrb9elCZbJPDsUATc"
+    # Listed so noc-l1 users keep an entry point once the spec list is prioritised.
+    - name: "noc-l1-support"
+      label: "NOC L1 Support"
+      description: "L1 support assistant (granted to the noc-l1 role)."
+      preset:
+        endpoint: "agents"
+        agent_id: "agent_5HmjjTDnFlY1bqhXxJ1ax"
+
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
   allowedAddresses:

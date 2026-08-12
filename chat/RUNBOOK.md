@@ -180,6 +180,52 @@ permissions. It starts with the stack as the `admin-panel` service, reachable at
 - **⚠ Security:** the panel is a powerful admin surface. `:3091` is fine for local dev, but in
   production it MUST sit behind the reverse proxy with auth + an IP allowlist — never raw.
 
+## Serving other machines (LAN access)
+
+Everything defaults to `localhost`, which is correct only while the browser runs **on the
+Docker host**. The moment you share the URL (`http://<host-ip>:3080`), three settings need
+the machine's real address instead. Find it with `ipconfig` (the `Ethernet` adapter).
+
+Add to `chat/.env` — substitute your own IP for `172.16.12.188`:
+
+```
+# Browser-facing address of this host. Used for download links and share links.
+DOCGEN_PUBLIC_BASE_URL=http://172.16.12.188:8103
+DOMAIN_CLIENT=http://172.16.12.188:3080
+DOMAIN_SERVER=http://172.16.12.188:3080
+
+# Required when serving over plain HTTP to anything other than localhost — see below.
+SESSION_COOKIE_SECURE=false
+```
+
+Then **recreate** (a `restart` will not reload `.env`):
+
+```powershell
+cd E:\cjain\noc-mcp-agent\chat
+docker compose up -d --force-recreate docgen-mcp-server api
+```
+
+### Why each one matters
+
+- **`DOCGEN_PUBLIC_BASE_URL`** — baked into every generated download link
+  (`docgen-mcp-server/docgen_mcp/config.py:21`). The link is resolved by the *user's*
+  browser, so `localhost` sends them to their own machine, where nothing listens on 8103 and
+  the download fails. Must be this host's address.
+- **`DOMAIN_CLIENT` / `DOMAIN_SERVER`** — used to build share links. Unset, shared chat URLs
+  point at the wrong host for everyone but you.
+- **`SESSION_COOKIE_SECURE=false`** — **without this, LAN users are logged out on every page
+  reload.** LibreChat runs with `NODE_ENV=production` (injected by its own npm script, so it
+  is invisible in `.env`), which makes `shouldUseSecureCookie()` flag the auth cookies
+  `Secure`. Browsers refuse to store a `Secure` cookie delivered over plain HTTP — except on
+  `localhost`, which they treat as a trustworthy origin. So the refresh-token cookie is
+  silently dropped for LAN users and the session cannot survive a reload.
+
+  > ⚠ **Security tradeoff.** This sends a 7-day refresh token in cleartext over the network,
+  > sniffable by anyone on that LAN. Acceptable on a trusted internal VLAN for dev/UAT; **not
+  > acceptable in production.** The correct fix is to serve the stack over HTTPS behind a
+  > reverse proxy, after which this override should be removed and the download port stops
+  > being published at all (P0-1/P0-3).
+
 ## Everyday commands (run from `chat/`)
 
 | Action | Command |

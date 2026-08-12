@@ -5,6 +5,21 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.1] - 2026-08-12
+
+### Features
+
+- **chat:** Default new chats to the NOC Engineer (Kimi) agent ([`a139ee6`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a139ee6d5428e25315c7692ca684966869ae2da2))
+
+### Bug Fixes
+
+- **chat:** Make docgen download links reachable from other machines ([`c04fd4b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c04fd4bedd8583e0863ba79a951c33a5ed0dca7c))
+
+### Documentation
+
+- RCA for E-stop-while-offline on Q060042024 (VinFast UAT) ([`c9d585d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c9d585d17175d726fde50d10e98d158af73ad8c1))
+- ChargeZone Jira API access request for their admin ([`d6cd984`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d6cd98494ca2c83ee0dfc3efb66a0550fa223485))
+
 ## [0.11.0] - 2026-08-07
 
 ### Features

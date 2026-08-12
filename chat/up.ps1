@@ -20,4 +20,4 @@ try {
 } finally {
     Pop-Location
 }
-Write-Host "Open http://localhost:3080  — footer shows v$($env:APP_VERSION) ($($env:GIT_SHA))"
+Write-Host "Open http://localhost:3080  - footer shows v$($env:APP_VERSION) ($($env:GIT_SHA))"

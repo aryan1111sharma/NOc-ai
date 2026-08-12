@@ -5,6 +5,13 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.2] - 2026-08-12
+
+### Bug Fixes
+
+- **chat:** Stop up.ps1 failing to parse on Windows PowerShell 5.1 ([`f04e3c3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f04e3c3d90489e7c738fcb0bcfd5c2ebaeadd08e))
+- **chat:** Have up scripts restart LibreChat after rebuilding MCP servers ([`1599aff`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1599affb8b0d2c145159d12c8e1d7be519b5efe5))
+
 ## [0.11.1] - 2026-08-12
 
 ### Features

@@ -47,7 +47,9 @@ docker compose ps
 docker compose logs mcp-server
 ```
 
-Then open **http://localhost:3080** and **register an account** (registration is open).
+Then open **http://localhost/** and **register an account** (registration is open). nginx
+fronts everything on port 80 — for LAN/remote access use `http://<SERVER_HOST>/` instead
+(see "Serving other machines" below).
 The footer shows the running build, e.g. **Ador Manthan.AI v0.1.0 (377a150)**, and the
 new-chat screen greets you with the version.
 
@@ -182,10 +184,12 @@ permissions. It starts with the stack as the `admin-panel` service, reachable at
 
 ## Serving other machines (LAN access)
 
-Everything is now served through nginx (`chat/nginx.conf`) on a single port, **80** — LibreChat,
-generated-file downloads, and the admin panel are no longer published on their own ports
-(`3080`/`8103`/`3091`). Only one setting needs the machine's real address instead of
-`localhost`. Find it with `ipconfig` (the `Ethernet` adapter).
+LibreChat and generated-file downloads are served through nginx (`chat/nginx.conf`) on port
+**80** — those two are no longer published on their own ports (`3080`/`8103`). The admin
+panel keeps its own port, **3091** (see "Admin Panel" above — it's a prebuilt SPA that isn't
+confirmed to support being served from a subpath, so it's not routed through nginx). Only
+one setting needs the machine's real address instead of `localhost`. Find it with `ipconfig`
+(the `Ethernet` adapter).
 
 Set in `chat/.env` — substitute your own IP or domain for `172.16.12.188`:
 
@@ -209,7 +213,7 @@ cd E:\cjain\noc-mcp-agent\chat
 docker compose up -d --force-recreate
 ```
 
-Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>/admin/` (admin panel).
+Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>:3091` (admin panel).
 
 ### Why each setting matters
 
@@ -274,4 +278,4 @@ and tags it. It does **not** push — you review first.
 - **`cannot connect to the docker API`** → Docker Desktop isn't running. Start it, re-check `docker version`.
 - **GLM `429 Insufficient balance`** → recharge the GLM account; not a stack problem.
 - **NOC auth errors in `mcp-server` logs** → fix `NOC_EMAIL`/`NOC_PASSWORD` in `.env`, then `docker compose up -d mcp-server`.
-- **Port 3080 already in use** → stop the other process or change the `3080:3080` mapping in `docker-compose.yml`.
+- **Port 80 already in use** → stop the other process or change the nginx `"80:80"` mapping in `docker-compose.yml`.

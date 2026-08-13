@@ -37,7 +37,9 @@ Then set `GLM_API_KEY` and the `NOC_*` read-only credentials.
 
 ```bash
 docker compose up -d          # builds mcp-server, starts LibreChat + mongo + meilisearch
-# open http://localhost:3080  — register an account (open registration)
+# open http://localhost/      — register an account (open registration)
+# (nginx fronts everything on port 80; for LAN/remote access use http://<SERVER_HOST>/
+# instead, where SERVER_HOST is set in .env — see RUNBOOK.md)
 docker compose logs -f mcp-server   # check the MCP server logged in to NOC
 ```
 

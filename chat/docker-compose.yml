@@ -174,10 +174,13 @@ services:
     restart: unless-stopped
 
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
-  # (not Mongo). GUI at http://<SERVER_HOST>/admin/; the first-registered LibreChat user is
+  # (not Mongo). GUI at http://<SERVER_HOST>:3091; the first-registered LibreChat user is
   # admin. Needs ADMIN_PANEL_SESSION_SECRET in .env (init-env.ps1 generates it).
-  # No published port: nginx (below) proxies /admin/ to this container on the internal
-  # network — satisfies the "sit behind the reverse proxy" requirement directly.
+  # Published on its own port rather than proxied under a subpath: this is a prebuilt Vite
+  # SPA with no confirmed support for a non-root base path, so /admin/ risked breaking its
+  # own JS/CSS asset loading. SECURITY: this again exposes an admin surface on a raw port —
+  # in production it MUST sit behind auth/IP-allowlisted TLS termination (P0-1), same
+  # requirement as before, just not handled by nginx for this one service.
   admin-panel:
     image: registry.librechat.ai/clickhouse/librechat-admin-panel:latest
     container_name: noc-librechat-admin
@@ -189,18 +192,18 @@ services:
       - API_SERVER_URL=http://api:3080   # server-to-server (in-network)
       - VITE_API_BASE_URL=http://${SERVER_HOST}   # browser-facing LibreChat URL, via nginx
       - SESSION_COOKIE_SECURE=false      # local http; set true behind TLS in prod
+    ports:
+      - "3091:3000"
     restart: unless-stopped
 
-  # Reverse proxy: the ONLY container with a published port. Fronts LibreChat (/), generated
-  # file downloads (/files/), and the admin panel (/admin/) on a single port 80, so no
-  # individual service port needs to be exposed to the host (P0-1/P0-3).
+  # Reverse proxy: fronts LibreChat (/) and generated file downloads (/files/) on port 80.
+  # admin-panel is NOT routed here (see its own comment above) — it keeps its own port.
   nginx:
     image: nginx:alpine
     container_name: noc-nginx
     depends_on:
       - api
       - docgen-mcp-server
-      - admin-panel
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:

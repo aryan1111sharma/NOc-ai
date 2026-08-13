@@ -22,6 +22,14 @@ root="$(dirname "$chat_dir")"
 export APP_VERSION="$(tr -d '[:space:]' < "$root/VERSION")"
 export GIT_SHA="$(git -C "$root" rev-parse --short HEAD)"
 
+# Read SERVER_HOST from .env so the closing "Open http://..." message is always right,
+# instead of a hardcoded address that goes stale the moment the deployment moves host.
+server_host="localhost"
+if [ -f "$chat_dir/.env" ]; then
+  val="$(grep -E '^SERVER_HOST=' "$chat_dir/.env" | tail -1 | cut -d= -f2-)"
+  [ -n "$val" ] && server_host="$val"
+fi
+
 # compose service name : the port it listens on inside the compose network.
 mcp_servers=(
   "mcp-server:8100"
@@ -77,5 +85,6 @@ else
   fi
 fi
 
-echo "Open http://localhost:3080  - footer shows v${APP_VERSION} (${GIT_SHA})"
+echo "Open http://${server_host}  - footer shows v${APP_VERSION} (${GIT_SHA})"
+echo "Admin panel: http://${server_host}:3091"
 echo "Verify the tool count with: docker compose logs api | grep 'Initialized with'"

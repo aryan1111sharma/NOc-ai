@@ -21,6 +21,15 @@ $root = Split-Path -Parent $chatDir
 $env:APP_VERSION = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim()
 $env:GIT_SHA = (git -C $root rev-parse --short HEAD).Trim()
 
+# Read SERVER_HOST from .env so the closing "Open http://..." message is always right,
+# instead of a hardcoded address that goes stale the moment the deployment moves host.
+$serverHost = 'localhost'
+$envFile = Join-Path $chatDir '.env'
+if (Test-Path $envFile) {
+    $match = Select-String -Path $envFile -Pattern '^SERVER_HOST=(.+)$' | Select-Object -First 1
+    if ($match) { $serverHost = $match.Matches[0].Groups[1].Value.Trim() }
+}
+
 # compose service name -> the port it listens on inside the compose network.
 $mcpServers = [ordered]@{
     'mcp-server'                 = 8100
@@ -95,5 +104,6 @@ try {
 finally {
     Pop-Location
 }
-Write-Host "Open http://localhost:3080  - footer shows v$($env:APP_VERSION) ($($env:GIT_SHA))"
+Write-Host "Open http://$serverHost  - footer shows v$($env:APP_VERSION) ($($env:GIT_SHA))"
+Write-Host "Admin panel: http://${serverHost}:3091"
 Write-Host "Verify the tool count with: docker compose logs api | Select-String 'Initialized with'"

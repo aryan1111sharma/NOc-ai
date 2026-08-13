@@ -182,49 +182,55 @@ permissions. It starts with the stack as the `admin-panel` service, reachable at
 
 ## Serving other machines (LAN access)
 
-Everything defaults to `localhost`, which is correct only while the browser runs **on the
-Docker host**. The moment you share the URL (`http://<host-ip>:3080`), three settings need
-the machine's real address instead. Find it with `ipconfig` (the `Ethernet` adapter).
+Everything is now served through nginx (`chat/nginx.conf`) on a single port, **80** — LibreChat,
+generated-file downloads, and the admin panel are no longer published on their own ports
+(`3080`/`8103`/`3091`). Only one setting needs the machine's real address instead of
+`localhost`. Find it with `ipconfig` (the `Ethernet` adapter).
 
-Add to `chat/.env` — substitute your own IP for `172.16.12.188`:
+Set in `chat/.env` — substitute your own IP or domain for `172.16.12.188`:
 
 ```
-# Browser-facing address of this host. Used for download links and share links.
-DOCGEN_PUBLIC_BASE_URL=http://172.16.12.188:8103
-DOMAIN_CLIENT=http://172.16.12.188:3080
-DOMAIN_SERVER=http://172.16.12.188:3080
+# Change this ONE line if the IP/domain changes. Every browser-facing URL (download links,
+# share links, the admin panel) is derived from it in chat/docker-compose.yml.
+SERVER_HOST=172.16.12.188
 
 # Required when serving over plain HTTP to anything other than localhost — see below.
 SESSION_COOKIE_SECURE=false
 ```
 
+`DOCGEN_PUBLIC_BASE_URL`, `DOMAIN_CLIENT`, `DOMAIN_SERVER`, and `VITE_API_BASE_URL` are **no
+longer set by hand** — `chat/docker-compose.yml` derives all four from `SERVER_HOST`
+automatically.
+
 Then **recreate** (a `restart` will not reload `.env`):
 
 ```powershell
 cd E:\cjain\noc-mcp-agent\chat
-docker compose up -d --force-recreate docgen-mcp-server api
+docker compose up -d --force-recreate
 ```
 
-### Why each one matters
+Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>/admin/` (admin panel).
 
-- **`DOCGEN_PUBLIC_BASE_URL`** — baked into every generated download link
-  (`docgen-mcp-server/docgen_mcp/config.py:21`). The link is resolved by the *user's*
-  browser, so `localhost` sends them to their own machine, where nothing listens on 8103 and
-  the download fails. Must be this host's address.
-- **`DOMAIN_CLIENT` / `DOMAIN_SERVER`** — used to build share links. Unset, shared chat URLs
-  point at the wrong host for everyone but you.
+### Why each setting matters
+
+- **`SERVER_HOST`** — the single source of truth for every browser-facing URL. Download links
+  (`docgen-mcp-server/docgen_mcp/config.py:21`) and share links are resolved by the *user's*
+  browser, so pointing them at `localhost` sends users to their own machine, where nothing is
+  listening — the download/share fails. `docker-compose.yml` substitutes `${SERVER_HOST}` into
+  `DOCGEN_PUBLIC_BASE_URL`, `DOMAIN_CLIENT`, `DOMAIN_SERVER`, and `VITE_API_BASE_URL` directly,
+  so changing this one value updates all four consistently.
 - **`SESSION_COOKIE_SECURE=false`** — **without this, LAN users are logged out on every page
   reload.** LibreChat runs with `NODE_ENV=production` (injected by its own npm script, so it
   is invisible in `.env`), which makes `shouldUseSecureCookie()` flag the auth cookies
   `Secure`. Browsers refuse to store a `Secure` cookie delivered over plain HTTP — except on
   `localhost`, which they treat as a trustworthy origin. So the refresh-token cookie is
-  silently dropped for LAN users and the session cannot survive a reload.
+  silently dropped for LAN users and the session cannot survive a reload. This still applies
+  with nginx in front, since nginx here proxies plain HTTP — it does not terminate TLS.
 
   > ⚠ **Security tradeoff.** This sends a 7-day refresh token in cleartext over the network,
   > sniffable by anyone on that LAN. Acceptable on a trusted internal VLAN for dev/UAT; **not
-  > acceptable in production.** The correct fix is to serve the stack over HTTPS behind a
-  > reverse proxy, after which this override should be removed and the download port stops
-  > being published at all (P0-1/P0-3).
+  > acceptable in production.** The correct fix is to add TLS termination to the nginx config
+  > (`chat/nginx.conf`), after which this override should be removed (P0-1).
 
 ## Everyday commands (run from `chat/`)
 

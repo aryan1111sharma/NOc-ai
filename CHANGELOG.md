@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.5] - 2026-08-13
+
+### Bug Fixes
+
+- **chat:** Resolve nginx upstreams at request time, not config load ([`d68b594`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d68b594582e1392f0f2dd081ff0b28cfd6d43310))
+
 ## [0.11.4] - 2026-08-13
 
 ### Chores

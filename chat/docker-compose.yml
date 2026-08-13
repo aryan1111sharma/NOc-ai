@@ -27,8 +27,12 @@ services:
       - CONFIG_PATH=/app/librechat.yaml
       # Browser-facing address, used to build share links. Derived from SERVER_HOST (.env)
       # so only that one value needs to change if the deployment moves host/domain.
-      - DOMAIN_CLIENT=http://${SERVER_HOST}
-      - DOMAIN_SERVER=http://${SERVER_HOST}
+      # The :-localhost default is load-bearing: with SERVER_HOST unset this resolves to the
+      # bare string "http://", which LibreChat rejects at startup with "Failed to start
+      # server: Invalid URL" - a crash loop whose message never mentions SERVER_HOST. The
+      # default degrades to localhost-only instead of taking the whole stack down.
+      - DOMAIN_CLIENT=http://${SERVER_HOST:-localhost}
+      - DOMAIN_SERVER=http://${SERVER_HOST:-localhost}
       # Version shown in the LibreChat footer. APP_VERSION + GIT_SHA are injected by
       # chat/up.ps1 (or up.sh) from the VERSION file and `git rev-parse --short HEAD`,
       # so the footer always names the exact running build. A raw `docker compose up`
@@ -166,7 +170,7 @@ services:
       # Base URL baked into every download link, resolved by the USER'S BROWSER. NOTE: no
       # /files suffix here — docgen_mcp/server.py's _deliver() already appends
       # /files/{file_id}/{filename} itself; adding it here would double it up.
-      - DOCGEN_PUBLIC_BASE_URL=http://${SERVER_HOST}
+      - DOCGEN_PUBLIC_BASE_URL=http://${SERVER_HOST:-localhost}
       - DOCGEN_DATA_DIR=/data/files
     # Persist generated files so download links survive container restarts/rebuilds.
     volumes:
@@ -190,7 +194,7 @@ services:
       - PORT=3000
       - SESSION_SECRET=${ADMIN_PANEL_SESSION_SECRET}
       - API_SERVER_URL=http://api:3080   # server-to-server (in-network)
-      - VITE_API_BASE_URL=http://${SERVER_HOST}   # browser-facing LibreChat URL, via nginx
+      - VITE_API_BASE_URL=http://${SERVER_HOST:-localhost}   # browser-facing LibreChat URL, via nginx
       - SESSION_COOKIE_SECURE=false      # local http; set true behind TLS in prod
     ports:
       - "3091:3000"

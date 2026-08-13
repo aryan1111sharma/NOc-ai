@@ -5,6 +5,14 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.3] - 2026-08-13
+
+### Bug Fixes
+
+- Add Nginx, single SERVER_HOST variable, remove all hardcoded IPs and ports ([`0642570`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/064257019e5e8263c2385c5b032bc2dc4edf0c66))
+- Admin panel on direct port, fix nginx best practices, update docs ([`3402832`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/340283202dc4da0bea5b04def8473de4cc9fdc81))
+- **chat:** Make SERVER_HOST safe to omit and repairable in an existing .env ([`741642b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/741642b80a10af3ed0f199c9a21d3a2cd6a86c41))
+
 ## [0.11.2] - 2026-08-12
 
 ### Bug Fixes

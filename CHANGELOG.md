@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.11.4] - 2026-08-13
+
+### Chores
+
+- **chat:** Drop the GLM Agent sentence from the welcome message ([`b346050`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b346050d3790d65ae1a6407b4f1df71e10be93ff))
+
 ## [0.11.3] - 2026-08-13
 
 ### Bug Fixes

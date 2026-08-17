@@ -36,13 +36,13 @@ echo "Bumping $current -> $new"
 printf '%s\n' "$new" > "$root/VERSION"
 
 # 2. Version token in the LibreChat welcome line (footer version comes from git at runtime).
-sed -i.bak -E "/customWelcome/ s/v[0-9]+\.[0-9]+\.[0-9]+/v$new/" "$root/chat/librechat.yaml"
-rm -f "$root/chat/librechat.yaml.bak"
+sed -i.bak -E "/customWelcome/ s/v[0-9]+\.[0-9]+\.[0-9]+/v$new/" "$root/apps/ai-platform/librechat/librechat.yaml"
+rm -f "$root/apps/ai-platform/librechat/librechat.yaml.bak"
 
 # 3. Regenerate the changelog with the new version section, commit, and tag.
 cd "$root"
 npx --yes git-cliff@latest --tag "v$new" -o CHANGELOG.md
-git add VERSION chat/librechat.yaml CHANGELOG.md
+git add VERSION apps/ai-platform/librechat/librechat.yaml CHANGELOG.md
 git commit -m "chore(release): v$new"
 git tag "v$new"
 echo "Committed + tagged v$new. Review, then push:  git push && git push origin v$new"

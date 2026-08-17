@@ -193,7 +193,7 @@ existence from unauthorized callers — so treat it as a permissions problem, no
 ## For Quench: what to do with the token when it arrives
 
 Do **not** paste the token into chat, tickets, or commits. Put it straight into
-`chat/.env`:
+`apps/ai-platform/librechat/.env`:
 
 ```
 CZ_JIRA_BASE_URL=https://team-1604552506221.atlassian.net
@@ -215,5 +215,5 @@ startup, so it needs to re-handshake to see the reconnected tools. Confirm with:
 docker compose logs api | Select-String "\[MCP\]\[chargezone\]"
 ```
 
-You should see the eight `cz_jira_*` tools listed. See `chat/RUNBOOK.md` for the rest of
+You should see the eight `cz_jira_*` tools listed. See `apps/ai-platform/librechat/RUNBOOK.md` for the rest of
 the stack.

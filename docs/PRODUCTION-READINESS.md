@@ -19,7 +19,7 @@ plus the **role-based access-control** workstream.
 
 - [ ] **D1 — Data residency of GLM / z.ai.** All prompts **and tool results** (charger
   telemetry, tickets, customer data) are sent to Zhipu (z.ai, China-based) for inference
-  (`chat/librechat.yaml`). Internal use may accept this; **external/customer-facing use
+  (`apps/ai-platform/librechat/librechat.yaml`). Internal use may accept this; **external/customer-facing use
   needs explicit approval** or a model swap (in-region / self-hosted / approved provider).
   → *Decision:* acceptable for internal? for external? (record outcome here)
 - [ ] **D2 — Shared service-account identity.** Both MCP servers authenticate with **one**
@@ -45,7 +45,7 @@ plus the **role-based access-control** workstream.
   *Accept:* app reachable **only** over `https://`, valid cert; direct `http://host:3080`
   not reachable from outside.
 - [ ] **P0-2 — Close open registration.** `ALLOW_REGISTRATION=false`; add SSO/OIDC scoped
-  to `@quenchchargers.com` or pre-provision accounts (`chat/docker-compose.yml:9`).
+  to `@quenchchargers.com` or pre-provision accounts (`apps/ai-platform/librechat/docker-compose.yml:9`).
   *Accept:* a non-org email cannot self-register or log in.
 - [ ] **P0-3 — Keep MCP ports internal.** Never publish `:8100`/`:8101`; they have **no
   inbound auth**. Confirm only `3080` (via proxy) is exposed.
@@ -55,14 +55,14 @@ plus the **role-based access-control** workstream.
   (`services/mcp/noc/README.md:75-77`).
   *Accept:* a non-GET call through the proxy tool is rejected server-side (unit test).
 - [ ] **P0-5 — MongoDB auth.** Enable auth + strong credential on `mongo:7`
-  (`chat/docker-compose.yml:35-40`).
+  (`apps/ai-platform/librechat/docker-compose.yml:35-40`).
   *Accept:* unauthenticated `mongosh` connection is refused; app still works with creds.
 - [ ] **P0-6 — Secrets management.** Inject `GLM_API_KEY`, NOC/CMS creds,
   `MEILI_MASTER_KEY`, `JWT_SECRET`, `CREDS_KEY` via Docker/cloud secrets — not a
   plaintext `.env` baked into an image.
   *Accept:* no secret present in the built image layers or in git; app boots from injected secrets.
 - [ ] **P0-7 — Move off the GLM Coding Plan.** The configured z.ai coding endpoint
-  (`chat/librechat.yaml`) **prohibits multi-user access** and caps concurrency to ~1 in-flight
+  (`apps/ai-platform/librechat/librechat.yaml`) **prohibits multi-user access** and caps concurrency to ~1 in-flight
   request. Switch to pay-as-you-go GLM (or an approved/self-hosted provider) with concurrency
   raised + per-token billing. **Blocks any multi-user launch.**
   *Accept:* stack runs on a provider/tier whose ToS permits multi-user and whose concurrency
@@ -87,7 +87,7 @@ plus the **role-based access-control** workstream.
   forwarded identity headers (see AC-4) can't be spoofed by anything else on the network.
   *Accept:* an MCP request without the shared secret is rejected.
 - [ ] **P1-5 — Pin image versions.** Replace `librechat:latest` and pin `mongo`,
-  `meilisearch` to tags/digests (`chat/docker-compose.yml`).
+  `meilisearch` to tags/digests (`apps/ai-platform/librechat/docker-compose.yml`).
   *Accept:* compose references immutable tags/digests; no `:latest`.
 - [ ] **P1-6 — Container hardening.** Non-root user in both MCP Dockerfiles, drop caps,
   resource limits, read-only FS where feasible.
@@ -115,7 +115,7 @@ plus the **role-based access-control** workstream.
   *Accept:* a simulated MCP auth failure raises an alert.
 - [ ] **P2-4 — MongoDB backups** — scheduled dump + a tested restore.
   *Accept:* a restore from backup into a clean volume reproduces users/chats.
-- [ ] **P2-5 — Production runbook** — extend `chat/RUNBOOK.md` with deploy, rollback,
+- [ ] **P2-5 — Production runbook** — extend `apps/ai-platform/librechat/RUNBOOK.md` with deploy, rollback,
   secret + service-account rotation.
   *Accept:* runbook exists and a dry-run rollback succeeds.
 - [ ] **P2-6 — Resource sizing** — memory/CPU limits + concurrency expectations documented.
@@ -143,7 +143,7 @@ plus the **role-based access-control** workstream.
 - [ ] **P3-3 — OpenAPI spec freshness check** for bundled `noc_openapi.json` vs. live backend.
   *Accept:* CI (or a script) flags drift between bundled spec and backend.
 - [ ] **P3-4 — Agent config as code.** The LibreChat Agent (endpoint/tools/system prompt) is
-  hand-wired in the UI (`chat/RUNBOOK.md`); capture it reproducibly so it survives `down -v`.
+  hand-wired in the UI (`apps/ai-platform/librechat/RUNBOOK.md`); capture it reproducibly so it survives `down -v`.
   *Accept:* agent config is restorable from source without manual UI steps.
 - [ ] **P3-5 — Testing standard for new MCP servers.** Every new MCP server (see **CAP-3**,
   **EVT-3**) ships a `pytest` suite mirroring `services/mcp/noc/tests`, wired into the **P3-1** CI gate.
@@ -212,7 +212,7 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
   can't be done here — **moved to AC-5** (MCP-side role filtering). The proxy is already
   GET-locked (P0-4), so L1 seeing it is read-only. Agents live in Mongo (P3-4).
 - [ ] **AC-3 — Force users through agents.** Set `chatMenu: false` on `mcpServers` entries
-  (`chat/librechat.yaml`) so raw tools aren't à-la-carte selectable.
+  (`apps/ai-platform/librechat/librechat.yaml`) so raw tools aren't à-la-carte selectable.
   *Accept:* raw `noc`/`cms` servers don't appear in the chat dropdown.
 - [ ] **AC-8 — Admin governance of MCP ↔ agent ↔ role (native, runtime).** Grant admins
   `manage:mcpservers`; let them (a) add/update MCP servers live, (b) edit which agents expose
@@ -227,7 +227,7 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
 
 - [ ] **AC-4 — Forward user identity to MCP.** Add `headers:` with
   `X-User-Role: '{{LIBRECHAT_USER_ROLE}}'` (+ id/email) to both `mcpServers` in
-  `chat/librechat.yaml`.
+  `apps/ai-platform/librechat/librechat.yaml`.
   *Accept:* MCP servers receive the header (logged) on each tool call.
 - [ ] **AC-5 — Role-based tool filtering (FastMCP middleware).** In
   `services/mcp/noc/noc_mcp/server.py`, read `X-User-Role` and expose only that role's tool set
@@ -343,7 +343,7 @@ document **create** and **read**. Delivered via **native LibreChat features + se
 > MCP only via an `mcpo` (MCP→OpenAPI) proxy.
 
 - [ ] **CAP-1 — Enable Artifacts (visual output, native).** Turn on `interface.artifacts` in
-  `chat/librechat.yaml` for the rich side panel (React/HTML/Mermaid), like Claude Artifacts.
+  `apps/ai-platform/librechat/librechat.yaml` for the rich side panel (React/HTML/Mermaid), like Claude Artifacts.
   *Accept:* a GLM reply renders a Mermaid diagram / HTML table in the Artifacts panel.
 - [ ] **CAP-2 — Enable file uploads + RAG (document reading, native).** Turn on uploads + the
   `rag_api` service so PDF/DOCX/XLSX/CSV are parsed and queryable; images via GLM vision models.

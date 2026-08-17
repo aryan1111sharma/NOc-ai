@@ -16,7 +16,8 @@
 #                            # wait + restart step is skipped
 $ErrorActionPreference = 'Stop'
 $chatDir = $PSScriptRoot
-$root = Split-Path -Parent $chatDir
+# Repo root is 3 levels up: apps/ai-platform/librechat -> apps/ai-platform -> apps -> repo root.
+$root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $chatDir))
 
 $env:APP_VERSION = (Get-Content (Join-Path $root 'VERSION') -Raw).Trim()
 $env:GIT_SHA = (git -C $root rev-parse --short HEAD).Trim()
@@ -39,6 +40,7 @@ $mcpServers = [ordered]@{
     'ecog-sd-mcp-server'         = 8104
     'chargezone-jira-mcp-server' = 8105
     'kb-mcp-server'              = 8106
+    'platform-mcp-server'        = 8107
 }
 # kb-mcp-server downloads its embedding models on first run, which can take
 # several minutes - hence the generous budget.

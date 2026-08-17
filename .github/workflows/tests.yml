@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [services/mcp/noc, services/mcp/cms, services/mcp/jira, services/mcp/ecog-sd]
+        server: [services/mcp/noc, services/mcp/cms, services/mcp/jira, services/mcp/ecog-sd, services/mcp/platform]
     name: pytest (${{ matrix.server }})
     steps:
       - name: Checkout

@@ -15,7 +15,7 @@ param([Parameter(Mandatory)][string]$Bump)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $versionFile = Join-Path $root 'VERSION'
-$yamlFile = Join-Path $root 'chat/librechat.yaml'
+$yamlFile = Join-Path $root 'apps/ai-platform/librechat/librechat.yaml'
 
 $current = (Get-Content $versionFile -Raw).Trim()
 if ($current -notmatch '^\d+\.\d+\.\d+$') { throw "VERSION malformed: '$current'" }
@@ -46,7 +46,7 @@ Set-Content -Path $yamlFile -Value $lines -Encoding ascii
 Push-Location $root
 try {
     npx --yes git-cliff@latest --tag "v$new" -o CHANGELOG.md
-    git add VERSION chat/librechat.yaml CHANGELOG.md
+    git add VERSION apps/ai-platform/librechat/librechat.yaml CHANGELOG.md
     git commit -m "chore(release): v$new"
     git tag "v$new"
 }

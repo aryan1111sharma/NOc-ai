@@ -45,13 +45,13 @@ It is built on **LibreChat** (the web UI + orchestration) with **GLM models** (v
                           └─────────────┘
 ```
 
-Everything runs as Docker containers on a single host, defined in `chat/docker-compose.yml`.
+Everything runs as Docker containers on a single host, defined in `apps/ai-platform/librechat/docker-compose.yml`.
 
 ---
 
 ## 3. The agents
 
-Agents are configured in LibreChat (stored in MongoDB; the source of truth is `chat/agents/agents.json`, restored into Mongo via `chat/agents/restore-agents`). Each agent is a GLM model + a curated set of MCP tools + an instruction prompt.
+Agents are configured in LibreChat (stored in MongoDB; the source of truth is `apps/ai-platform/librechat/agents/agents.json`, restored into Mongo via `apps/ai-platform/librechat/agents/restore-agents`). Each agent is a GLM model + a curated set of MCP tools + an instruction prompt.
 
 | Agent | Model | Knowledge / tool servers | Role |
 |---|---|---|---|
@@ -70,7 +70,7 @@ Agents are configured in LibreChat (stored in MongoDB; the source of truth is `c
 
 ## 4. The MCP tool servers
 
-Each backend system is exposed by its own FastMCP server over HTTP. LibreChat reaches them by container name (see `chat/librechat.yaml` → `mcpServers`).
+Each backend system is exposed by its own FastMCP server over HTTP. LibreChat reaches them by container name (see `apps/ai-platform/librechat/librechat.yaml` → `mcpServers`).
 
 | Server (MCP name) | Port | Backend | What it does | Access |
 |---|---|---|---|---|
@@ -81,8 +81,9 @@ Each backend system is exposed by its own FastMCP server over HTTP. LibreChat re
 | **ecog_sd** (`ecog-sd-mcp-server`) | 8104 | Ecog Jira Service Management (customer API) | Live Ecog Service-Desk tickets, authenticated by browser session cookie. | Read-only |
 | **chargezone** (`chargezone-jira-mcp-server`) | 8105 | ChargeZone Atlassian Cloud Jira, `QCH` project | ChargeZone/Quench tickets, priority/OCPP-ID aware. | Read-only |
 | **kb** (`kb-mcp-server`) | 8106 | Self-hosted RAG + Qdrant | Retrieval over EV/charger reference documents (see §5). | Read-only |
+| **platform** (`platform-mcp-server`) | 8107 | This repository (read-only bind mount) | Platform Intelligence: repo health/structure/git-state introspection — the platform understanding itself, not an external backend. | Read-only |
 
-> **Health check:** after a restart, `docker logs noc-librechat` shows one `[MCP][<name>] Tools: …` line per server. All seven should appear.
+> **Health check:** after a restart, `docker logs noc-librechat` shows one `[MCP][<name>] Tools: …` line per server. All eight should appear.
 
 ---
 
@@ -154,7 +155,7 @@ Names (scopes and profiles) must match `^[A-Za-z0-9_-]+$`; the `folder:` field i
 
 ### 6.1 Start / restart the stack
 
-From `chat/`:
+From `apps/ai-platform/librechat/`:
 
 ```bash
 ./up.ps1            # Windows — build + start everything, wiring version+commit into the footer
@@ -169,9 +170,9 @@ From `chat/`:
 
 | Concern | Location |
 |---|---|
-| Stack definition | `chat/docker-compose.yml` |
-| MCP server + agent wiring | `chat/librechat.yaml` |
-| Agent definitions (source of truth) | `chat/agents/agents.json` |
+| Stack definition | `apps/ai-platform/librechat/docker-compose.yml` |
+| MCP server + agent wiring | `apps/ai-platform/librechat/librechat.yaml` |
+| Agent definitions (source of truth) | `apps/ai-platform/librechat/agents/agents.json` |
 | Knowledge base documents | `knowledge/<scope>/` (gitignored; `scopes.yaml` + `MANIFEST.md` tracked) |
 | Version | `VERSION` (single source of truth) |
 | Changelog | `CHANGELOG.md` (git-cliff generated) |
@@ -179,7 +180,7 @@ From `chat/`:
 
 ### 6.3 Editing agents (important gotcha)
 
-`agents.json` is **regenerated from Mongo by `export-agents`**. If you edit the file, **restore it to Mongo immediately** (`chat/agents/restore-agents`) — an edit left un-restored is silently dropped by any later export. After restoring, restart `api` so LibreChat re-reads the agents.
+`agents.json` is **regenerated from Mongo by `export-agents`**. If you edit the file, **restore it to Mongo immediately** (`apps/ai-platform/librechat/agents/restore-agents`) — an edit left un-restored is silently dropped by any later export. After restoring, restart `api` so LibreChat re-reads the agents.
 
 ### 6.4 Version bump
 
@@ -198,9 +199,9 @@ Updates `VERSION`, the welcome line, regenerates `CHANGELOG.md`, commits `chore(
 | **Add knowledge** | Drop file in `knowledge/ev-core/` → `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` → check summary → update `MANIFEST.md`. |
 | **Check what an agent did in a session** | Query MongoDB `messages` by `conversationId` (from the chat URL `/c/<id>`); the message `content` array shows `tool_call` (name + args + output) and the final `text` part. |
 | **Confirm KB tools loaded** | `docker logs noc-librechat \| grep "\[MCP\]\[kb\] Tools"` → expect `kb_search_noc`. |
-| **Refresh the UI footer** | Re-run `chat/up.ps1` (recreates the container). `restart` alone won't do it. |
-| **Restart one server** | `docker compose -f chat/docker-compose.yml restart <service>`. |
-| **Rebuild one server after code change** | `docker compose -f chat/docker-compose.yml up -d --build <service>`. |
+| **Refresh the UI footer** | Re-run `apps/ai-platform/librechat/up.ps1` (recreates the container). `restart` alone won't do it. |
+| **Restart one server** | `docker compose -f apps/ai-platform/librechat/docker-compose.yml restart <service>`. |
+| **Rebuild one server after code change** | `docker compose -f apps/ai-platform/librechat/docker-compose.yml up -d --build <service>`. |
 
 ---
 

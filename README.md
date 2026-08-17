@@ -11,7 +11,7 @@ modifies it; it only calls its HTTP API as an authenticated service account.
 
 ```
 services/mcp/noc/   FastMCP read-only server exposing NOC GET endpoints as MCP tools
-chat/                LibreChat deployment (docker-compose + config)   [later phase]
+apps/ai-platform/librechat/                LibreChat deployment (docker-compose + config)   [later phase]
 knowledge/           optional RAG assets for troubleshooting          [later phase]
 docs/                design + operations notes
 ```

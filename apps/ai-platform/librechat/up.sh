@@ -17,7 +17,8 @@
 set -euo pipefail
 
 chat_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-root="$(dirname "$chat_dir")"
+# Repo root is 3 levels up: apps/ai-platform/librechat -> apps/ai-platform -> apps -> repo root.
+root="$(dirname "$(dirname "$(dirname "$chat_dir")")")"
 
 export APP_VERSION="$(tr -d '[:space:]' < "$root/VERSION")"
 export GIT_SHA="$(git -C "$root" rev-parse --short HEAD)"
@@ -39,6 +40,7 @@ mcp_servers=(
   "ecog-sd-mcp-server:8104"
   "chargezone-jira-mcp-server:8105"
   "kb-mcp-server:8106"
+  "platform-mcp-server:8107"
 )
 # kb-mcp-server downloads its embedding models on first run, which can take
 # several minutes - hence the generous budget.

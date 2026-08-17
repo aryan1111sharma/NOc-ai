@@ -12,7 +12,7 @@ LibreChat (:3080)  →  GLM (z.ai)  →  mcp-server (:8100)   →  NOC backend
 
 1. **Docker Desktop** installed and able to start
    (default path: `C:\Program Files\Docker\Docker\Docker Desktop.exe`).
-2. **`chat/.env`** filled in. If it doesn't exist yet, generate it:
+2. **`apps/ai-platform/librechat/.env`** filled in. If it doesn't exist yet, generate it:
    ```powershell
    cd E:\cjain\noc-mcp-agent\chat
    powershell -ExecutionPolicy Bypass -File .\init-env.ps1
@@ -81,7 +81,7 @@ An `sk-kimi-*` key is a **Kimi For Coding subscription** key and is bound to
 `api.moonshot.ai/v1` (pay-as-you-go) and `api.moonshot.cn/v1` (mainland) — those are separate
 accounts with their own keys. A 401 here means *wrong endpoint or wrong key*, never no balance.
 
-Add the Kimi key to `chat/.env` (no `docker-compose.yml` change needed — the `api` service
+Add the Kimi key to `apps/ai-platform/librechat/.env` (no `docker-compose.yml` change needed — the `api` service
 already loads the whole file via `env_file`):
 
 ```
@@ -144,9 +144,9 @@ docker exec noc-librechat node -e "fetch('https://api.kimi.com/coding/v1/models'
 
 Agents live in **MongoDB**, so `docker compose down -v` wipes them (the Artifacts toggle,
 context-window size, curated tool list, and system prompt all disappear). Capture them to git
-and restore after a fresh start with the scripts in **`chat/agents/`**:
+and restore after a fresh start with the scripts in **`apps/ai-platform/librechat/agents/`**:
 
-| When | Command (from `chat/agents/`) |
+| When | Command (from `apps/ai-platform/librechat/agents/`) |
 |---|---|
 | After changing an agent in the UI — capture it to git | `./export-agents.ps1`  (bash: `./export-agents.sh`) |
 | After a fresh `up`, once the admin user is registered — recreate agents | `./restore-agents.ps1`  (bash: `./restore-agents.sh`) |
@@ -184,18 +184,18 @@ permissions. It starts with the stack as the `admin-panel` service, reachable at
 
 ## Serving other machines (LAN access)
 
-LibreChat and generated-file downloads are served through nginx (`chat/nginx.conf`) on port
+LibreChat and generated-file downloads are served through nginx (`apps/ai-platform/librechat/nginx.conf`) on port
 **80** — those two are no longer published on their own ports (`3080`/`8103`). The admin
 panel keeps its own port, **3091** (see "Admin Panel" above — it's a prebuilt SPA that isn't
 confirmed to support being served from a subpath, so it's not routed through nginx). Only
 one setting needs the machine's real address instead of `localhost`. Find it with `ipconfig`
 (the `Ethernet` adapter).
 
-Set in `chat/.env` — substitute your own IP or domain for `172.16.12.188`:
+Set in `apps/ai-platform/librechat/.env` — substitute your own IP or domain for `172.16.12.188`:
 
 ```
 # Change this ONE line if the IP/domain changes. Every browser-facing URL (download links,
-# share links, the admin panel) is derived from it in chat/docker-compose.yml.
+# share links, the admin panel) is derived from it in apps/ai-platform/librechat/docker-compose.yml.
 SERVER_HOST=172.16.12.188
 
 # Required when serving over plain HTTP to anything other than localhost — see below.
@@ -203,7 +203,7 @@ SESSION_COOKIE_SECURE=false
 ```
 
 `DOCGEN_PUBLIC_BASE_URL`, `DOMAIN_CLIENT`, `DOMAIN_SERVER`, and `VITE_API_BASE_URL` are **no
-longer set by hand** — `chat/docker-compose.yml` derives all four from `SERVER_HOST`
+longer set by hand** — `apps/ai-platform/librechat/docker-compose.yml` derives all four from `SERVER_HOST`
 automatically.
 
 Then **recreate** (a `restart` will not reload `.env`):
@@ -234,9 +234,9 @@ Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>:3091` (admi
   > ⚠ **Security tradeoff.** This sends a 7-day refresh token in cleartext over the network,
   > sniffable by anyone on that LAN. Acceptable on a trusted internal VLAN for dev/UAT; **not
   > acceptable in production.** The correct fix is to add TLS termination to the nginx config
-  > (`chat/nginx.conf`), after which this override should be removed (P0-1).
+  > (`apps/ai-platform/librechat/nginx.conf`), after which this override should be removed (P0-1).
 
-## Everyday commands (run from `chat/`)
+## Everyday commands (run from `apps/ai-platform/librechat/`)
 
 | Action | Command |
 |---|---|

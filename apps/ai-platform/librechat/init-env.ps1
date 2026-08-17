@@ -1,7 +1,7 @@
-# Generates chat/.env with fresh random LibreChat secrets, or repairs an existing one.
+# Generates apps/ai-platform/librechat/.env with fresh random LibreChat secrets, or repairs an existing one.
 # After a fresh generate, edit GLM_API_KEY and NOC_EMAIL / NOC_PASSWORD.
 #
-#   Usage (from chat/):
+#   Usage (from apps/ai-platform/librechat/):
 #     powershell -ExecutionPolicy Bypass -File .\init-env.ps1            # first run: generate
 #     powershell -ExecutionPolicy Bypass -File .\init-env.ps1 -Ensure    # existing .env: repair
 #

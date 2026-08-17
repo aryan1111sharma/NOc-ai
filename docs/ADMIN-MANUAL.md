@@ -5,7 +5,7 @@ agents, models, users, and whole new departments — with the isolation between 
 
 **Audience:** platform administrators. **Companion docs:** [`manthan-overview.md`](manthan-overview.md)
 (architecture reference), [`ADMIN-ACCESS.md`](ADMIN-ACCESS.md) (accounts & roles reference),
-[`../chat/RUNBOOK.md`](../chat/RUNBOOK.md) (running the stack).
+[`../apps/ai-platform/librechat/RUNBOOK.md`](../apps/ai-platform/librechat/RUNBOOK.md) (running the stack).
 
 **Last updated:** 2026-07-21
 
@@ -43,10 +43,10 @@ is 80% of administering the platform.
 
 | Block | What it is | Where it's defined |
 |---|---|---|
-| **MCP server** | A set of *tools* that read/act on one backend system (fleet, CMS, a Jira, etc.) | `chat/docker-compose.yml` + `chat/librechat.yaml` |
+| **MCP server** | A set of *tools* that read/act on one backend system (fleet, CMS, a Jira, etc.) | `apps/ai-platform/librechat/docker-compose.yml` + `apps/ai-platform/librechat/librechat.yaml` |
 | **Knowledge base (KB)** | Searchable reference documents, exposed as a `kb_search_<profile>` tool | `knowledge/` + `knowledge/scopes.yaml` |
-| **Model** | The LLM that reasons (GLM today; Claude/others pluggable) | `chat/librechat.yaml` → `endpoints` |
-| **Agent** | A named assistant = **one model + a chosen set of tools + an instruction prompt** | `chat/agents/agents.json` (source of truth) → MongoDB |
+| **Model** | The LLM that reasons (GLM today; Claude/others pluggable) | `apps/ai-platform/librechat/librechat.yaml` → `endpoints` |
+| **Agent** | A named assistant = **one model + a chosen set of tools + an instruction prompt** | `apps/ai-platform/librechat/agents/agents.json` (source of truth) → MongoDB |
 | **Role** | A label on users that decides **which agents they can see** + whether they may use tools | Admin Panel (`:3091`) → MongoDB |
 
 **The mental model:** you build **tools** and **knowledge**, bundle a selection of them into an
@@ -119,7 +119,7 @@ confirmation the tools loaded.
    an existing one — `services/mcp/chargezone/` is a good template. The Docker Compose service
    and container name keep the `<name>-mcp-server` convention regardless of the shorter folder
    name (see the existing services for the pattern).
-2. **Add a compose service** in `chat/docker-compose.yml`:
+2. **Add a compose service** in `apps/ai-platform/librechat/docker-compose.yml`:
    ```yaml
    sales-crm-mcp-server:
      build: ../services/mcp/sales-crm
@@ -129,23 +129,23 @@ confirmation the tools loaded.
        - CRM_API_TOKEN=${CRM_API_TOKEN}
        - MCP_TRANSPORT=http
        - MCP_HOST=0.0.0.0
-       - MCP_PORT=8107          # next free port
+       - MCP_PORT=8108          # next free port
      restart: unless-stopped
    ```
-3. **Register it in `chat/librechat.yaml`** — *two* places (forgetting the second is the classic
+3. **Register it in `apps/ai-platform/librechat/librechat.yaml`** — *two* places (forgetting the second is the classic
    mistake):
    ```yaml
    mcpSettings:
      allowedAddresses:
-       - "sales-crm-mcp-server:8107"      # (a) SSRF allow-list — REQUIRED, easy to forget
+       - "sales-crm-mcp-server:8108"      # (a) SSRF allow-list — REQUIRED, easy to forget
 
    mcpServers:
      sales_crm:                            # (b) the server LibreChat connects to
        type: streamable-http
-       url: "http://sales-crm-mcp-server:8107/mcp"
+       url: "http://sales-crm-mcp-server:8108/mcp"
        timeout: 60000
    ```
-4. **Put secrets in `chat/.env`** (never in the committed files): `CRM_BASE_URL`, `CRM_API_TOKEN`.
+4. **Put secrets in `apps/ai-platform/librechat/.env`** (never in the committed files): `CRM_BASE_URL`, `CRM_API_TOKEN`.
 5. **Restart:** `cd chat && ./up.ps1` (or `docker compose up -d --build sales-crm-mcp-server` then
    `docker compose restart api`).
 6. **Verify:** `docker logs noc-librechat | grep "\[MCP\]\[sales_crm\]"` — you should see its tools.
@@ -168,7 +168,7 @@ choosing which tools it carries.
    pick model                                                                    agent picker
    pick tools (from any MCP server + KB)        │                                (to whoever it's
    write instructions                           │  export-agents  ▼              shared with)
-   set sharing (which roles)                    └────────────▶  chat/agents/agents.json
+   set sharing (which roles)                    └────────────▶  apps/ai-platform/librechat/agents/agents.json
                                                                  (version-controlled source of truth)
 ```
 
@@ -191,7 +191,7 @@ choosing which tools it carries.
 The UI writes to MongoDB. To capture it in the repo (so it survives a rebuild and is reviewable):
 
 ```bash
-cd chat/agents && ./export-agents.ps1     # pulls all agents from Mongo → agents.json
+cd apps/ai-platform/librechat/agents && ./export-agents.ps1     # pulls all agents from Mongo → agents.json
 ```
 
 Commit `agents.json`. To go the other way (file → Mongo, e.g. after editing the file or on a fresh
@@ -258,7 +258,7 @@ just a filter.
 
 ## 6. Flow E — Adding or swapping the AI model
 
-Each agent names one **model**. Models come from **endpoints** declared in `chat/librechat.yaml`.
+Each agent names one **model**. Models come from **endpoints** declared in `apps/ai-platform/librechat/librechat.yaml`.
 Today there is one endpoint (`GLM`, via z.ai); adding another (e.g. Claude) makes its models
 selectable on any agent.
 
@@ -291,7 +291,7 @@ endpoints:
         default: ["claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"]
 ```
 
-Add the key to `chat/.env`, run `./up.ps1`, and the new models appear in the Model dropdown. To
+Add the key to `apps/ai-platform/librechat/.env`, run `./up.ps1`, and the new models appear in the Model dropdown. To
 switch an agent's brain, just change its model and re-save (then `export-agents` to capture it).
 
 > For **data-residency-sensitive** deployments, Claude can also be reached via **AWS Bedrock
@@ -447,17 +447,17 @@ server with its own credentials scoped so it *physically cannot* read another de
 
 | Concern | Location |
 |---|---|
-| Stack definition (all containers) | `chat/docker-compose.yml` |
-| MCP server registration + model endpoints | `chat/librechat.yaml` |
-| Agent definitions (source of truth) | `chat/agents/agents.json` → MongoDB |
-| Export / restore agents | `chat/agents/export-agents.ps1` · `restore-agents.ps1` |
+| Stack definition (all containers) | `apps/ai-platform/librechat/docker-compose.yml` |
+| MCP server registration + model endpoints | `apps/ai-platform/librechat/librechat.yaml` |
+| Agent definitions (source of truth) | `apps/ai-platform/librechat/agents/agents.json` → MongoDB |
+| Export / restore agents | `apps/ai-platform/librechat/agents/export-agents.ps1` · `restore-agents.ps1` |
 | Knowledge documents | `knowledge/<scope>/` (gitignored); `knowledge/scopes.yaml` + `MANIFEST.md` (tracked) |
 | Ingest the KB | `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` |
 | Roles, users, permissions | Admin Panel `http://localhost:3091` → MongoDB |
 | Accounts & role reference | `docs/ADMIN-ACCESS.md` |
 | Architecture reference | `docs/manthan-overview.md` |
-| Running the stack | `chat/RUNBOOK.md` · `chat/up.ps1` |
-| Secrets | `chat/.env` (never committed) |
+| Running the stack | `apps/ai-platform/librechat/RUNBOOK.md` · `apps/ai-platform/librechat/up.ps1` |
+| Secrets | `apps/ai-platform/librechat/.env` (never committed) |
 
 ### The commands you'll use most
 
@@ -466,16 +466,16 @@ server with its own credentials scoped so it *physically cannot* read another de
 cd chat && ./up.ps1
 
 # Rebuild one server after a code change
-docker compose -f chat/docker-compose.yml up -d --build <service>
+docker compose -f apps/ai-platform/librechat/docker-compose.yml up -d --build <service>
 
 # Restart the API (needed after role-permission changes)
-docker compose -f chat/docker-compose.yml restart api
+docker compose -f apps/ai-platform/librechat/docker-compose.yml restart api
 
 # Re-ingest the knowledge base
 docker exec kb-mcp-server python -m kb_mcp.ingest --prune
 
 # Capture agents from Mongo into version control
-cd chat/agents && ./export-agents.ps1
+cd apps/ai-platform/librechat/agents && ./export-agents.ps1
 
 # Confirm all MCP servers loaded their tools
 docker logs noc-librechat | grep "\[MCP\]"

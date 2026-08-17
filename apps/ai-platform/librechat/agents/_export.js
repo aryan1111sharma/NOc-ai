@@ -1,7 +1,7 @@
 // Export all LibreChat agents as config-as-code (run inside the mongo container by
 // export-agents.ps1 / .sh). The owner is stored as __author_email — portable across fresh
 // databases, where ObjectIds differ. Mongo internals (_id, __v) are dropped. Restore with
-// restore-agents.ps1 / .sh. See chat/RUNBOOK.md.
+// restore-agents.ps1 / .sh. See apps/ai-platform/librechat/RUNBOOK.md.
 //
 // Permissions are exported too, as __acl. LibreChat v0.8.x gates agent visibility on the
 // `aclentries` collection keyed by the agent's Mongo _id — NOT on the agent document. An

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Restore LibreChat agents from agents.json into MongoDB (idempotent upsert). Run after a fresh
 # `docker compose up` once the owning admin user has been registered. Requires the mongo
-# container (noc-librechat-mongo) up. See chat/RUNBOOK.md.
+# container (noc-librechat-mongo) up. See apps/ai-platform/librechat/RUNBOOK.md.
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 docker cp "$DIR/agents.json" noc-librechat-mongo:/tmp/agents.restore.json

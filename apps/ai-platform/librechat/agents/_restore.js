@@ -1,7 +1,7 @@
 // Restore LibreChat agents from a JSON file (EJSON array from export-agents) that the wrapper
 // copies into the mongo container at AGENT_FILE. Resolves each agent's owner by email —
 // falling back to the first ADMIN user when the emailed owner is absent — and upserts by the
-// string `id`. Idempotent: re-running updates in place. See chat/RUNBOOK.md.
+// string `id`. Idempotent: re-running updates in place. See apps/ai-platform/librechat/RUNBOOK.md.
 //
 // Also restores permissions from __acl. LibreChat v0.8.x gates agent visibility on the
 // `aclentries` collection keyed by the agent's Mongo _id, not on the agent document itself.

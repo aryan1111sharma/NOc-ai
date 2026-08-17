@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.12.1] - 2026-08-17
+
+### Bug Fixes
+
+- **ai-platform:** Pin compose project to chat and repair paths after move ([`e816b09`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e816b09e1b6578ec684821f39eb1a085b9008df1))
+
 ## [0.11.5] - 2026-08-13
 
 ### Bug Fixes
@@ -255,6 +261,56 @@ by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 ## [0.4.3] - 2026-07-14
 
+### Bug Fixes
+
+- **noc:** Strip PTY login banner/prompts/echoed-command from SSH output ([`2424245`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2424245b66cac7f96c5872d8da135107e863ce55))
+- **cms:** Ride through transient backend flaps with backoff retry ([`8d38efc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8d38efcfab4fae43e2a5c6f343691bfbcbbfdeb5))
+
+### Documentation
+
+- **backlog:** JR-6 — Ecog Service Desk ticket creation (future, draft-first) ([`db6e94a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/db6e94a27bcf776f7792d3b41580efd27f9d20e1))
+- **cms:** Spec for transient-flap resilience in CmsAuthClient ([`03f0d68`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/03f0d68e959c7969d21d7a29ff8e168643ccd8a4))
+
+## [0.4.2] - 2026-07-13
+
+### Features
+
+- **noc:** Add charger_ssh_prepare + charger_ssh_execute (two-step, audited) ([`7b4195a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7b4195a7bfcd6a1d05645706ef052d1d21747932))
+- **agents:** Capture agents as config-as-code with export/restore (P3-4) ([`8909d6f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8909d6f259b84453480c53c6c4a3e92c811f2a4a))
+
+### Bug Fixes
+
+- **noc:** SSH exit-code survives truncation; wire up audit logging ([`ca7f08d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ca7f08d69d60c194a65cd274579f08055502485e))
+
+### Documentation
+
+- **noc:** Document the two-step SSH command-execution tools ([`281fa88`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/281fa880765985429e4ebd508eaafe55cb4e5e69))
+
+### Testing
+
+- **noc:** Bound fake SSH SLOW sleep (30s -> 2s) so suite teardown is fast ([`06d8c97`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/06d8c9712a1323ca6a7001701015330631bf949e))
+
+## [0.4.1] - 2026-07-12
+
+### Features
+
+- **ecog-sd:** Sd_set_session_cookie tool (validated in-chat cookie refresh) ([`b0a6d61`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b0a6d617fbb556e64f930d22c9496c8e6d75a224))
+- **noc:** Add SSH-exec config settings + websockets dependency ([`3ff747b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3ff747b93494509399f61f3484d262a1eafce962))
+- **noc:** Add single-use SSH confirmation-token store ([`491eb67`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/491eb6763500c3016806008eb2c07dced9d75c26))
+- **noc:** Add ANSI stripping + sentinel exit-code parsing for SSH output ([`b031ba7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b031ba7be1e8cb6c0d888d366a3cf2d8d7f2cc41))
+- **noc:** Add _run_ssh_command WebSocket round-trip + fake SSH server ([`e0e0ec8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e0e0ec807844c6ae29c8d0bb075bd95250569b01))
+
+### Bug Fixes
+
+- **docgen:** Persist files to a volume + serve PDFs inline ([`eb41f39`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/eb41f394bb0f640be189804e17d182a72041076a))
+
+### Documentation
+
+- **spec:** NOC SSH command-execution tools (two-step, audited) ([`dcbc291`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dcbc2918bc302ff5b9c85898fce4c9127683a348))
+- **plan:** Implementation plan for NOC SSH command-execution tools ([`22e17a2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/22e17a29384782e4b2d633a16039c8d82a4d5940))
+
+## [0.4.0] - 2026-07-12
+
 ### Features
 
 - **jira-mcp:** Scaffold package + config ([`dfde143`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dfde1431b3d450bc67167616a389129c1ffa0c17))
@@ -289,13 +345,6 @@ by [git-cliff](https://git-cliff.org) — do not edit by hand.
 - **noc:** Add charger_get_charging_status tool + shared fake NOC harness ([`b3a1c05`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b3a1c05ead2aa7e602dd573b87fa4f497538cac9))
 - **noc:** Add the remaining 12 Tier-1 control-center tools ([`0b6ea17`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/0b6ea1700c9d4d9a979c2729aec3bbba28cf7123))
 - **docgen:** Add document-generation MCP server (Excel/Word/PDF downloads) ([`1fa6e7b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1fa6e7becfae76a605c1726f57d9f66dd0686811))
-- **ecog-sd:** Sd_set_session_cookie tool (validated in-chat cookie refresh) ([`b0a6d61`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b0a6d617fbb556e64f930d22c9496c8e6d75a224))
-- **noc:** Add SSH-exec config settings + websockets dependency ([`3ff747b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3ff747b93494509399f61f3484d262a1eafce962))
-- **noc:** Add single-use SSH confirmation-token store ([`491eb67`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/491eb6763500c3016806008eb2c07dced9d75c26))
-- **noc:** Add ANSI stripping + sentinel exit-code parsing for SSH output ([`b031ba7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b031ba7be1e8cb6c0d888d366a3cf2d8d7f2cc41))
-- **noc:** Add _run_ssh_command WebSocket round-trip + fake SSH server ([`e0e0ec8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e0e0ec807844c6ae29c8d0bb075bd95250569b01))
-- **noc:** Add charger_ssh_prepare + charger_ssh_execute (two-step, audited) ([`7b4195a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7b4195a7bfcd6a1d05645706ef052d1d21747932))
-- **agents:** Capture agents as config-as-code with export/restore (P3-4) ([`8909d6f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8909d6f259b84453480c53c6c4a3e92c811f2a4a))
 
 ### Bug Fixes
 
@@ -306,10 +355,6 @@ by [git-cliff](https://git-cliff.org) — do not edit by hand.
 - **ecog-sd:** Expand serviceDesk/requestType, cookie-send robustness, captcha+html-strip hardening ([`45707bf`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/45707bf506fb366ba03bba1d860a1082637f554a))
 - **ecog-sd:** Pin playwright==1.48.0 to match Docker base image browsers ([`bb641f0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bb641f0fedf5c36652f583868da88474a914b34a))
 - **ecog-sd:** Correct Atlassian login selectors + clear verification-challenge error ([`9c6cfd2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9c6cfd2f76ea84364ae88e1c2b13dce5dca981c6))
-- **docgen:** Persist files to a volume + serve PDFs inline ([`eb41f39`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/eb41f394bb0f640be189804e17d182a72041076a))
-- **noc:** SSH exit-code survives truncation; wire up audit logging ([`ca7f08d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ca7f08d69d60c194a65cd274579f08055502485e))
-- **noc:** Strip PTY login banner/prompts/echoed-command from SSH output ([`2424245`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2424245b66cac7f96c5872d8da135107e863ce55))
-- **cms:** Ride through transient backend flaps with backoff retry ([`8d38efc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8d38efcfab4fae43e2a5c6f343691bfbcbbfdeb5))
 
 ### Refactoring
 
@@ -329,11 +374,6 @@ by [git-cliff](https://git-cliff.org) — do not edit by hand.
 - **spec:** NOC on-charger control-center Tier-1 tools ([`75b3909`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/75b3909d39aed9c58fdcc42b05a07a9d27aaf404))
 - **plan:** Implementation plan for NOC control-center Tier-1 tools ([`922068b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/922068bd05064fbf63f4a02b0df7a0e166be4b1d))
 - **noc:** Document the 13 Tier-1 on-charger tools ([`a2ab404`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a2ab404861f3ccf73e9f160f4d7676f6a6b03cb7))
-- **spec:** NOC SSH command-execution tools (two-step, audited) ([`dcbc291`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dcbc2918bc302ff5b9c85898fce4c9127683a348))
-- **plan:** Implementation plan for NOC SSH command-execution tools ([`22e17a2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/22e17a29384782e4b2d633a16039c8d82a4d5940))
-- **noc:** Document the two-step SSH command-execution tools ([`281fa88`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/281fa880765985429e4ebd508eaafe55cb4e5e69))
-- **backlog:** JR-6 — Ecog Service Desk ticket creation (future, draft-first) ([`db6e94a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/db6e94a27bcf776f7792d3b41580efd27f9d20e1))
-- **cms:** Spec for transient-flap resilience in CmsAuthClient ([`03f0d68`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/03f0d68e959c7969d21d7a29ff8e168643ccd8a4))
 
 ### Testing
 
@@ -341,7 +381,6 @@ by [git-cliff](https://git-cliff.org) — do not edit by hand.
 - **ecog-sd:** Assert server is read-only (no write tools) ([`5f4ca5d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/5f4ca5d38f64ae1001fb2ce19ef47113c66a13d3))
 - **ecog-sd:** Update port assertion to 8104 ([`9795fb8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9795fb89aeb1653487ed7d460ccb6645c348494f))
 - **noc:** Assert composite partial-failure; add 'online' to tool docstrings ([`92a0fbd`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/92a0fbd92fee6400eab3621111878194e7a6177e))
-- **noc:** Bound fake SSH SLOW sleep (30s -> 2s) so suite teardown is fast ([`06d8c97`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/06d8c9712a1323ca6a7001701015330631bf949e))
 
 ### CI/CD
 

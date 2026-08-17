@@ -146,7 +146,7 @@ confirmation the tools loaded.
        timeout: 60000
    ```
 4. **Put secrets in `apps/ai-platform/librechat/.env`** (never in the committed files): `CRM_BASE_URL`, `CRM_API_TOKEN`.
-5. **Restart:** `cd chat && ./up.ps1` (or `docker compose up -d --build sales-crm-mcp-server` then
+5. **Restart:** `cd apps/ai-platform/librechat && ./up.ps1` (or `docker compose up -d --build sales-crm-mcp-server` then
    `docker compose restart api`).
 6. **Verify:** `docker logs noc-librechat | grep "\[MCP\]\[sales_crm\]"` — you should see its tools.
 
@@ -463,7 +463,7 @@ server with its own credentials scoped so it *physically cannot* read another de
 
 ```bash
 # Bring the whole stack up (also refreshes the UI footer)
-cd chat && ./up.ps1
+cd apps/ai-platform/librechat && ./up.ps1
 
 # Rebuild one server after a code change
 docker compose -f apps/ai-platform/librechat/docker-compose.yml up -d --build <service>

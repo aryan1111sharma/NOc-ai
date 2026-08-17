@@ -20,7 +20,7 @@ LibreChat (web UI :3080)  →  GLM 5.2 (z.ai API)  →  mcp-server (:8100, 153 r
 ## Setup
 
 ```bash
-cd chat
+cd apps/ai-platform/librechat
 cp .env.example .env
 ```
 

@@ -266,7 +266,7 @@ git push
 git push origin v0.1.1
 
 # redeploy so the footer shows the new version
-cd chat; .\up.ps1
+cd apps/ai-platform/librechat; .\up.ps1
 ```
 
 The bump script updates `VERSION` + the LibreChat welcome message, regenerates

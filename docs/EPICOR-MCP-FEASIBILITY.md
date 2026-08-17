@@ -84,7 +84,7 @@ Any **one** of these moves us from BLOCKED to buildable:
 
 ## Design sketch (only once unblocked)
 
-Mirror the existing servers exactly — a new `epicor-mcp-server/` with the same trio:
+Mirror the existing servers exactly — a new `services/mcp/epicor/` with the same trio:
 
 - `config.py` — `EPICOR_BASE_URL`, API key, service-account creds, `MCP_TRANSPORT`, timeout.
 - `auth.py` — attach API key + Basic/OAuth; refresh as needed.
@@ -107,6 +107,6 @@ Mirror the existing servers exactly — a new `epicor-mcp-server/` with the same
   + read-only service account).
 - [ ] **EP-3 — Decide scope** — which Epicor data the assistant should answer over (orders,
   inventory, jobs, AR/AP, …) before generating tools.
-- [ ] **EP-4 — Scaffold `epicor-mcp-server/`** mirroring `noc_mcp` (only after EP-1/EP-2 clear).
+- [ ] **EP-4 — Scaffold `services/mcp/epicor/`** mirroring `noc_mcp` (only after EP-1/EP-2 clear).
 
 _Last updated: 2026-07-11._

@@ -231,6 +231,6 @@ Manthan is being improved through a program of designed features, each brainstor
 ## 10. Reference
 
 - **Design specs:** `docs/superpowers/specs/` — notably `2026-07-19-agent-centric-knowledge-scopes-design.md`, `2026-07-18-ev-knowledge-base-rag-design.md`, `2026-07-17-manthan-self-improvement-loop-design.md`.
-- **kb-mcp-server details:** `kb-mcp-server/README.md`.
+- **kb-mcp-server details:** `services/mcp/kb/README.md`.
 - **Production readiness:** `docs/PRODUCTION-READINESS.md`.
 - **Repo:** `Quench-EV-Charger/noc-mcp-agent`.

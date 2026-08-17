@@ -218,7 +218,7 @@ Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>:3091` (admi
 ### Why each setting matters
 
 - **`SERVER_HOST`** — the single source of truth for every browser-facing URL. Download links
-  (`docgen-mcp-server/docgen_mcp/config.py:21`) and share links are resolved by the *user's*
+  (`services/mcp/docgen/docgen_mcp/config.py:21`) and share links are resolved by the *user's*
   browser, so pointing them at `localhost` sends users to their own machine, where nothing is
   listening — the download/share fails. `docker-compose.yml` substitutes `${SERVER_HOST}` into
   `DOCGEN_PUBLIC_BASE_URL`, `DOMAIN_CLIENT`, `DOMAIN_SERVER`, and `VITE_API_BASE_URL` directly,

@@ -120,7 +120,7 @@ endpoints:
       titleModel: "kimi-for-coding-highspeed"
       modelDisplayLabel: "Kimi (NOC Assistant)"
 
-# NOC read-only MCP server (this repo, mcp-server/). Its 153 GET tools become available
+# NOC read-only MCP server (this repo, services/mcp/noc/). Its 153 GET tools become available
 # to LibreChat Agents. Build a LibreChat Agent using the GLM model + this server's tools.
 mcpServers:
   noc:
@@ -152,7 +152,7 @@ mcpServers:
     type: streamable-http
     url: "http://chargezone-jira-mcp-server:8105/mcp"
     timeout: 60000
-  # Document generation (docgen-mcp-server/). Exposes create_excel (??? .xlsx) as a tool;
+  # Document generation (services/mcp/docgen/). Exposes create_excel (??? .xlsx) as a tool;
   # GLM calls it after fetching data to return a downloadable file.
   docgen:
     type: streamable-http

@@ -102,7 +102,7 @@ tools. Adding one is **four edits + a restart**. No LibreChat code changes.
 
 ```
  build the server dir        docker-compose service       librechat.yaml
- <name>-mcp-server/    ─────▶  builds + runs it      ─────▶  (a) mcpServers.<key> = its URL
+ services/mcp/<name>/  ─────▶  builds + runs it      ─────▶  (a) mcpServers.<key> = its URL
  (FastMCP, its tools)         on an internal port           (b) allowedAddresses += host:port
                                                                     │
                                         restart the stack ─────────▶ LibreChat connects, lists
@@ -115,12 +115,14 @@ confirmation the tools loaded.
 
 ### How to do it
 
-1. **Build the server** in `<name>-mcp-server/` (a FastMCP app exposing read-only tools). Copy an
-   existing one — `chargezone-jira-mcp-server/` is a good template.
+1. **Build the server** in `services/mcp/<name>/` (a FastMCP app exposing read-only tools). Copy
+   an existing one — `services/mcp/chargezone/` is a good template. The Docker Compose service
+   and container name keep the `<name>-mcp-server` convention regardless of the shorter folder
+   name (see the existing services for the pattern).
 2. **Add a compose service** in `chat/docker-compose.yml`:
    ```yaml
    sales-crm-mcp-server:
-     build: ../sales-crm-mcp-server
+     build: ../services/mcp/sales-crm
      container_name: sales-crm-mcp-server
      environment:
        - CRM_BASE_URL=${CRM_BASE_URL}

@@ -117,7 +117,7 @@ itself stays active.
 ## 4. Exactly what we call (for your security review)
 
 The integration is a small self-hosted service. Its Jira client
-(`chargezone-jira-mcp-server/cz_jira_mcp/auth.py:29`) raises an exception on any method
+(`services/mcp/chargezone/cz_jira_mcp/auth.py:29`) raises an exception on any method
 other than `GET`/`HEAD`/`OPTIONS` — write access is impossible even if someone tried, and
 it's covered by tests.
 

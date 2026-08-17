@@ -4,7 +4,7 @@ Three capabilities (4 MCP tools):
   * cms_run_device_query          — read-only device diagnostics (all GET commands)
   * cms_run_device_action_prepare / _execute — gated writes (curated recovery
     allow-list) behind a two-step, audited confirm gate (mirrors
-    mcp-server/noc_mcp/ssh_exec.py)
+    services/mcp/noc/noc_mcp/ssh_exec.py)
   * cms_read_device_log           — read a session/alert state-log blob
 
 ExecuteApi is asynchronous: it returns a scheduling ack, and the device result

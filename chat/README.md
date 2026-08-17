@@ -1,7 +1,7 @@
 # noc-mcp-agent · chat
 
 The Ador Manthan.AI web app: **LibreChat** (ChatGPT-like UI with saved chats + shareable
-links) driven by **GLM 5.2**, using the read-only **NOC MCP server** (`../mcp-server`) for
+links) driven by **GLM 5.2**, using the read-only **NOC MCP server** (`../services/mcp/noc`) for
 live NOC data.
 
 ```
@@ -77,7 +77,7 @@ Confirm: a chat can be **saved** and **shared via link** (LibreChat share featur
 ## Notes / follow-ups
 
 - **Tool count:** all 153 NOC GET tools are exposed. If GLM misfires on tool selection,
-  clean up tool names in `../mcp-server` (`mcp_names`) or curate the RouteMap.
+  clean up tool names in `../services/mcp/noc` (`mcp_names`) or curate the RouteMap.
 - **RAG** (optional, later): add pgvector + LibreChat's rag_api for grounding troubleshooting
   on `merged_error_mapping.csv` and docs.
 - **Untested end-to-end here:** authored without Docker/GLM-balance available on the build

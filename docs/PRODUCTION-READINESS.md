@@ -23,7 +23,7 @@ plus the **role-based access-control** workstream.
   needs explicit approval** or a model swap (in-region / self-hosted / approved provider).
   → *Decision:* acceptable for internal? for external? (record outcome here)
 - [ ] **D2 — Shared service-account identity.** Both MCP servers authenticate with **one**
-  `NOC_EMAIL` token (`mcp-server/noc_mcp/auth.py`), so every chat user reads the **entire
+  `NOC_EMAIL` token (`services/mcp/noc/noc_mcp/auth.py`), so every chat user reads the **entire
   fleet**. Restricting *tools* does not restrict *data*. Decide the target model:
   per-user NOC tokens, a role→scope map, or separate scoped instances per audience.
   → *Decision:* (record outcome here) — drives **AC-6**.
@@ -52,7 +52,7 @@ plus the **role-based access-control** workstream.
   *Accept:* `curl http://<host>:8100/mcp` from outside the Docker network fails/refused.
 - [x] **P0-4 — Lock charger proxy to GET.** Enforce `method=GET` in code on
   `proxy_api_call_path_based_...`; the catalog is descriptive only
-  (`mcp-server/README.md:75-77`).
+  (`services/mcp/noc/README.md:75-77`).
   *Accept:* a non-GET call through the proxy tool is rejected server-side (unit test).
 - [ ] **P0-5 — MongoDB auth.** Enable auth + strong credential on `mongo:7`
   (`chat/docker-compose.yml:35-40`).
@@ -124,14 +124,14 @@ plus the **role-based access-control** workstream.
 ## P3 — Quality & maintainability
 
 - [~] **P3-1 — CI test gate.** Run `pytest` for both MCP servers on PR (tests already exist:
-  `mcp-server/tests`, `cms-mcp-server/tests`); today only the changelog workflow runs.
+  `services/mcp/noc/tests`, `services/mcp/cms/tests`); today only the changelog workflow runs.
   *Accept:* PRs run both test suites and block on failure.
   *Status:* workflow `.github/workflows/tests.yml` added (matrix over both servers, Python 3.12)
   and **running green on GitHub Actions** (it correctly caught a real import bug red, then went
   green after the fix). **Remaining (manual, GitHub UI):** enable branch protection → required
-  checks `pytest (mcp-server)` / `pytest (cms-mcp-server)` so red checks block merge.
+  checks `pytest (services/mcp/noc)` / `pytest (services/mcp/cms)` so red checks block merge.
 - [ ] **P3-2 — Tool-name cleanup + de-dup overlapping tools.** Apply `mcp_names`/`mcp_component_fn`
-  to the verbose auto-names (`mcp-server/README.md:81-83`) for better LLM tool selection, and
+  to the verbose auto-names (`services/mcp/noc/README.md:81-83`) for better LLM tool selection, and
   resolve **near-duplicate tools** that invite wrong-tool selection.
   *Accept:* tools expose concise names; overlapping pairs are disambiguated or pruned; tests
   updated; agent still selects correctly.
@@ -146,7 +146,7 @@ plus the **role-based access-control** workstream.
   hand-wired in the UI (`chat/RUNBOOK.md`); capture it reproducibly so it survives `down -v`.
   *Accept:* agent config is restorable from source without manual UI steps.
 - [ ] **P3-5 — Testing standard for new MCP servers.** Every new MCP server (see **CAP-3**,
-  **EVT-3**) ships a `pytest` suite mirroring `mcp-server/tests`, wired into the **P3-1** CI gate.
+  **EVT-3**) ships a `pytest` suite mirroring `services/mcp/noc/tests`, wired into the **P3-1** CI gate.
   *Accept:* the new server's suite runs in CI and blocks the PR on failure.
 - [ ] **P3-6 — Tool-level tests for `noc`/`cms` (close the coverage gap).** Today only
   `test_auth.py` exists — the **actual tools are untested**, so "green" proves only auth works.
@@ -230,7 +230,7 @@ Layer 2 (MCP code) *enforces* tools + data. Both needed; Layer 2 resolves **D2**
   `chat/librechat.yaml`.
   *Accept:* MCP servers receive the header (logged) on each tool call.
 - [ ] **AC-5 — Role-based tool filtering (FastMCP middleware).** In
-  `mcp-server/noc_mcp/server.py`, read `X-User-Role` and expose only that role's tool set
+  `services/mcp/noc/noc_mcp/server.py`, read `X-User-Role` and expose only that role's tool set
   (e.g. charger-proxy only for engineer/admin). **Now owns the proxy-exclusion for `noc-l1`**
   (AC-2 can't do per-tool exclusion — LibreChat adds MCP tools per-server, not per-tool).
   *Accept:* unit test — an `l1` role cannot invoke the proxy tool even if requested.
@@ -376,7 +376,7 @@ Separate exploratory track (like **EPIC**).
   stack's network.
 - [ ] **EVT-2 — Decide the tool surface (brainstorming).** Which actions become tools — status
   reads / test-file generation / full end-to-end run. *Accept:* agreed tool list before code.
-- [ ] **EVT-3 — Scaffold `ev-test-mcp-server/`.** Mirror `noc_mcp`; implement the agreed tools;
+- [ ] **EVT-3 — Scaffold `services/mcp/ev-test/`.** Mirror `noc_mcp`; implement the agreed tools;
   use the skill's `.py.template` files as generators; ship tests (see **P3-5**).
   *Accept:* GLM can invoke e.g. `fetch_otp` / `generate_test_suite`; tests pass.
 - [ ] **EVT-4 — Wire into `librechat.yaml`** as a third MCP server next to `noc`/`cms`.
@@ -396,7 +396,7 @@ local/admin instance — most promising lead).
   key + read-only service account. *Accept:* an authenticated REST call returns data.
 - [ ] **EP-3 — Decide data scope** the assistant answers over (orders/inventory/jobs/AR-AP…).
   *Accept:* scoped tool list agreed before generation.
-- [ ] **EP-4 — Scaffold `epicor-mcp-server/`** mirroring `noc_mcp` (GET-only route map), only
+- [ ] **EP-4 — Scaffold `services/mcp/epicor/`** mirroring `noc_mcp` (GET-only route map), only
   after EP-1/EP-2 clear. *Accept:* server exposes read-only Epicor tools; tests pass.
   > Decision **D-EP1:** no UI-automation fallback — REST API is the only supported path.
 

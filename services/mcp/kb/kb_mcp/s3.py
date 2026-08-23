@@ -6,7 +6,6 @@ never constructed at import time.
 """
 from __future__ import annotations
 
-import posixpath
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,7 +41,10 @@ class S3Corpus:
             kwargs = {"Bucket": self.bucket, "Prefix": prefix}
             if token:
                 kwargs["ContinuationToken"] = token
-            resp = self.c.list_objects_v2(**kwargs)
+            try:
+                resp = self.c.list_objects_v2(**kwargs)
+            except Exception as exc:  # noqa: BLE001
+                raise S3Error(f"could not list {prefix!r}: {exc}") from exc
             out.extend(resp.get("Contents", []))
             if not resp.get("IsTruncated"):
                 return out
@@ -56,22 +58,48 @@ class S3Corpus:
                     "returned no NextContinuationToken"
                 )
 
+    def _exists(self, key: str) -> bool:
+        try:
+            self.c.head_object(Bucket=self.bucket, Key=key)
+            return True
+        except Exception:  # noqa: BLE001 - any failure to confirm reads as absent
+            return False
+
     def corpus_key(self, filename: str) -> str:
         """Caller-supplied names become keys only here, so this is the one
-        place traversal has to be stopped. Flatten to a basename: a name like
-        `../../evil.md` must not write outside the corpus prefix."""
-        safe = posixpath.basename(filename.replace("\\", "/")).strip()
-        if not safe or safe in (".", ".."):
+        place traversal has to be stopped.
+
+        A name containing a separator is rejected rather than flattened to its
+        basename. Flattening looks safer than it is: `delete_from_corpus`
+        would resolve "2026/report.md" to "report.md", delete that different
+        document, and report success. Every legitimate name arriving here is
+        already a single path segment, so rejection costs nothing.
+        """
+        name = filename.strip()
+        if not name or name in (".", ".."):
             raise S3Error(f"unusable filename: {filename!r}")
-        return f"{CORPUS_PREFIX}/{safe}"
+        if "/" in name or "\\" in name:
+            raise S3Error(
+                f"{filename!r} is a path, not a filename — documents live directly "
+                f"under {CORPUS_PREFIX}/ and a name containing a separator would "
+                "resolve to a different document"
+            )
+        return f"{CORPUS_PREFIX}/{name}"
 
     def find_user_upload(self, user_id: str, filename: str) -> UploadRef | None:
         """Newest matching upload under this user's own prefix, or None.
 
         Scoped to `chat-uploads/<user_id>/` so one contributor cannot reach
-        another's file by guessing its name.
+        another's file by guessing its name. The trailing slash on the prefix
+        is load-bearing: without it, user "u1" would also match keys under
+        "chat-uploads/u1extra/", "chat-uploads/u10/", and so on.
         """
         wanted = filename.strip().casefold()
+        if not wanted:
+            # An empty/blank request would otherwise match a zero-byte
+            # folder-marker object (key ending in "/", whose recovered name
+            # is "") and return a bogus UploadRef for it.
+            return None
         matches = []
         for obj in self._list(f"{CHAT_PREFIX}/{user_id}/"):
             name = _original_name(obj["Key"])
@@ -83,8 +111,16 @@ class S3Corpus:
         _, key, size, name = matches[0]
         return UploadRef(key=key, filename=name, size=size)
 
-    def copy_to_corpus(self, ref: UploadRef) -> str:
+    def copy_to_corpus(self, ref: UploadRef) -> tuple[str, bool]:
+        """Copy an upload into the corpus. Returns (key, replaced_existing).
+
+        The corpus namespace is flat and global while uploads are per-user, so
+        two contributors who both attach "notes.md" collapse onto one key. The
+        caller is told when that happens so a person can be warned, rather
+        than one document quietly disappearing.
+        """
         key = self.corpus_key(ref.filename)
+        replaced = self._exists(key)
         try:
             self.c.copy_object(
                 Bucket=self.bucket, Key=key,
@@ -92,22 +128,37 @@ class S3Corpus:
             )
         except Exception as exc:  # noqa: BLE001 - re-raised with context
             raise S3Error(f"could not copy {ref.key} into the corpus: {exc}") from exc
-        return key
+        return key, replaced
 
     def download_corpus(self, dest: Path) -> list[Path]:
-        """Mirror the corpus prefix into `dest`. Returns the files written."""
+        """Mirror the corpus prefix into `dest`, preserving any sub-path
+        under the prefix. Returns the files written.
+
+        Nothing this module writes ever produces a key with a sub-path under
+        CORPUS_PREFIX (corpus_key rejects separators), but an out-of-band
+        actor could place one directly in S3. Mirroring the sub-path avoids
+        silently colliding two same-named files from different sources, and
+        the resolved-path check stops such a key from writing outside `dest`.
+        """
         dest = Path(dest)
         dest.mkdir(parents=True, exist_ok=True)
+        dest_root = dest.resolve()
+        root_prefix = f"{CORPUS_PREFIX}/"
         written = []
-        for obj in self._list(f"{CORPUS_PREFIX}/"):
-            name = obj["Key"].rsplit("/", 1)[-1]
-            if not name:
-                continue
+        for obj in self._list(root_prefix):
+            relative = obj["Key"][len(root_prefix):]
+            if not relative or relative.endswith("/"):
+                continue  # folder marker, not a document
             try:
                 body = self.c.get_object(Bucket=self.bucket, Key=obj["Key"])["Body"].read()
             except Exception as exc:  # noqa: BLE001
                 raise S3Error(f"could not read {obj['Key']}: {exc}") from exc
-            path = dest / name
+            path = (dest / relative).resolve()
+            if path != dest_root and dest_root not in path.parents:
+                raise S3Error(
+                    f"refusing to write {obj['Key']!r} outside the cache directory"
+                )
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(body)
             written.append(path)
         return written
@@ -124,8 +175,10 @@ class S3Corpus:
 
     def delete_from_corpus(self, filename: str) -> bool:
         key = self.corpus_key(filename)
-        existing = {o["Key"] for o in self._list(f"{CORPUS_PREFIX}/")}
-        if key not in existing:
+        if not self._exists(key):
             return False
-        self.c.delete_object(Bucket=self.bucket, Key=key)
+        try:
+            self.c.delete_object(Bucket=self.bucket, Key=key)
+        except Exception as exc:  # noqa: BLE001
+            raise S3Error(f"could not delete {key}: {exc}") from exc
         return True

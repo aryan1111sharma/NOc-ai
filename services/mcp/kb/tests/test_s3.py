@@ -37,6 +37,23 @@ def test_cannot_see_another_users_upload():
     assert corpus.find_user_upload("u1", "secret.docx") is None
 
 
+def test_a_user_whose_id_is_a_prefix_of_another_cannot_see_their_uploads():
+    """Isolation must survive the trailing slash being dropped from the
+    prefix — a one-character regression that otherwise passes every test."""
+    corpus, s3 = _corpus()
+    s3.put(f"{CHAT_PREFIX}/u1extra/abc__salary-review.docx", b"someone else's")
+    assert corpus.find_user_upload("u1", "salary-review.docx") is None
+
+
+def test_empty_filename_returns_none_instead_of_a_bogus_match():
+    corpus, s3 = _corpus()
+    # A folder-marker object (zero-byte, key ending in "/") would otherwise
+    # be treated as a match for an empty/blank requested filename.
+    s3.put(f"{CHAT_PREFIX}/u1/", b"")
+    assert corpus.find_user_upload("u1", "") is None
+    assert corpus.find_user_upload("u1", "   ") is None
+
+
 def test_missing_upload_returns_none():
     corpus, _ = _corpus()
     assert corpus.find_user_upload("u1", "nope.pdf") is None
@@ -52,9 +69,28 @@ def test_copy_to_corpus_places_the_object_under_the_corpus_prefix():
     corpus, s3 = _corpus()
     s3.put(f"{CHAT_PREFIX}/u1/abc__runbook.docx", b"data")
     ref = corpus.find_user_upload("u1", "runbook.docx")
-    key = corpus.copy_to_corpus(ref)
+    key, replaced = corpus.copy_to_corpus(ref)
     assert key == f"{CORPUS_PREFIX}/runbook.docx"
+    assert replaced is False
     assert s3.objects[key] == b"data"
+
+
+def test_copy_to_corpus_reports_when_it_replaces_an_existing_document():
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/notes.md", b"first contributor's version")
+    s3.put(f"{CHAT_PREFIX}/u2/abc__notes.md", b"second contributor's version")
+    ref = corpus.find_user_upload("u2", "notes.md")
+    key, replaced = corpus.copy_to_corpus(ref)
+    assert replaced is True
+    assert s3.objects[key] == b"second contributor's version"
+
+
+def test_copy_to_corpus_reports_a_new_document_as_not_replacing():
+    corpus, s3 = _corpus()
+    s3.put(f"{CHAT_PREFIX}/u1/abc__fresh.md", b"new")
+    ref = corpus.find_user_upload("u1", "fresh.md")
+    _, replaced = corpus.copy_to_corpus(ref)
+    assert replaced is False
 
 
 def test_download_corpus_writes_files_to_a_directory(tmp_path):
@@ -64,6 +100,25 @@ def test_download_corpus_writes_files_to_a_directory(tmp_path):
     written = corpus.download_corpus(tmp_path)
     assert sorted(p.name for p in written) == ["a.md", "b.md"]
     assert (tmp_path / "a.md").read_bytes() == b"alpha"
+
+
+def test_download_corpus_preserves_nested_keys_with_colliding_basenames(tmp_path):
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/sub1/dup.md", b"one")
+    s3.put(f"{CORPUS_PREFIX}/sub2/dup.md", b"two")
+    written = corpus.download_corpus(tmp_path)
+    assert len(written) == 2
+    assert (tmp_path / "sub1" / "dup.md").read_bytes() == b"one"
+    assert (tmp_path / "sub2" / "dup.md").read_bytes() == b"two"
+
+
+def test_download_corpus_refuses_to_escape_the_destination_directory(tmp_path):
+    corpus, s3 = _corpus()
+    # An out-of-band actor could place a key with a path-escaping component
+    # directly in S3 (e.g. via the console), bypassing corpus_key entirely.
+    s3.put(f"{CORPUS_PREFIX}/../../evil.md", b"escaped")
+    with pytest.raises(S3Error):
+        corpus.download_corpus(tmp_path)
 
 
 def test_delete_from_corpus_removes_the_object():
@@ -78,11 +133,16 @@ def test_delete_reports_false_for_an_absent_object():
     assert corpus.delete_from_corpus("never-existed.md") is False
 
 
-def test_corpus_filenames_are_flattened_to_a_basename():
-    # A caller must not be able to write outside the corpus prefix by passing
-    # a path. This is the only place a caller-supplied name becomes a key.
+def test_corpus_filenames_containing_a_path_are_rejected():
     corpus, _ = _corpus()
-    assert corpus.corpus_key("../../evil.md") == f"{CORPUS_PREFIX}/evil.md"
+    for bad in ("../../evil.md", "..\\..\\evil.md", "2026/report.md", "/etc/passwd"):
+        with pytest.raises(S3Error):
+            corpus.corpus_key(bad)
+
+
+def test_a_plain_filename_is_accepted():
+    corpus, _ = _corpus()
+    assert corpus.corpus_key("runbook.docx") == f"{CORPUS_PREFIX}/runbook.docx"
 
 
 def test_pagination_follows_continuation_token_and_accumulates(monkeypatch):
@@ -116,3 +176,43 @@ def test_pagination_raises_instead_of_looping_forever_on_a_malformed_response(mo
     monkeypatch.setattr(s3, "list_objects_v2", fake_list)
     with pytest.raises(S3Error):
         corpus._list(f"{CORPUS_PREFIX}/")
+
+
+class _BrokenClient:
+    """Every S3 call fails except head_object, which reports the object as
+    present. head_object succeeding (rather than also failing) matters:
+    _exists deliberately swallows a head_object failure as "absent" (see
+    corpus_key/_exists), so a client that fails everything would make
+    delete_from_corpus report False instead of exercising its own
+    delete_object wrapping. This fake isolates that wrapping instead."""
+
+    def list_objects_v2(self, **kwargs):
+        raise RuntimeError("boom")
+
+    def get_object(self, **kwargs):
+        raise RuntimeError("boom")
+
+    def copy_object(self, **kwargs):
+        raise RuntimeError("boom")
+
+    def delete_object(self, **kwargs):
+        raise RuntimeError("boom")
+
+    def head_object(self, **kwargs):
+        return {"ContentLength": 1}
+
+
+def test_every_public_method_wraps_client_failures_as_s3error(tmp_path):
+    corpus = S3Corpus(_BrokenClient(), "test-bucket")
+    ref = UploadRef(key=f"{CHAT_PREFIX}/u1/abc__x.md", filename="x.md", size=1)
+
+    with pytest.raises(S3Error):
+        corpus.find_user_upload("u1", "x.md")
+    with pytest.raises(S3Error):
+        corpus.copy_to_corpus(ref)
+    with pytest.raises(S3Error):
+        corpus.download_corpus(tmp_path)
+    with pytest.raises(S3Error):
+        corpus.download_one(f"{CORPUS_PREFIX}/x.md", tmp_path / "x.md")
+    with pytest.raises(S3Error):
+        corpus.delete_from_corpus("x.md")

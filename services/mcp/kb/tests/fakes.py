@@ -38,6 +38,11 @@ class FakeS3:
             "IsTruncated": False,
         }
 
+    def head_object(self, Bucket, Key):
+        if Key not in self.objects:
+            raise KeyError(Key)
+        return {"ContentLength": len(self.objects[Key])}
+
     def get_object(self, Bucket, Key):
         if Key not in self.objects:
             raise KeyError(Key)

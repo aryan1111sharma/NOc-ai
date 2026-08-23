@@ -119,7 +119,17 @@ class KbWriter:
         source = f"{self.scope}/{ref.filename}"
         store = self.registry.for_scope(self.scope)
 
-        if store.current_doc_hash(source) == doc_hash:
+        # A hash match in the index is NOT proof the corpus still holds the
+        # file: the object can be deleted out of band (directly in S3) while
+        # the chunks it produced stay indexed. Short-circuiting on the hash
+        # alone would report "already indexed" for a document that is about
+        # to vanish from the corpus for good — a later `ingest --prune` walk
+        # mirrors S3 and removes chunks for anything not on disk there, so
+        # the very next prune would silently delete what this call just told
+        # the caller was fine. Both conditions must hold to skip real work.
+        hash_matches = store.current_doc_hash(source) == doc_hash
+        repairing = hash_matches and not self.corpus.exists_in_corpus(ref.filename)
+        if hash_matches and not repairing:
             existing = [d for d in store.list_documents(scopes=[self.scope])
                         if d["source"] == source]
             return {"source": source, "scope": self.scope, "already_indexed": True,
@@ -158,10 +168,19 @@ class KbWriter:
                 "an empty file. Scanned documents need OCR before they can be indexed."
             )
 
-        log.info("indexed %s (%d chunks) for user=%s", source, chunks, caller.user_id)
+        log.info("indexed %s (%d chunks) for user=%s repaired=%s",
+                 source, chunks, caller.user_id, repairing)
+        if repairing:
+            # already_indexed is False here on purpose: this call did real
+            # work (a fresh S3 copy and a full re-index), and the caller
+            # should know that, not be told nothing happened.
+            message = (f"{ref.filename} was already indexed, but its stored copy had "
+                       "gone missing from the knowledge base — both have now been restored.")
+        else:
+            message = f"{ref.filename} is now searchable ({chunks} chunks)."
         return {"source": source, "scope": self.scope, "chunks": chunks,
                 "already_indexed": False, "replaced": replaced,
-                "message": f"{ref.filename} is now searchable ({chunks} chunks)."}
+                "message": message}
 
     def remove(self, caller: Caller, source: str) -> dict:
         self._require_contributor(caller, "remove documents from")

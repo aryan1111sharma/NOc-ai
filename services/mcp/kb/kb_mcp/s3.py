@@ -98,6 +98,16 @@ class S3Corpus:
                 return False
             raise S3Error(f"could not check whether {key} exists: {exc}") from exc
 
+    def exists_in_corpus(self, filename: str) -> bool:
+        """Whether a document is present in the corpus.
+
+        Public because the writer needs it: a hash match in the index is not
+        proof the corpus still holds the file, and reporting "already
+        indexed" for a document whose object has gone means the next prune
+        silently removes it.
+        """
+        return self._exists(self.corpus_key(filename))
+
     def corpus_key(self, filename: str) -> str:
         """Caller-supplied names become keys only here, so this is the one
         place traversal has to be stopped.

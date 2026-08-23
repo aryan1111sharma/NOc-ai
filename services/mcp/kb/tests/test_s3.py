@@ -337,3 +337,25 @@ def test_download_corpus_rejects_a_key_resolving_to_the_destination_itself(tmp_p
     s3.put(f"{CORPUS_PREFIX}/.", b"x")
     with pytest.raises(S3Error, match="outside the cache directory"):
         corpus.download_corpus(tmp_path)
+
+
+def test_exists_in_corpus_reports_present_and_absent():
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/runbook.md", b"real content")
+    assert corpus.exists_in_corpus("runbook.md") is True
+    assert corpus.exists_in_corpus("nope.md") is False
+
+
+def test_exists_in_corpus_raises_rather_than_reporting_absent_when_s3_fails():
+    """Same contract as _exists: a 403 or a connection flap must not read as
+    "not there", or a caller deciding whether to repair the corpus would
+    treat a live S3 outage as proof the object is genuinely missing."""
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/runbook.md", b"real content")
+
+    def forbidden(**kwargs):
+        raise FakeClientError("403", "AccessDenied: s3:GetObject")
+
+    s3.head_object = forbidden
+    with pytest.raises(S3Error, match="could not check whether"):
+        corpus.exists_in_corpus("runbook.md")

@@ -352,31 +352,26 @@ def test_remove_reports_true_when_chunks_already_gone_but_object_remains(tmp_pat
     assert f"{CORPUS_PREFIX}/orphan.md" not in s3.objects
 
 
-def test_already_indexed_does_not_notice_a_missing_corpus_object(tmp_path):
-    """If the corpus object is deleted out-of-band (e.g. someone edits S3
-    directly) after indexing, but the same bytes are re-uploaded later, the
-    hash still matches what's in the store -- so upload() reports
-    already_indexed=True without checking that the corpus object still
-    exists. A later corpus walk (which mirrors S3 and prunes anything not
-    on disk) would then silently prune this document's chunks, since S3 no
-    longer has it, even though this upload just told the caller it was
-    fine. This test documents that gap; fixing it would need a public
-    existence check on S3Corpus (in s3.py, which this task does not own)."""
+def test_a_missing_corpus_object_is_repaired_rather_than_reported_as_present(tmp_path):
+    """A hash match in the index is not proof the corpus still holds the file.
+    Reporting "already indexed" for a document whose object has gone means the
+    next prune silently removes it, after the user was told it was fine."""
     writer, s3, reg, _ = _writer(tmp_path)
-    key = f"{CHAT_PREFIX}/u1/abc__note.md"
-    s3.put(key, b"stable content for hashing")
+    s3.put(f"{CHAT_PREFIX}/u1/abc__note.md", b"stable content for hashing")
     writer.upload(CONTRIBUTOR, "note.md")
+    assert f"{CORPUS_PREFIX}/note.md" in s3.objects
 
-    # Corpus object removed out-of-band; chunks (with the doc_hash) remain.
+    # The object disappears out of band; the index still has its chunks.
     del s3.objects[f"{CORPUS_PREFIX}/note.md"]
-    s3.times.pop(f"{CORPUS_PREFIX}/note.md", None)
 
-    # Same bytes, re-attached under a fresh chat upload key.
-    s3.put(key, b"stable content for hashing")
     result = writer.upload(CONTRIBUTOR, "note.md")
+    assert f"{CORPUS_PREFIX}/note.md" in s3.objects, "the corpus object must be restored"
+    assert result["already_indexed"] is False
 
+
+def test_an_unchanged_document_whose_object_is_present_is_still_a_no_op(tmp_path):
+    writer, s3, reg, _ = _writer(tmp_path)
+    s3.put(f"{CHAT_PREFIX}/u1/abc__note.md", b"stable content for hashing")
+    writer.upload(CONTRIBUTOR, "note.md")
+    result = writer.upload(CONTRIBUTOR, "note.md")
     assert result["already_indexed"] is True
-    assert f"{CORPUS_PREFIX}/note.md" not in s3.objects, (
-        "documents the gap: upload() reported success but the corpus object "
-        "was never repaired/re-copied"
-    )

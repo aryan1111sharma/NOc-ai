@@ -1814,13 +1814,24 @@ def test_another_users_file_is_not_reachable(tmp_path):
 
 
 def test_absent_and_forbidden_files_give_the_same_message(tmp_path):
-    """The tool must not become an existence oracle for other users' files."""
-    writer, s3, _, _ = _writer(tmp_path)
-    s3.put(f"{CHAT_PREFIX}/u2/abc__theirs.md", b"x")
+    """The tool must not become an existence oracle: asking for a file that
+    belongs to someone else must be indistinguishable from asking for one
+    that exists nowhere. Same filename in both cases — only the other user's
+    possession of it differs.
+
+    An earlier version of this test used two DIFFERENT filenames, which can
+    never produce equal messages because the message embeds the name. It was
+    unpassable, and it tested nothing about the property it was named for.
+    """
+    forbidden_writer, s3_with, _, _ = _writer(tmp_path / "a")
+    s3_with.put(f"{CHAT_PREFIX}/u2/abc__report.md", b"another user's document")
+    absent_writer, _, _, _ = _writer(tmp_path / "b")
+
     with pytest.raises(UploadRejected) as forbidden:
-        writer.upload(CONTRIBUTOR, "theirs.md")
+        forbidden_writer.upload(CONTRIBUTOR, "report.md")
     with pytest.raises(UploadRejected) as absent:
-        writer.upload(CONTRIBUTOR, "nothing-like-this.md")
+        absent_writer.upload(CONTRIBUTOR, "report.md")
+
     assert str(forbidden.value) == str(absent.value)
 
 

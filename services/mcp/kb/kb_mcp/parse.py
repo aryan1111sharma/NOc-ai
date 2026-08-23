@@ -2,7 +2,7 @@
 import re
 from pathlib import Path
 
-SUPPORTED = {".pdf", ".docx", ".md", ".markdown", ".txt", ".html", ".htm"}
+SUPPORTED = {".pdf", ".docx", ".xlsx", ".csv", ".md", ".markdown", ".txt", ".html", ".htm"}
 
 
 def _strip_html(html: str) -> str:
@@ -61,6 +61,42 @@ def _parse_docx(path: Path) -> list[dict]:
     return segs
 
 
+def _rows_to_text(rows: list[list[str]]) -> str:
+    """Pipe-join cells and keep the header on its own first line.
+
+    The header is what makes a row of values mean anything, so it is retained
+    verbatim; the tabular chunker re-prepends it when a sheet spans chunks.
+    """
+    return "\n".join(" | ".join(cells) for cells in rows)
+
+
+def _parse_xlsx(path: Path) -> list[dict]:
+    from openpyxl import load_workbook  # lazy: keeps server start fast
+
+    wb = load_workbook(str(path), read_only=True, data_only=True)
+    try:
+        segs = []
+        for sheet in wb.worksheets:
+            rows = []
+            for row in sheet.iter_rows(values_only=True):
+                cells = ["" if v is None else str(v).strip() for v in row]
+                if any(cells):
+                    rows.append(cells)
+            if rows:
+                segs.append({"text": _rows_to_text(rows), "location": sheet.title})
+        return segs
+    finally:
+        wb.close()
+
+
+def _parse_csv(path: Path) -> list[dict]:
+    import csv
+
+    with path.open("r", encoding="utf-8", errors="replace", newline="") as fh:
+        rows = [[c.strip() for c in row] for row in csv.reader(fh) if any(c.strip() for c in row)]
+    return [{"text": _rows_to_text(rows), "location": path.name}] if rows else []
+
+
 def parse_file(path: Path) -> list[dict]:
     ext = path.suffix.lower()
     if ext not in SUPPORTED:
@@ -76,6 +112,10 @@ def parse_file(path: Path) -> list[dict]:
         return segs
     if ext == ".docx":
         return _parse_docx(path)
+    if ext == ".xlsx":
+        return _parse_xlsx(path)
+    if ext == ".csv":
+        return _parse_csv(path)
     raw = path.read_text(encoding="utf-8", errors="replace")
     if ext in (".html", ".htm"):
         raw = _strip_html(raw)

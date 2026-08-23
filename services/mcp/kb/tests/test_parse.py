@@ -96,3 +96,47 @@ def test_merged_cells_are_not_duplicated(tmp_path: Path):
 
     segs = parse_file(f)
     assert segs[0]["text"] == "Merged Header | Col3"
+
+
+def test_parses_xlsx_one_segment_per_sheet(tmp_path: Path):
+    from openpyxl import Workbook
+    wb = Workbook()
+    s1 = wb.active
+    s1.title = "Faults"
+    s1.append(["Code", "Meaning"])
+    s1.append(["E42", "comms lost"])
+    s2 = wb.create_sheet("Sites")
+    s2.append(["Site", "City"])
+    s2.append(["QNCH-1", "Pune"])
+    f = tmp_path / "matrix.xlsx"
+    wb.save(f)
+
+    segs = parse_file(f)
+    locations = {s["location"] for s in segs}
+    assert locations == {"Faults", "Sites"}
+    faults = next(s for s in segs if s["location"] == "Faults")
+    assert "Code | Meaning" in faults["text"]
+    assert "E42 | comms lost" in faults["text"]
+
+
+def test_empty_xlsx_sheet_produces_no_segment(tmp_path: Path):
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.active.title = "Blank"
+    f = tmp_path / "blank.xlsx"
+    wb.save(f)
+    assert parse_file(f) == []
+
+
+def test_parses_csv_and_repeats_header(tmp_path: Path):
+    f = tmp_path / "tickets.csv"
+    f.write_text("id,summary\nQCH-1,charger offline\nQCH-2,gun stuck\n", encoding="utf-8")
+    segs = parse_file(f)
+    assert len(segs) == 1
+    assert segs[0]["location"] == "tickets.csv"
+    assert "id | summary" in segs[0]["text"]
+    assert "QCH-2 | gun stuck" in segs[0]["text"]
+
+
+def test_spreadsheet_extensions_supported(tmp_path: Path):
+    assert ".xlsx" in SUPPORTED and ".csv" in SUPPORTED

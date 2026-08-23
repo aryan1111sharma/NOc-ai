@@ -867,9 +867,50 @@ def parse_caller(headers: dict[str, str]) -> Caller:
 
 
 def is_contributor(caller: Caller, allowed_roles: tuple[str, ...]) -> bool:
-    allowed = {r.casefold() for r in allowed_roles if r and r.strip()}
-    role = caller.role.casefold().strip()
+    if isinstance(allowed_roles, str):
+        raise TypeError(
+            "allowed_roles must be a sequence of role names, not a single string — "
+            "a bare string iterates per character and would match one-character roles"
+        )
+    allowed = {r.strip().casefold() for r in allowed_roles if r and r.strip()}
+    raw_role = caller.role.strip()
+    # The ASCII check MUST run before casefold, not after: casefold() maps
+    # U+212A KELVIN SIGN to plain ASCII "k" (the only non-ASCII codepoint that
+    # folds into either default role, per an exhaustive sweep — see module
+    # docstring), so checking isascii() on the already-casefolded string would
+    # find nothing to reject — the very thing casefold just destroyed.
+    if not raw_role.isascii():
+        return False
+    role = raw_role.casefold()
     return bool(role) and role in allowed
+```
+
+`parse_caller` must also reject a non-mapping `headers` as an `IdentityError` rather than
+letting an `AttributeError` escape, and must not erase falsy non-string values:
+```python
+    if headers is None:
+        headers = {}
+    if not hasattr(headers, "items"):
+        raise IdentityError(
+            f"headers must be a mapping, got {type(headers).__name__} — the KB "
+            "server cannot identify the caller and refuses rather than assuming."
+        )
+    lowered = {str(k).lower(): ("" if v is None else str(v)).strip()
+               for k, v in headers.items()}
+```
+
+**The Kelvin-sign test must use `chr(0x212A)`, not a literal pasted character.** U+212A is
+visually indistinguishable from an ASCII `K` in most fonts, so a transcribed version
+silently tests nothing:
+```python
+def test_a_kelvin_sign_does_not_impersonate_a_contributor_role():
+    """U+212A casefolds to "k". An exhaustive codepoint sweep found it to be
+    the only non-ASCII character folding into either default role."""
+    kelvin = chr(0x212A) + "b-contributor"
+    assert not is_contributor(Caller("u1", "a@b.com", kelvin), ROLES)
+    assert not is_contributor(Caller("u1", "a@b.com", "ＡＤＭＩＮ"), ROLES)
+    # Plain ASCII case-insensitive matching must still work.
+    assert is_contributor(Caller("u1", "a@b.com", "KB-Contributor"), ROLES)
 ```
 
 - [ ] **Step 4: Run to verify they pass**

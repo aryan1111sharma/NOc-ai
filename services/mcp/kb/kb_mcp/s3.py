@@ -37,12 +37,22 @@ _NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
 def _error_code(exc: Exception) -> str:
     """Pull an S3 error code out of a botocore exception without importing
     botocore — this module is deliberately client-agnostic so the tests can
-    inject a fake."""
-    response = getattr(exc, "response", None)
-    if not isinstance(response, dict):
+    inject a fake.
+
+    This runs inside an exception handler, so it must never raise: a crash
+    here would replace a recoverable S3Error with whatever the inspection
+    happened to throw, which is worse than the failure it was examining. An
+    unrecognised shape returns "" and the caller raises S3Error, which is the
+    safe direction.
+    """
+    try:
+        response = getattr(exc, "response", None)
+        if not isinstance(response, dict):
+            return ""
+        error = response.get("Error")
+        return str(error.get("Code", "")) if isinstance(error, dict) else ""
+    except Exception:  # noqa: BLE001 - a hostile exception object must not escape
         return ""
-    error = response.get("Error")
-    return str(error.get("Code", "")) if isinstance(error, dict) else ""
 
 
 class S3Corpus:

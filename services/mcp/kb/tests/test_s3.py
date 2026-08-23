@@ -280,3 +280,60 @@ def test_every_public_method_wraps_client_failures_as_s3error(tmp_path):
         corpus.download_one(f"{CORPUS_PREFIX}/x.md", tmp_path / "x.md")
     with pytest.raises(S3Error):
         corpus.delete_from_corpus("x.md")
+
+
+def test_error_code_never_raises_on_a_hostile_exception():
+    """_error_code runs inside an exception handler. A crash there would
+    replace a recoverable S3Error with whatever the inspection threw — worse
+    than the failure it was examining."""
+    from kb_mcp.s3 import _error_code
+
+    class ExplodingResponse(Exception):
+        @property
+        def response(self):
+            raise RuntimeError("property exploded")
+
+    class HostileMapping(dict):
+        def get(self, *args, **kwargs):
+            raise TypeError("hostile mapping")
+
+    class ExplodingCode:
+        def __str__(self):
+            raise ValueError("__str__ exploded")
+
+    hostile_outer = Exception()
+    hostile_outer.response = HostileMapping()
+    hostile_inner = Exception()
+    hostile_inner.response = {"Error": HostileMapping()}
+    exploding_code = Exception()
+    exploding_code.response = {"Error": {"Code": ExplodingCode()}}
+
+    for exc in (ExplodingResponse(), hostile_outer, hostile_inner, exploding_code):
+        assert _error_code(exc) == ""
+
+
+def test_a_hostile_exception_still_surfaces_as_s3error():
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/runbook.md", b"content")
+
+    class ExplodingResponse(Exception):
+        @property
+        def response(self):
+            raise RuntimeError("property exploded")
+
+    def head(**kwargs):
+        raise ExplodingResponse()
+
+    s3.head_object = head
+    with pytest.raises(S3Error):
+        corpus.delete_from_corpus("runbook.md")
+
+
+def test_download_corpus_rejects_a_key_resolving_to_the_destination_itself(tmp_path):
+    """A key of "." resolves to dest_root exactly. Writing there is never
+    legitimate, and it must be refused before the attempt rather than left to
+    the OS to reject with a raw PermissionError."""
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/.", b"x")
+    with pytest.raises(S3Error, match="outside the cache directory"):
+        corpus.download_corpus(tmp_path)

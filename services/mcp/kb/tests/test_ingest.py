@@ -349,3 +349,114 @@ def test_a_csv_is_chunked_with_its_header_repeated(tmp_path):
 
     pts, _ = store.c.scroll(store.collection, limit=100, with_payload=True)
     assert all(p.payload["text"].startswith("id | summary") for p in pts)
+
+
+def test_a_failed_embed_does_not_destroy_the_previous_version(tmp_path):
+    """Delete-first meant a transient embedder failure during re-ingest left
+    the document absent from the index, not merely stale."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    doc = tmp_path / "note.md"
+    doc.write_text("Connector lock failure recovery steps.", encoding="utf-8")
+    ingest_file(doc, source="contributed/note.md", scope_name="contributed", store=store,
+                embedder=emb, max_chars=1800, overlap=200, doc_hash="v1")
+    assert store.known_sources() == {"contributed/note.md"}
+
+    class ExplodingEmbedder:
+        dim = emb.dim
+
+        def embed(self, texts):
+            raise RuntimeError("embedder unavailable")
+
+    doc.write_text("Revised recovery steps for the connector lock.", encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        ingest_file(doc, source="contributed/note.md", scope_name="contributed",
+                    store=store, embedder=ExplodingEmbedder(), max_chars=1800,
+                    overlap=200, doc_hash="v2")
+
+    assert store.known_sources() == {"contributed/note.md"}, \
+        "the previous version must survive a failed re-ingest"
+    hits = store.search(emb.embed(["connector lock failure"])[0], top_k=3)
+    assert hits and "Connector lock failure recovery steps." in hits[0]["text"]
+
+
+def test_an_unextractable_rewrite_leaves_the_previous_version_intact(tmp_path):
+    """Replacing a good document with nothing is worse than not updating it."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    doc = tmp_path / "note.md"
+    doc.write_text("Gun 2 fails to unlock after a session ends.", encoding="utf-8")
+    ingest_file(doc, source="contributed/note.md", scope_name="contributed", store=store,
+                embedder=emb, max_chars=1800, overlap=200, doc_hash="v1")
+
+    doc.write_text("   \n\n  ", encoding="utf-8")
+    assert ingest_file(doc, source="contributed/note.md", scope_name="contributed",
+                       store=store, embedder=emb, max_chars=1800, overlap=200,
+                       doc_hash="v2") == 0
+    assert store.known_sources() == {"contributed/note.md"}
+
+
+def test_a_shorter_new_version_leaves_no_orphaned_chunks(tmp_path):
+    """Point ids derive from chunk_idx, so replacing a long document with a
+    short one must not leave the old tail behind."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    doc = tmp_path / "long.md"
+    doc.write_text("\n\n".join(f"Paragraph {i} about charger faults." for i in range(40)),
+                   encoding="utf-8")
+    many = ingest_file(doc, source="contributed/long.md", scope_name="contributed",
+                       store=store, embedder=emb, max_chars=200, overlap=20, doc_hash="v1")
+    assert many > 1
+
+    doc.write_text("Just one short paragraph now.", encoding="utf-8")
+    few = ingest_file(doc, source="contributed/long.md", scope_name="contributed",
+                      store=store, embedder=emb, max_chars=200, overlap=20, doc_hash="v2")
+    assert few == 1
+
+    pts, _ = store.c.scroll(store.collection, limit=200, with_payload=True)
+    assert len(pts) == 1, "stale chunks from the longer version were left behind"

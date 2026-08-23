@@ -60,14 +60,20 @@ def ingest_file(path, source: str, scope_name: str, store, embedder, *,
     and stamp payloads identically. Returns the chunk count; 0 means nothing
     was extractable (a scanned PDF or an empty file), which callers must treat
     as a failure rather than a silent success.
+
+    Every fallible step — parsing, chunking, embedding — runs to completion
+    before the store is touched. Deleting first and rebuilding afterwards
+    meant a transient embedder or network failure during a re-ingest left the
+    document absent from the index rather than merely stale: the previous good
+    version was already gone and the new one never arrived.
     """
     path = Path(path)
-    store.delete_source(source)  # replace old version (no-op if new)
     splitter = chunk_tabular if path.suffix.lower() in TABULAR else chunk_text
 
     try:
         segments = parse_file(path)
     except Exception as exc:  # noqa: BLE001 - any parser failure is the same to callers
+        log.exception("parsing %s failed", path.name)
         raise DocumentUnreadable(
             f"{path.name} could not be read as {path.suffix} — the file may be corrupt, "
             "or saved in a different format than its extension claims."
@@ -85,8 +91,20 @@ def ingest_file(path, source: str, scope_name: str, store, embedder, *,
             chunks.append(chunk)
 
     if not chunks:
+        # Nothing extractable. Leave any existing version alone: replacing a
+        # good document with nothing is worse than not updating it.
         return 0
-    store.upsert(chunks, embedder.embed([c["text"] for c in chunks]))
+
+    vectors = embedder.embed([c["text"] for c in chunks])
+
+    # Only now is the store touched. The two calls are back to back and do no
+    # fallible work between them, so the window where the document is missing
+    # is as small as this store can make it (Qdrant has no transaction to
+    # borrow). delete_source is still needed: point ids are derived from
+    # chunk_idx, so a shorter new version would otherwise leave the old tail
+    # behind as orphaned chunks.
+    store.delete_source(source)
+    store.upsert(chunks, vectors)
     return len(chunks)
 
 

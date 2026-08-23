@@ -1,4 +1,6 @@
 """FastMCP server exposing one read-only kb_search tool per configured profile."""
+import logging
+
 from fastmcp import FastMCP
 
 from .config import settings
@@ -6,6 +8,8 @@ from .identity import parse_caller
 from .parse import SUPPORTED
 from .scopes import Profile, ScopesConfig
 from .store import search_many
+
+log = logging.getLogger(__name__)
 
 _CONTRACT = (
     "Returns up to top_k chunks, each with its source document, location, the matching "
@@ -54,10 +58,48 @@ def build_server(config: ScopesConfig | None = None, registry=None, embedder=Non
     for profile in config.profiles.values():
         _register(mcp, profile, registry, embedder)
 
+    if writer is None:  # pragma: no cover - real wiring
+        writer = build_writer(settings, config, registry, embedder)
     if writer is not None:
         _register_writes(mcp, writer, headers_source)
 
     return mcp
+
+
+def build_writer(settings, config: ScopesConfig, registry, embedder):
+    """Assemble the KbWriter, or return None if uploads are not configured.
+
+    Returning None rather than raising is deliberate: a KB server with no
+    bucket must still serve search. The write tools simply do not appear,
+    which is a clearer signal — to a person and to a model — than tools that
+    exist and always fail.
+    """
+    if not settings.s3_bucket:
+        log.warning("S3_BUCKET is unset — upload tools disabled, search still available")
+        return None
+    if settings.contributed_scope not in config.scopes:
+        log.warning(
+            "contributed scope %r is not declared in scopes.yaml — upload tools disabled",
+            settings.contributed_scope,
+        )
+        return None
+
+    import boto3  # lazy: tests must never need AWS libraries at import time
+
+    from .s3 import S3Corpus
+    from .writes import KbWriter
+
+    client = boto3.client("s3", region_name=settings.aws_region)
+    return KbWriter(
+        corpus=S3Corpus(client, settings.s3_bucket),
+        registry=registry, embedder=embedder,
+        scope=settings.contributed_scope,
+        cache_dir=settings.contributed_dir,
+        contributor_roles=settings.contributor_roles,
+        max_upload_mb=settings.kb_max_upload_mb,
+        max_chars=settings.chunk_max_chars,
+        overlap=settings.chunk_overlap_chars,
+    )
 
 
 def _register(mcp: FastMCP, profile: Profile, registry, embedder) -> None:

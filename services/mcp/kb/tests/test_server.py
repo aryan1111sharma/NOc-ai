@@ -262,6 +262,78 @@ async def test_remove_tool_refuses_a_non_contributor(tmp_path):
             await client.call_tool("kb_remove_document", {"source": "ev-core/note.md"})
 
 
+def test_build_writer_returns_none_without_a_bucket():
+    """A KB server with no bucket must still serve search. Tools that exist
+    and always fail are a worse signal than tools that are not there."""
+    from kb_mcp.config import Settings
+    from kb_mcp.server import build_writer
+
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), CFG, shared_collection="ev_kb", dim=e.dim)
+    assert build_writer(Settings(s3_bucket=""), CFG, reg, e) is None
+
+
+def test_build_writer_returns_none_when_the_scope_is_undeclared():
+    """CFG declares ev-core, chargezone and hr — not 'contributed'. A bucket
+    without a declared scope to put documents in is a misconfiguration, and
+    must degrade to search-only rather than registering tools that cannot work."""
+    from kb_mcp.config import Settings
+    from kb_mcp.server import build_writer
+
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), CFG, shared_collection="ev_kb", dim=e.dim)
+    assert build_writer(Settings(s3_bucket="b", contributed_scope="not-declared"), CFG, reg, e) is None
+
+
+def test_build_writer_returns_a_writer_when_configured(monkeypatch):
+    """With a bucket and a declared scope, a real KbWriter is built and
+    carries the configured roles, cap and scope."""
+    from kb_mcp.config import Settings
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.server import build_writer
+    from kb_mcp.writes import KbWriter
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {}, "contributed": {}},
+         "profiles": {"noc": {"scopes": ["ev-core", "contributed"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+
+    import boto3
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: object())
+
+    writer = build_writer(
+        Settings(s3_bucket="quench-manthan-kb", kb_contributor_roles="kb-contributor,ADMIN",
+                 kb_max_upload_mb=25),
+        cfg, reg, e,
+    )
+    assert isinstance(writer, KbWriter)
+    assert writer.scope == "contributed"
+    assert writer.roles == ("kb-contributor", "ADMIN")
+    assert writer.max_upload_mb == 25
+
+
+def test_the_server_module_imports_without_aws_libraries(monkeypatch):
+    """boto3 must be imported lazily inside build_writer. A test suite that
+    needs AWS libraries to import the server is a suite that stops running the
+    day that dependency breaks."""
+    import ast
+    from pathlib import Path
+
+    source = Path("kb_mcp/server.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    module_level = []
+    for node in tree.body:  # only top-level statements, not function bodies
+        if isinstance(node, ast.Import):
+            module_level += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            module_level.append(node.module or "")
+    assert not any("boto3" in name for name in module_level), module_level
+
+
 async def test_store_failure_raises_rather_than_returning_empty():
     """An empty list means 'not in the knowledge base'. A search failure must
     never be mistaken for that. Matching on the underlying message (not just

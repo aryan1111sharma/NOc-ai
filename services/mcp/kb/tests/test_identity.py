@@ -85,3 +85,38 @@ def test_a_b64_encoded_role_is_not_decoded():
 def test_a_plain_role_still_works_after_the_decoding_change():
     caller = parse_caller({"x-user-id": "u1", "x-user-role": "kb-contributor"})
     assert is_contributor(caller, ROLES)
+
+
+def test_a_kelvin_sign_does_not_impersonate_a_contributor_role():
+    """U+212A casefolds to "k". An exhaustive codepoint sweep found it to be
+    the only non-ASCII character folding into either default role."""
+    assert not is_contributor(Caller("u1", "a@b.com", "Kb-contributor"), ROLES)
+    assert not is_contributor(Caller("u1", "a@b.com", "ＡＤＭＩＮ"), ROLES)
+
+
+def test_a_blank_allow_list_entry_alone_grants_nothing():
+    assert not is_contributor(Caller("u1", "a@b.com", ""), ("",))
+    assert not is_contributor(Caller("u1", "a@b.com", " "), (" ",))
+
+
+def test_allow_list_entries_are_stripped_before_comparison():
+    assert is_contributor(Caller("u1", "a@b.com", "ADMIN"), (" ADMIN ",))
+
+
+def test_a_bare_string_allow_list_is_rejected():
+    with pytest.raises(TypeError, match="sequence of role names"):
+        is_contributor(Caller("u1", "a@b.com", "a"), "ADMIN")
+
+
+def test_a_b64_encoded_whitespace_user_id_is_refused():
+    """Without the post-decode strip this yields user_id="   ", which would
+    pass the gate and scope an S3 prefix of chat-uploads/   /."""
+    encoded = "b64:" + base64.b64encode(b"   ").decode()
+    with pytest.raises(IdentityError):
+        parse_caller({"x-user-id": encoded})
+
+
+def test_non_mapping_headers_are_refused_as_an_identity_error():
+    for bad in ([], "x", 7, object()):
+        with pytest.raises(IdentityError):
+            parse_caller(bad)

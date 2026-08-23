@@ -26,12 +26,19 @@ Known behaviour, established by adversarial testing rather than assumed:
 
 - A header dict containing the same name in two cases resolves to whichever
   was inserted last. Unreachable through a real HTTP stack, which coalesces
-  repeated headers before this module sees them.
+  repeated headers before this module sees them — and even there, Starlette's
+  Headers.items() yields duplicates and keeps the last, while Headers.get()
+  returns the first, so the two accessors can disagree on a duplicated header.
 - A value that legitimately begins with the literal text "b64:" decodes to
   nothing rather than passing through. Only the email can plausibly hit this,
   where it degrades an audit field and grants nothing.
-- Casefold does not create a bypass: Turkish dotless "admın" does not
-  match "ADMIN".
+- Casefold alone is not a safe comparison: U+212A KELVIN SIGN casefolds to
+  "k", so "Kb-contributor" would match "kb-contributor". An exhaustive
+  sweep of all 1,114,112 codepoints found that to be the only non-ASCII
+  character folding into either default role. The gate therefore requires the
+  role to be ASCII. NFKC normalisation is NOT the fix — it grants that same
+  variant and fullwidth "ＡＤＭＩＮ" as well. Turkish dotless "admın" does not
+  match "ADMIN" either way.
 """
 from __future__ import annotations
 
@@ -66,7 +73,15 @@ def _decode(value: str) -> str:
 
 
 def parse_caller(headers: dict[str, str]) -> Caller:
-    lowered = {str(k).lower(): str(v or "").strip() for k, v in (headers or {}).items()}
+    if headers is None:
+        headers = {}
+    if not hasattr(headers, "items"):
+        raise IdentityError(
+            f"headers must be a mapping, got {type(headers).__name__} — the KB "
+            "server cannot identify the caller and refuses rather than assuming."
+        )
+    lowered = {str(k).lower(): ("" if v is None else str(v)).strip()
+               for k, v in headers.items()}
 
     # The role is taken verbatim, never base64-decoded. Role names are always
     # header-safe ASCII, so LibreChat never encodes one — and a decoding path
@@ -90,6 +105,19 @@ def parse_caller(headers: dict[str, str]) -> Caller:
 
 
 def is_contributor(caller: Caller, allowed_roles: tuple[str, ...]) -> bool:
-    allowed = {r.casefold() for r in allowed_roles if r and r.strip()}
-    role = caller.role.casefold().strip()
+    if isinstance(allowed_roles, str):
+        raise TypeError(
+            "allowed_roles must be a sequence of role names, not a single string — "
+            "a bare string iterates per character and would match one-character roles"
+        )
+    allowed = {r.strip().casefold() for r in allowed_roles if r and r.strip()}
+    raw_role = caller.role.strip()
+    # The ASCII check MUST run before casefold, not after: casefold() maps
+    # U+212A KELVIN SIGN to plain ASCII "k" (the only non-ASCII codepoint that
+    # folds into either default role, per an exhaustive sweep — see module
+    # docstring), so checking isascii() on the already-casefolded string would
+    # find nothing to reject — the very thing casefold just destroyed.
+    if not raw_role.isascii():
+        return False
+    role = raw_role.casefold()
     return bool(role) and role in allowed

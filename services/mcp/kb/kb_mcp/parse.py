@@ -16,28 +16,48 @@ def _parse_docx(path: Path) -> list[dict]:
 
     Word has no pages until it is rendered, so `location` uses the document's
     own structure instead: a heading is the most useful thing to cite back.
+
+    The body is walked in document order rather than through `doc.paragraphs`
+    and `doc.tables`. Those are two independent collections, so iterating them
+    separately loses the interleaving and tags every table with whichever
+    heading happened to come last in the file — which would cite a fault table
+    against the wrong procedure.
     """
     import docx  # imported lazily: a parser dependency must not slow server start
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     doc = docx.Document(str(path))
     segs: list[dict] = []
     current = path.name
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        if para.style is not None and (para.style.name or "").startswith("Heading"):
-            current = text
-            continue
-        segs.append({"text": text, "location": current})
-    for table in doc.tables:
-        rows = []
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells]
-            if any(cells):
-                rows.append(" | ".join(cells))
-        if rows:
-            segs.append({"text": "\n".join(rows), "location": current})
+
+    for child in doc.element.body.iterchildren():
+        if child.tag.endswith("}p"):
+            para = Paragraph(child, doc)
+            text = para.text.strip()
+            if not text:
+                continue
+            if para.style is not None and (para.style.name or "").startswith("Heading"):
+                current = text
+                continue
+            segs.append({"text": text, "location": current})
+        elif child.tag.endswith("}tbl"):
+            rows = []
+            for row in Table(child, doc).rows:
+                # A horizontally merged cell is repeated once per column it
+                # spans; emitting it each time duplicates text into the
+                # embedding, so keep only the first appearance.
+                cells, previous = [], None
+                for cell in row.cells:
+                    if previous is not None and cell._tc is previous:
+                        continue
+                    previous = cell._tc
+                    cells.append(cell.text.strip())
+                if any(cells):
+                    rows.append(" | ".join(cells))
+            if rows:
+                segs.append({"text": "\n".join(rows), "location": current})
+
     return segs
 
 

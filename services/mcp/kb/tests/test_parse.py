@@ -58,3 +58,41 @@ def test_empty_docx_yields_no_segments(tmp_path: Path):
 
 def test_docx_is_supported(tmp_path: Path):
     assert ".docx" in SUPPORTED
+
+
+def test_each_table_gets_the_heading_it_sits_under(tmp_path: Path):
+    """Regression: tables were previously tagged with the last heading in the
+    whole document, so a table under one section was cited as another."""
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading("Section A", level=1)
+    t1 = doc.add_table(rows=1, cols=2)
+    t1.cell(0, 0).text = "A-Code"
+    t1.cell(0, 1).text = "value under A"
+    doc.add_heading("Section B", level=1)
+    t2 = doc.add_table(rows=1, cols=2)
+    t2.cell(0, 0).text = "B-Code"
+    t2.cell(0, 1).text = "value under B"
+    f = tmp_path / "sections.docx"
+    doc.save(f)
+
+    segs = parse_file(f)
+    by_text = {s["text"].split(" | ")[0]: s["location"] for s in segs}
+    assert by_text["A-Code"] == "Section A"
+    assert by_text["B-Code"] == "Section B"
+
+
+def test_merged_cells_are_not_duplicated(tmp_path: Path):
+    from docx import Document
+
+    doc = Document()
+    table = doc.add_table(rows=1, cols=3)
+    table.cell(0, 0).merge(table.cell(0, 1))
+    table.cell(0, 0).text = "Merged Header"
+    table.cell(0, 2).text = "Col3"
+    f = tmp_path / "merged.docx"
+    doc.save(f)
+
+    segs = parse_file(f)
+    assert segs[0]["text"] == "Merged Header | Col3"

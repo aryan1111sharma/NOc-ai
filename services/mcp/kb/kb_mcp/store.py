@@ -78,6 +78,16 @@ class KbStore:
         "what is in the knowledge base" for a person. Curated documents carry
         no uploader, so those fields come back None rather than absent — a
         caller rendering a list should not have to special-case them.
+
+        Provenance is merged across a document's chunks rather than taken
+        from whichever chunk `scroll` happens to yield first: `scroll` order
+        is point-ID (UUID) order, which is a hash of source+chunk_idx and so
+        is unrelated to chunk index or ingest recency. A document can also
+        genuinely have mixed provenance — e.g. a contributed file edited on
+        disk gets picked up by the batch `ingest --prune` walk with no
+        `extra_payload`, so only some of its chunks carry an uploader after
+        that re-ingest. Any chunk that carries an uploader is evidence the
+        document has one, so the first non-None value found wins.
         """
         if not self.c.collection_exists(self.collection):
             return []
@@ -98,9 +108,13 @@ class KbStore:
                 pl = p.payload
                 row = docs.setdefault(pl["source"], {
                     "source": pl["source"], "scope": pl.get("scope"), "chunks": 0,
-                    "uploaded_by": pl.get("uploaded_by"), "uploaded_at": pl.get("uploaded_at"),
+                    "uploaded_by": None, "uploaded_at": None,
                 })
                 row["chunks"] += 1
+                if row["uploaded_by"] is None:
+                    row["uploaded_by"] = pl.get("uploaded_by")
+                if row["uploaded_at"] is None:
+                    row["uploaded_at"] = pl.get("uploaded_at")
             if offset is None:
                 break
         return sorted(docs.values(), key=lambda r: r["source"])

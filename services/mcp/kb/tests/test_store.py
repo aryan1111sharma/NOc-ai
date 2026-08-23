@@ -280,3 +280,65 @@ def test_list_documents_reports_curated_documents_with_no_provenance():
     assert doc["uploaded_by"] is None
     assert doc["uploaded_at"] is None
     assert doc["chunks"] == 1
+
+
+def test_provenance_is_found_even_when_only_some_chunks_carry_it():
+    """scroll yields points in UUID order, unrelated to chunk index, so
+    first-chunk-wins reported a document's uploader by accident. Any chunk
+    carrying an uploader is evidence the document has one."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    rows = [
+        {"source": "contributed/mixed.md", "scope": "contributed", "location": "mixed.md",
+         "text": "chunk zero", "doc_hash": "h", "chunk_idx": 0,
+         "uploaded_by": "noc@quench.local", "uploaded_at": "2026-08-23T10:00:00Z"},
+        {"source": "contributed/mixed.md", "scope": "contributed", "location": "mixed.md",
+         "text": "chunk one", "doc_hash": "h", "chunk_idx": 1},
+    ]
+    store.upsert(rows, e.embed([r["text"] for r in rows]))
+
+    doc = store.list_documents()[0]
+    assert doc["chunks"] == 2
+    assert doc["uploaded_by"] == "noc@quench.local"
+    assert doc["uploaded_at"] == "2026-08-23T10:00:00Z"
+
+
+def test_a_document_with_no_provenance_anywhere_still_reports_none():
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {}},
+         "profiles": {"noc": {"scopes": ["ev-core"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    store = reg.for_scope("ev-core")
+    rows = [
+        {"source": "ev-core/a.md", "scope": "ev-core", "location": "a.md",
+         "text": f"curated {i}", "doc_hash": "h", "chunk_idx": i}
+        for i in range(3)
+    ]
+    store.upsert(rows, e.embed([r["text"] for r in rows]))
+
+    doc = store.list_documents()[0]
+    assert doc["uploaded_by"] is None and doc["chunks"] == 3

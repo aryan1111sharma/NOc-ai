@@ -18,9 +18,23 @@ class Settings(BaseSettings):
     knowledge_dir: str = "/knowledge"
     scopes_file: str = "/knowledge/scopes.yaml"
 
+    # --- contributed uploads (see 2026-08-23-kb-document-upload-design.md) ---
+    s3_bucket: str = ""                       # empty disables the write tools entirely
+    aws_region: str = "ap-south-1"
+    contributed_scope: str = "contributed"
+    contributed_dir: str = "/knowledge/contributed"  # writable volume nested in the ro mount
+    kb_contributor_roles: str = "kb-contributor,ADMIN"
+    kb_max_upload_mb: int = 25
+
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"
     mcp_port: int = 8106
+
+    @property
+    def contributor_roles(self) -> tuple[str, ...]:
+        """Comma-separated env value -> tuple. Blank entries are dropped so a
+        stray comma cannot create a role that matches a caller with none."""
+        return tuple(r.strip() for r in self.kb_contributor_roles.split(",") if r.strip())
 
 
 settings = Settings()

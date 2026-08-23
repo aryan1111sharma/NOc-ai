@@ -1,4 +1,6 @@
 from pathlib import Path
+
+import pytest
 from kb_mcp.parse import parse_file, SUPPORTED
 
 
@@ -190,3 +192,39 @@ def test_csv_exported_from_excel_has_a_clean_header(tmp_path: Path):
     segs = parse_file(f)
     assert segs[0]["text"].startswith("id | summary")
     assert "﻿" not in segs[0]["text"]
+
+
+def test_first_workbook_is_closed_when_the_second_open_fails(tmp_path: Path, monkeypatch):
+    """The two loads are opened inside the try, so a failure on the second
+    does not leak the first past the finally."""
+    import openpyxl
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    wb.active.append(["Code", "Meaning"])
+    f = tmp_path / "leak.xlsx"
+    wb.save(f)
+
+    real_load = openpyxl.load_workbook
+    closed, calls = [], {"n": 0}
+
+    def flaky_load(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise MemoryError("second load failed")
+        book = real_load(*args, **kwargs)
+        real_close = book.close
+
+        def tracking_close():
+            closed.append(book)
+            real_close()
+
+        book.close = tracking_close
+        return book
+
+    monkeypatch.setattr(openpyxl, "load_workbook", flaky_load)
+
+    with pytest.raises(MemoryError):
+        parse_file(f)
+
+    assert len(closed) == 1, "the first workbook must be closed when the second open fails"

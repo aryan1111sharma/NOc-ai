@@ -111,9 +111,13 @@ def _parse_xlsx(path: Path) -> list[dict]:
     """
     from openpyxl import load_workbook  # lazy: keeps server start fast
 
-    values = load_workbook(str(path), read_only=True, data_only=True)
-    formulas = load_workbook(str(path), read_only=True, data_only=False)
+    # Both opens sit inside the try: if the second one fails — a truncated
+    # file, a memory error on a huge sheet — the first is already open, and
+    # opening it outside would leak its handle past the finally.
+    values = formulas = None
     try:
+        values = load_workbook(str(path), read_only=True, data_only=True)
+        formulas = load_workbook(str(path), read_only=True, data_only=False)
         segs = []
         for sheet, formula_sheet in zip(values.worksheets, formulas.worksheets):
             rows = []
@@ -129,8 +133,9 @@ def _parse_xlsx(path: Path) -> list[dict]:
                 segs.append({"text": _rows_to_text(rows), "location": sheet.title})
         return segs
     finally:
-        values.close()
-        formulas.close()
+        for workbook in (values, formulas):
+            if workbook is not None:
+                workbook.close()
 
 
 def _parse_csv(path: Path) -> list[dict]:

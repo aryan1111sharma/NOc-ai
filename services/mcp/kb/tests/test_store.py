@@ -201,3 +201,82 @@ def test_group_unknown_raises_named_error():
     reg = StoreRegistry(client, CFG, shared_collection="ev_kb", dim=FakeEmbedder().dim)
     with pytest.raises(ScopesConfigError):
         reg.group(["does-not-exist"])
+
+
+def test_list_documents_groups_chunks_by_source_with_provenance():
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {}, "contributed": {}},
+         "profiles": {"noc": {"scopes": ["ev-core", "contributed"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    rows = [
+        {"source": "contributed/a.md", "scope": "contributed", "location": "a.md",
+         "text": "alpha one", "doc_hash": "h1", "chunk_idx": 0,
+         "uploaded_by": "noc@quench.local", "uploaded_at": "2026-08-23T10:00:00Z"},
+        {"source": "contributed/a.md", "scope": "contributed", "location": "a.md",
+         "text": "alpha two", "doc_hash": "h1", "chunk_idx": 1,
+         "uploaded_by": "noc@quench.local", "uploaded_at": "2026-08-23T10:00:00Z"},
+        {"source": "ev-core/ocpp.md", "scope": "ev-core", "location": "ocpp.md",
+         "text": "curated", "doc_hash": "h2", "chunk_idx": 0},
+    ]
+    store.upsert(rows, e.embed([r["text"] for r in rows]))
+
+    everything = store.list_documents()
+    assert [d["source"] for d in everything] == ["contributed/a.md", "ev-core/ocpp.md"]
+    a = everything[0]
+    assert a["chunks"] == 2
+    assert a["uploaded_by"] == "noc@quench.local"
+    assert a["scope"] == "contributed"
+
+    only_contributed = store.list_documents(scopes=["contributed"])
+    assert [d["source"] for d in only_contributed] == ["contributed/a.md"]
+
+    assert store.list_documents(scopes=[]) == []
+
+
+def test_list_documents_on_a_missing_collection_is_empty():
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.store import KbStore
+
+    store = KbStore(QdrantClient(":memory:"), "never_created", dim=8)
+    assert store.list_documents() == []
+
+
+def test_list_documents_reports_curated_documents_with_no_provenance():
+    """Curated corpus documents carry no uploader — the field must be present
+    and None rather than missing, so a caller can render it uniformly."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {}},
+         "profiles": {"noc": {"scopes": ["ev-core"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    store = reg.for_scope("ev-core")
+    row = {"source": "ev-core/ocpp.md", "scope": "ev-core", "location": "ocpp.md",
+           "text": "curated text", "doc_hash": "h", "chunk_idx": 0}
+    store.upsert([row], e.embed([row["text"]]))
+
+    doc = store.list_documents()[0]
+    assert doc["uploaded_by"] is None
+    assert doc["uploaded_at"] is None
+    assert doc["chunks"] == 1

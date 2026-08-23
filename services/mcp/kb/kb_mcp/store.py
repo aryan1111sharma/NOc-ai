@@ -70,6 +70,41 @@ class KbStore:
                 break
         return seen
 
+    def list_documents(self, scopes: list[str] | None = None) -> list[dict]:
+        """One row per source document: chunk count plus the provenance
+        stamped at ingest.
+
+        `known_sources` answers "what keys exist" for pruning; this answers
+        "what is in the knowledge base" for a person. Curated documents carry
+        no uploader, so those fields come back None rather than absent — a
+        caller rendering a list should not have to special-case them.
+        """
+        if not self.c.collection_exists(self.collection):
+            return []
+        flt = None
+        if scopes is not None:
+            # Same "explicit empty list filters to nothing" contract as
+            # search(): MatchAny(any=[]) matches zero points, it is not
+            # treated as "no filter".
+            flt = Filter(must=[FieldCondition(key="scope", match=MatchAny(any=list(scopes)))])
+
+        docs: dict[str, dict] = {}
+        offset = None
+        while True:
+            pts, offset = self.c.scroll(
+                self.collection, scroll_filter=flt, limit=256, offset=offset, with_payload=True
+            )
+            for p in pts:
+                pl = p.payload
+                row = docs.setdefault(pl["source"], {
+                    "source": pl["source"], "scope": pl.get("scope"), "chunks": 0,
+                    "uploaded_by": pl.get("uploaded_by"), "uploaded_at": pl.get("uploaded_at"),
+                })
+                row["chunks"] += 1
+            if offset is None:
+                break
+        return sorted(docs.values(), key=lambda r: r["source"])
+
     def search(self, vector: list[float], top_k: int, scopes: list[str] | None = None) -> list[dict]:
         # A scope-less collection (declared in config but never ingested) has
         # no collection yet; that reads as "nothing in the KB", not a crash.

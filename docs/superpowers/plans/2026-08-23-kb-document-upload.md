@@ -426,31 +426,129 @@ def _rows_to_text(rows: list[list[str]]) -> str:
     return "\n".join(" | ".join(cells) for cells in rows)
 
 
+def _cell_text(value, formula) -> str:
+    """Cached value first, falling back to the formula text.
+
+    A cell whose formula was never evaluated has no cached value; indexing it
+    as blank loses the column silently, so the formula itself is kept — it is
+    at least searchable and visibly uncalculated.
+    """
+    if value is not None:
+        return str(value).strip()
+    if isinstance(formula, str) and formula.startswith("="):
+        return formula.strip()
+    return ""
+
+
+def _trim_empty_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Drop trailing columns that are empty in every row.
+
+    read_only mode reports the used range inflated by any cell ever written
+    to, even one later cleared, so a two-row table can arrive padded to
+    hundreds of columns. Left in place, that padding crowds genuine content
+    out of the chunk window.
+    """
+    width = 0
+    for row in rows:
+        for i, cell in enumerate(row):
+            if cell:
+                width = max(width, i + 1)
+    return [row[:width] for row in rows] if width else []
+
+
 def _parse_xlsx(path: Path) -> list[dict]:
+    """One segment per sheet, rows pipe-joined, sheet name as the location.
+
+    Two workbooks are opened, not one. `data_only=True` yields a formula's
+    cached result, but a workbook generated programmatically was never
+    rendered by Excel and has no cache — every formula cell would come back
+    None and be silently indexed as blank. The second, formula-preserving
+    load supplies the formula text so a cell is never silently empty.
+    """
     from openpyxl import load_workbook  # lazy: keeps server start fast
 
-    wb = load_workbook(str(path), read_only=True, data_only=True)
+    values = load_workbook(str(path), read_only=True, data_only=True)
+    formulas = load_workbook(str(path), read_only=True, data_only=False)
     try:
         segs = []
-        for sheet in wb.worksheets:
+        for sheet, formula_sheet in zip(values.worksheets, formulas.worksheets):
             rows = []
-            for row in sheet.iter_rows(values_only=True):
-                cells = ["" if v is None else str(v).strip() for v in row]
+            for value_row, formula_row in zip(
+                sheet.iter_rows(values_only=True),
+                formula_sheet.iter_rows(values_only=True),
+            ):
+                cells = [_cell_text(v, f) for v, f in zip(value_row, formula_row)]
                 if any(cells):
                     rows.append(cells)
+            rows = _trim_empty_columns(rows)
             if rows:
                 segs.append({"text": _rows_to_text(rows), "location": sheet.title})
         return segs
     finally:
-        wb.close()
+        values.close()
+        formulas.close()
 
 
 def _parse_csv(path: Path) -> list[dict]:
     import csv
 
-    with path.open("r", encoding="utf-8", errors="replace", newline="") as fh:
+    # utf-8-sig transparently strips an Excel BOM and still reads plain UTF-8.
+    # Excel exports CSV with a BOM by default, which would otherwise leave the
+    # first header cell as "﻿id" in every chunk of every exported file.
+    with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as fh:
         rows = [[c.strip() for c in row] for row in csv.reader(fh) if any(c.strip() for c in row)]
     return [{"text": _rows_to_text(rows), "location": path.name}] if rows else []
+```
+
+Add these regression tests too — the four tests above cover none of these cases:
+```python
+def test_uncalculated_formula_cells_are_not_silently_dropped(tmp_path: Path):
+    """A workbook never opened in Excel has no cached formula results, so
+    data_only=True returns None for them. Indexing that as blank would lose a
+    whole column of a calculated matrix without any warning."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    s = wb.active
+    s.title = "Matrix"
+    s.append(["A", "B", "Sum"])
+    s.append([3, 4, "=A2+B2"])
+    f = tmp_path / "calc.xlsx"
+    wb.save(f)
+
+    segs = parse_file(f)
+    assert "=A2+B2" in segs[0]["text"]
+
+
+def test_cell_text_prefers_a_cached_value_over_the_formula():
+    from kb_mcp.parse import _cell_text
+    assert _cell_text(7, "=A2+B2") == "7"
+    assert _cell_text(None, "=A2+B2") == "=A2+B2"
+    assert _cell_text(None, None) == ""
+    assert _cell_text(0, None) == "0"
+
+
+def test_phantom_trailing_columns_are_trimmed(tmp_path: Path):
+    """read_only mode inflates the used range to include cells that were
+    written and later cleared, padding every row with empty columns."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    s = wb.active
+    s.title = "Sparse"
+    s.append(["Code", "Meaning"])
+    s["ZZ500"] = "temp"
+    s["ZZ500"] = None
+    f = tmp_path / "sparse.xlsx"
+    wb.save(f)
+
+    segs = parse_file(f)
+    assert segs[0]["text"] == "Code | Meaning"
+
+
+def test_csv_exported_from_excel_has_a_clean_header(tmp_path: Path):
+    f = tmp_path / "excel-export.csv"
+    f.write_text("id,summary\nQCH-1,offline\n", encoding="utf-8-sig")
+    segs = parse_file(f)
+    assert segs[0]["text"].startswith("id | summary")
 ```
 
 Wire both into `parse_file`, after the `.docx` branch:

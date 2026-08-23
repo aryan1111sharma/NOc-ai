@@ -2036,7 +2036,27 @@ class KbWriter:
                 f"{self.max_upload_mb} MB limit."
             )
 
-        local = self.corpus.download_one(ref.key, self.cache_dir / ref.filename)
+        # The cache path is namespaced by caller. A shared `cache_dir /
+        # filename` lets one user's download land on another's in-flight
+        # upload: the first caller then hashes the second's bytes, matches the
+        # store on that hash, and reports "already indexed" for content it
+        # never supplied — while the corpus permanently holds the other user's
+        # document under the requested name. Silent, and cross-user.
+        local = self.corpus.download_one(
+            ref.key, self.cache_dir / caller.user_id / ref.filename
+        )
+
+        # The listing's size was checked before download, but the object can
+        # grow between the two calls — a 2 MB payload passed a 1 MB cap that
+        # way. Re-check what actually arrived.
+        actual = local.stat().st_size
+        if actual > self.max_bytes:
+            local.unlink(missing_ok=True)
+            raise UploadRejected(
+                f"{filename!r} is {actual / 1024 / 1024:.1f} MB, over the "
+                f"{self.max_upload_mb} MB limit."
+            )
+
         doc_hash = hashlib.sha256(local.read_bytes()).hexdigest()
         source = f"{self.scope}/{ref.filename}"
         store = self.registry.for_scope(self.scope)
@@ -2062,6 +2082,15 @@ class KbWriter:
             # leaves nothing behind for a later corpus walk to trip over.
             self.corpus.delete_from_corpus(ref.filename)
             raise UploadRejected(str(exc)) from exc
+        except Exception:
+            # Any other failure — an embedder outage, a Qdrant error — would
+            # otherwise strand the copied object in the corpus with nothing
+            # indexed against it, and the next corpus walk would pick it up
+            # with no provenance. Clean up, then re-raise unchanged: this is
+            # not a user-actionable rejection and must not be dressed up as
+            # one.
+            self.corpus.delete_from_corpus(ref.filename)
+            raise
         if chunks == 0:
             # Leave nothing half-done: the object was copied, so take it back out.
             self.corpus.delete_from_corpus(ref.filename)

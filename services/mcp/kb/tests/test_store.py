@@ -283,9 +283,15 @@ def test_list_documents_reports_curated_documents_with_no_provenance():
 
 
 def test_provenance_is_found_even_when_only_some_chunks_carry_it():
-    """scroll yields points in UUID order, unrelated to chunk index, so
-    first-chunk-wins reported a document's uploader by accident. Any chunk
-    carrying an uploader is evidence the document has one."""
+    """scroll yields points in point-ID (UUID) order, unrelated to chunk
+    index, so first-chunk-wins reported a document's uploader by accident.
+
+    The source string matters: point ids are uuid5(source:chunk_idx), so which
+    chunk scrolls first depends on the name. This one is chosen because its
+    no-provenance chunk sorts FIRST — without the merge fix this test fails.
+    A name whose provenance-bearing chunk happens to sort first would pass
+    against the bug and protect nothing.
+    """
     from qdrant_client import QdrantClient
 
     from kb_mcp.scopes import parse_scopes
@@ -303,10 +309,10 @@ def test_provenance_is_found_even_when_only_some_chunks_carry_it():
     store = reg.for_scope("contributed")
 
     rows = [
-        {"source": "contributed/mixed.md", "scope": "contributed", "location": "mixed.md",
+        {"source": "a.md", "scope": "contributed", "location": "a.md",
          "text": "chunk zero", "doc_hash": "h", "chunk_idx": 0,
          "uploaded_by": "noc@quench.local", "uploaded_at": "2026-08-23T10:00:00Z"},
-        {"source": "contributed/mixed.md", "scope": "contributed", "location": "mixed.md",
+        {"source": "a.md", "scope": "contributed", "location": "a.md",
          "text": "chunk one", "doc_hash": "h", "chunk_idx": 1},
     ]
     store.upsert(rows, e.embed([r["text"] for r in rows]))

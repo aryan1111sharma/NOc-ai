@@ -63,3 +63,13 @@ def test_tabular_wide_row_does_not_swallow_its_neighbours():
     assert "QCH-1 | short" in body
     assert "QCH-3 | also short" in body
     assert ("y" * 2000) in body
+
+
+def test_tabular_header_only_yields_the_header():
+    """A sheet with column names but no data rows must still produce a chunk.
+
+    The `if not rows` guard is load-bearing: without it this returns [], the
+    document indexes to nothing, and ingest logs it as empty and skips it —
+    silently, so the knowledge is simply never retrievable.
+    """
+    assert chunk_tabular("id | note", max_chars=800, overlap_chars=0) == ["id | note"]

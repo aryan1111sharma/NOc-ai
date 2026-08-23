@@ -70,3 +70,18 @@ def test_blank_entries_in_allow_list_grant_nothing():
     # KB_CONTRIBUTOR_ROLES="" or a stray comma must not create a role that
     # matches a caller with no role header.
     assert not is_contributor(Caller("u1", "a@b.com", ""), ("", "kb-contributor"))
+
+
+def test_a_b64_encoded_role_is_not_decoded():
+    """Role names are always header-safe ASCII, so LibreChat never encodes
+    one. Decoding anyway would leave a second, less obvious way to spell a
+    privileged role."""
+    encoded = "b64:" + base64.b64encode(b"ADMIN").decode()
+    caller = parse_caller({"x-user-id": "u1", "x-user-role": encoded})
+    assert caller.role == encoded
+    assert not is_contributor(caller, ROLES)
+
+
+def test_a_plain_role_still_works_after_the_decoding_change():
+    caller = parse_caller({"x-user-id": "u1", "x-user-role": "kb-contributor"})
+    assert is_contributor(caller, ROLES)

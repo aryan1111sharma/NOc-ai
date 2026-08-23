@@ -98,75 +98,110 @@ class KbWriter:
             )
 
         # cache_dir/<user_id>/<filename>, not cache_dir/<filename>: two
-        # callers uploading same-named files concurrently must not be able
-        # to write over each other's local download between this download
-        # and the hash/ingest read that follows it (see
+        # DIFFERENT callers uploading same-named files concurrently must not
+        # be able to write over each other's local download between this
+        # download and the hash/ingest read that follows it (see
         # test_cache_dir_is_not_shared_between_users_uploading_same_filename,
-        # which reproduces the resulting content confusion).
+        # which reproduces the resulting content confusion). The SAME user
+        # uploading the same filename twice concurrently still shares this
+        # one path -- harmless, because both requests resolve to the same S3
+        # object and the same corpus/source key regardless.
+        #
+        # caller.user_id is used here, unvalidated, as a path segment --
+        # unlike corpus_key() below, which validates a filename before it
+        # becomes an S3 key or a local path. Not reachable under this
+        # server's trust model (user_id comes from the X-User-Id header
+        # LibreChat injects server-side, never from the model -- see
+        # identity.py), but corpus_key sets a precedent worth matching if
+        # that ever changes.
         local = self.corpus.download_one(ref.key, self.cache_dir / caller.user_id / ref.filename)
-        # ref.size came from the listing, before this download. An object
-        # can grow between the two calls, so the cap is re-checked against
-        # what was actually received -- otherwise the earlier check is a
-        # TOCTOU gap a caller could race to bypass the limit entirely.
-        actual_size = local.stat().st_size
-        if actual_size > self.max_bytes:
-            local.unlink(missing_ok=True)
-            raise UploadRejected(
-                f"{filename!r} is {actual_size / 1024 / 1024:.1f} MB, over the "
-                f"{self.max_upload_mb} MB limit."
-            )
-        doc_hash = hashlib.sha256(local.read_bytes()).hexdigest()
-        source = f"{self.scope}/{ref.filename}"
-        store = self.registry.for_scope(self.scope)
-
-        # A hash match in the index is NOT proof the corpus still holds the
-        # file: the object can be deleted out of band (directly in S3) while
-        # the chunks it produced stay indexed. Short-circuiting on the hash
-        # alone would report "already indexed" for a document that is about
-        # to vanish from the corpus for good — a later `ingest --prune` walk
-        # mirrors S3 and removes chunks for anything not on disk there, so
-        # the very next prune would silently delete what this call just told
-        # the caller was fine. Both conditions must hold to skip real work.
-        hash_matches = store.current_doc_hash(source) == doc_hash
-        repairing = hash_matches and not self.corpus.exists_in_corpus(ref.filename)
-        if hash_matches and not repairing:
-            existing = [d for d in store.list_documents(scopes=[self.scope])
-                        if d["source"] == source]
-            return {"source": source, "scope": self.scope, "already_indexed": True,
-                    "replaced": False,
-                    "chunks": existing[0]["chunks"] if existing else 0,
-                    "message": f"{ref.filename} is already in the knowledge base, unchanged."}
-
-        _, replaced = self.corpus.copy_to_corpus(ref)
         try:
-            chunks = ingest_file(
-                local, source=source, scope_name=self.scope, store=store,
-                embedder=self.embedder, max_chars=self.max_chars, overlap=self.overlap,
-                doc_hash=doc_hash,
-                extra_payload={"uploaded_by": caller.email or caller.user_id,
-                               "uploaded_at": self.now()},
-            )
-        except DocumentUnreadable as exc:
-            # The object was already copied; take it back out so a failed
-            # upload leaves nothing behind for a later corpus walk.
-            self.corpus.delete_from_corpus(ref.filename)
-            raise UploadRejected(str(exc)) from exc
-        except Exception:
-            # Any other failure here (an embedder outage, a Qdrant failure)
-            # happens after the object was already copied into the corpus
-            # but before anything was indexed for it. The same orphan risk
-            # applies as for DocumentUnreadable: a later corpus walk would
-            # pick the object up with no provenance. Clean it up, but do NOT
-            # swallow the failure itself -- the caller must still see it.
-            self.corpus.delete_from_corpus(ref.filename)
-            raise
+            # ref.size came from the listing, before this download. An object
+            # can grow between the two calls, so the cap is re-checked against
+            # what was actually received -- otherwise the earlier check is a
+            # TOCTOU gap a caller could race to bypass the limit entirely.
+            actual_size = local.stat().st_size
+            if actual_size > self.max_bytes:
+                raise UploadRejected(
+                    f"{filename!r} is {actual_size / 1024 / 1024:.1f} MB, over the "
+                    f"{self.max_upload_mb} MB limit."
+                )
+            doc_hash = hashlib.sha256(local.read_bytes()).hexdigest()
+            source = f"{self.scope}/{ref.filename}"
+            store = self.registry.for_scope(self.scope)
 
-        if chunks == 0:
-            self.corpus.delete_from_corpus(ref.filename)
-            raise UploadRejected(
-                f"{ref.filename!r} produced no readable text — it may be a scanned PDF or "
-                "an empty file. Scanned documents need OCR before they can be indexed."
-            )
+            # A hash match in the index is NOT proof the corpus still holds
+            # the file: the object can be deleted out of band (directly in
+            # S3) while the chunks it produced stay indexed. Short-circuiting
+            # on the hash alone would report "already indexed" for a
+            # document that is about to vanish from the corpus for good — a
+            # later `ingest --prune` walk mirrors S3 and removes chunks for
+            # anything not on disk there, so the very next prune would
+            # silently delete what this call just told the caller was fine.
+            # Both conditions must hold to skip real work.
+            hash_matches = store.current_doc_hash(source) == doc_hash
+            repairing = hash_matches and not self.corpus.exists_in_corpus(ref.filename)
+            if hash_matches and not repairing:
+                existing = [d for d in store.list_documents(scopes=[self.scope])
+                            if d["source"] == source]
+                return {"source": source, "scope": self.scope, "already_indexed": True,
+                        "replaced": False,
+                        "chunks": existing[0]["chunks"] if existing else 0,
+                        "message": f"{ref.filename} is already in the knowledge base, unchanged."}
+
+            # Index BEFORE touching the corpus. The corpus is a flat, global
+            # namespace shared by every contributor (see copy_to_corpus): a
+            # filename collision is normal, not an edge case. Copying first
+            # (the previous design) meant a rejection below had already
+            # overwritten -- or, on cleanup, deleted outright -- a DIFFERENT
+            # contributor's real document that merely shared this filename.
+            # Indexing first means a rejection here never touches the corpus
+            # at all, so it can only ever cost the uploader their own attempt.
+            try:
+                chunks = ingest_file(
+                    local, source=source, scope_name=self.scope, store=store,
+                    embedder=self.embedder, max_chars=self.max_chars, overlap=self.overlap,
+                    doc_hash=doc_hash,
+                    extra_payload={"uploaded_by": caller.email or caller.user_id,
+                                   "uploaded_at": self.now()},
+                )
+            except DocumentUnreadable as exc:
+                # Nothing has touched the corpus yet, so there is nothing to
+                # clean up here -- just report the reason.
+                raise UploadRejected(str(exc)) from exc
+
+            if chunks == 0:
+                # Same as above: ingest_file itself never touched the store
+                # when it produces no chunks, and neither did we touch the
+                # corpus, so there is nothing to roll back.
+                raise UploadRejected(
+                    f"{ref.filename!r} produced no readable text — it may be a scanned PDF or "
+                    "an empty file. Scanned documents need OCR before they can be indexed."
+                )
+
+            # Only now, with the document proven good and indexed, does this
+            # touch the corpus — so a failure here is the only case in this
+            # method that still needs a rollback, and it only ever unwinds
+            # work this call itself just did.
+            try:
+                _, replaced = self.corpus.copy_to_corpus(ref)
+            except Exception:
+                try:
+                    store.delete_source(source)
+                except Exception:
+                    # Never let a rollback failure replace the real error (the
+                    # failed copy) with a different one -- log it and let the
+                    # original propagate regardless of what happens here.
+                    log.exception(
+                        "failed to roll back index for %s after a failed corpus copy", source
+                    )
+                raise
+        finally:
+            # Unconditional, on every path (success, rejection, or a raised
+            # exception): cache_dir is nested under the directory the corpus
+            # walker scans, so a downloaded file left behind here would later
+            # be picked up and indexed as if it were a real, curated document.
+            local.unlink(missing_ok=True)
 
         log.info("indexed %s (%d chunks) for user=%s repaired=%s",
                  source, chunks, caller.user_id, repairing)
@@ -191,6 +226,17 @@ class KbWriter:
                 f"{source!r} is curated material. Curated documents are managed in git."
             )
         filename = source[len(prefix):]
+        # Validate before any S3 call: corpus_key() would reject a path-like
+        # or otherwise unusable filename too, but its S3Error names the
+        # internal corpus prefix (CORPUS_PREFIX) -- an implementation detail
+        # that must not leak to a model-supplied `source`, and the wrong
+        # exception type for a caller-facing tool besides. Mirrors
+        # corpus_key's own rules without depending on its wording.
+        if not filename or filename in (".", "..") or "/" in filename or "\\" in filename \
+                or any(ch < " " for ch in filename):
+            raise UploadRejected(
+                f"{source!r} is not a valid document name in the '{self.scope}' scope."
+            )
         store = self.registry.for_scope(self.scope)
         indexed = any(d["source"] == source for d in store.list_documents(scopes=[self.scope]))
         deleted = self.corpus.delete_from_corpus(filename)

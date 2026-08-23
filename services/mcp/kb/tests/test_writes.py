@@ -76,12 +76,26 @@ def test_non_contributor_is_refused(tmp_path):
         writer.upload(OUTSIDER, "note.md")
 
 
-def test_refusal_happens_before_any_write(tmp_path):
+def test_refusal_happens_before_any_s3_call(tmp_path):
+    """Not just 'before any write' — a non-contributor must not be able to
+    drive an S3 GET or a local disk write either."""
     writer, s3, _, _ = _writer(tmp_path)
     s3.put(f"{CHAT_PREFIX}/u2/abc__note.md", b"body")
+
+    calls = []
+    for name in ("list_objects_v2", "get_object", "copy_object", "delete_object", "head_object"):
+        original = getattr(s3, name)
+
+        def recorded(*a, _n=name, _o=original, **k):
+            calls.append(_n)
+            return _o(*a, **k)
+
+        setattr(s3, name, recorded)
+
     with pytest.raises(PermissionDenied):
         writer.upload(OUTSIDER, "note.md")
-    assert f"{CORPUS_PREFIX}/note.md" not in s3.objects
+    assert calls == [], f"a refused caller reached S3: {calls}"
+    assert not any(tmp_path.rglob("*")), "a refused caller wrote to the cache directory"
 
 
 def test_another_users_file_is_not_reachable(tmp_path):
@@ -106,6 +120,19 @@ def test_absent_and_forbidden_files_give_the_same_message(tmp_path):
         absent_writer.upload(CONTRIBUTOR, "report.md")
 
     assert str(forbidden.value) == str(absent.value)
+
+
+def test_the_not_found_message_never_contains_the_requested_filename(tmp_path):
+    """Guards against reintroducing an existence oracle: the previous test
+    uses the same filename in both branches, so it cannot by itself catch a
+    message that echoes a filename back (that would still match in both
+    branches and the equality assertion would still pass). This test checks
+    the stronger property directly: the message contains no filename at
+    all, for any requested name."""
+    writer, s3, _, _ = _writer(tmp_path)
+    with pytest.raises(UploadRejected) as exc:
+        writer.upload(CONTRIBUTOR, "a-very-distinctive-name-xyz123.md")
+    assert "a-very-distinctive-name-xyz123" not in str(exc.value)
 
 
 def test_unsupported_extension_is_refused_with_the_accepted_list(tmp_path):
@@ -375,3 +402,161 @@ def test_an_unchanged_document_whose_object_is_present_is_still_a_no_op(tmp_path
     writer.upload(CONTRIBUTOR, "note.md")
     result = writer.upload(CONTRIBUTOR, "note.md")
     assert result["already_indexed"] is True
+
+
+# --- Security review follow-up: index-before-copy reorder -------------------
+
+def test_a_blank_upload_does_not_destroy_the_document_it_would_have_replaced(tmp_path):
+    """Reviewer's reproduction: the corpus is a flat, global namespace, so a
+    SECOND, unrelated contributor's blank/unreadable upload sharing the same
+    filename must not destroy the FIRST contributor's real document. Before
+    the fix, copy_to_corpus ran before the chunks==0 check, so engineer two's
+    (empty) bytes overwrote engineer one's corpus object, and the subsequent
+    cleanup deleted it outright -- leaving engineer one's chunks in the index
+    with no corresponding corpus object."""
+    writer, s3, reg, _ = _writer(tmp_path)
+    engineer2 = Caller("u2", "two@quench.local", "kb-contributor")
+
+    s3.put(f"{CHAT_PREFIX}/u1/abc__runbook.txt", b"real maintenance procedure")
+    writer.upload(CONTRIBUTOR, "runbook.txt")
+    assert s3.objects[f"{CORPUS_PREFIX}/runbook.txt"] == b"real maintenance procedure"
+
+    s3.put(f"{CHAT_PREFIX}/u2/xyz__runbook.txt", b"   \n\n  ")
+    with pytest.raises(UploadRejected, match="no readable text"):
+        writer.upload(engineer2, "runbook.txt")
+
+    assert s3.objects[f"{CORPUS_PREFIX}/runbook.txt"] == b"real maintenance procedure", (
+        "engineer one's corpus object must survive engineer two's rejected upload"
+    )
+    docs = reg.for_scope("contributed").list_documents(scopes=["contributed"])
+    assert len(docs) == 1
+    assert docs[0]["source"] == "contributed/runbook.txt"
+    assert docs[0]["uploaded_by"] == "noc@quench.local"
+
+
+def test_a_transient_infra_failure_during_a_colliding_reupload_does_not_destroy_the_existing_document(tmp_path):
+    """Reviewer's reproduction, generalized to a transient infrastructure
+    failure rather than bad content: a second contributor's upload, sharing
+    the first's filename, fails partway through indexing (simulated here as
+    an embedding-service outage, which -- per ingest_file's own design --
+    happens before the store is touched at all). The first contributor's
+    corpus object and index entry must both survive untouched.
+
+    A failure landing inside ingest_file's own narrow window between its
+    internal delete_source() and upsert() calls is a separate, already-
+    documented residual risk of ingest.py itself (see its docstring: "Qdrant
+    has no transaction to borrow") and is not owned by this task -- this
+    test does not exercise that narrower window.
+    """
+    writer, s3, reg, emb = _writer(tmp_path)
+    engineer2 = Caller("u2", "two@quench.local", "kb-contributor")
+
+    s3.put(f"{CHAT_PREFIX}/u1/abc__runbook.txt", b"energise the charger during service")
+    writer.upload(CONTRIBUTOR, "runbook.txt")
+
+    class FlakyEmbedder:
+        dim = emb.dim
+
+        def embed(self, texts):
+            raise RuntimeError("embedding service unavailable")
+
+    writer.embedder = FlakyEmbedder()
+    s3.put(f"{CHAT_PREFIX}/u2/xyz__runbook.txt", b"isolate the charger before service")
+    with pytest.raises(RuntimeError, match="embedding service unavailable"):
+        writer.upload(engineer2, "runbook.txt")
+    writer.embedder = emb
+
+    assert s3.objects[f"{CORPUS_PREFIX}/runbook.txt"] == b"energise the charger during service"
+    docs = reg.for_scope("contributed").list_documents(scopes=["contributed"])
+    assert len(docs) == 1
+    assert docs[0]["source"] == "contributed/runbook.txt"
+
+
+def test_a_failed_corpus_copy_rolls_back_the_index_without_masking_the_original_error(tmp_path):
+    """The only remaining cleanup site after the reorder: if copy_to_corpus
+    itself fails (S3 unhealthy) AFTER indexing already succeeded, the index
+    is rolled back so it doesn't reference a document that isn't actually in
+    the corpus. If that rollback ALSO fails, the original copy failure must
+    still be what the caller sees -- never replaced by the rollback's own
+    exception."""
+    writer, s3, reg, _ = _writer(tmp_path)
+    s3.put(f"{CHAT_PREFIX}/u1/abc__note.md", b"content for a copy that will fail")
+
+    def failing_copy(ref):
+        raise RuntimeError("S3 is unavailable for copy_object")
+
+    writer.corpus.copy_to_corpus = failing_copy
+
+    with pytest.raises(RuntimeError, match="S3 is unavailable for copy_object"):
+        writer.upload(CONTRIBUTOR, "note.md")
+
+    # The index must not reference a document that was never actually
+    # copied into the corpus.
+    docs = reg.for_scope("contributed").list_documents(scopes=["contributed"])
+    assert docs == []
+
+
+def test_a_failed_corpus_copy_rollback_failure_still_surfaces_the_original_error(tmp_path):
+    """ingest_file itself calls store.delete_source(source) once, normally,
+    before the rollback is ever in play (to clear any previous version
+    before upserting the new one). The failure under test must specifically
+    be the ROLLBACK's own call to delete_source, not that ordinary one --
+    otherwise this test would validate the wrong code path entirely."""
+    writer, s3, reg, _ = _writer(tmp_path)
+    s3.put(f"{CHAT_PREFIX}/u1/abc__note.md", b"content for a copy that will fail")
+
+    def failing_copy(ref):
+        raise RuntimeError("S3 is unavailable for copy_object")
+
+    writer.corpus.copy_to_corpus = failing_copy
+    store = writer.registry.for_scope("contributed")
+    real_delete_source = store.delete_source
+    calls = {"n": 0}
+
+    def flaky_delete_source(source):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_delete_source(source)
+        raise RuntimeError("Qdrant is also unavailable during rollback")
+
+    store.delete_source = flaky_delete_source
+
+    with pytest.raises(RuntimeError, match="S3 is unavailable for copy_object"):
+        writer.upload(CONTRIBUTOR, "note.md")
+
+    store.delete_source = real_delete_source
+
+
+# --- Security review follow-up: remove() must not leak internal paths -------
+
+def test_remove_rejects_a_path_like_document_name_without_leaking_internals(tmp_path):
+    """A model can pass any `source`; a path-like one must not surface a raw
+    S3Error exposing the internal corpus prefix, and the reason given must be
+    the actionable UploadRejected message the rest of this module uses."""
+    writer, s3, _, _ = _writer(tmp_path)
+    with pytest.raises(UploadRejected) as exc:
+        writer.remove(CONTRIBUTOR, "contributed/../../evil.md")
+    assert "knowledge/contributed" not in str(exc.value)
+
+
+def test_local_cache_file_is_removed_on_every_path(tmp_path):
+    """cache_dir is nested under the directory the corpus walker scans (per
+    the comment in upload()), so any leftover download would later be
+    indexed as if it were a real, curated document -- with the uploader's
+    own user id baked into a bogus `source` path. Every path through
+    upload(), success and rejection alike, must leave no file behind."""
+    writer, s3, _, _ = _writer(tmp_path)
+
+    s3.put(f"{CHAT_PREFIX}/u1/abc__ok.md", b"real content")
+    writer.upload(CONTRIBUTOR, "ok.md")
+
+    s3.put(f"{CHAT_PREFIX}/u1/abc__blank.txt", b"   ")
+    with pytest.raises(UploadRejected):
+        writer.upload(CONTRIBUTOR, "blank.txt")
+
+    s3.put(f"{CHAT_PREFIX}/u1/abc__fake.docx", b"not a real docx")
+    with pytest.raises(UploadRejected):
+        writer.upload(CONTRIBUTOR, "fake.docx")
+
+    leftover_files = [p for p in tmp_path.rglob("*") if p.is_file()]
+    assert leftover_files == [], f"cache directory has leftover files: {leftover_files}"

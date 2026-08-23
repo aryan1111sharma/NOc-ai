@@ -15,6 +15,14 @@ class FakeEmbedder:
         return out
 
 
+class FakeClientError(Exception):
+    """Shaped like botocore's ClientError for the one attribute kb_mcp.s3 reads."""
+
+    def __init__(self, code: str, message: str = ""):
+        super().__init__(message or code)
+        self.response = {"Error": {"Code": code}}
+
+
 class FakeS3:
     """In-memory stand-in for the five boto3 S3 calls kb_mcp.s3 makes."""
 
@@ -40,7 +48,7 @@ class FakeS3:
 
     def head_object(self, Bucket, Key):
         if Key not in self.objects:
-            raise KeyError(Key)
+            raise FakeClientError("404", "Not Found")
         return {"ContentLength": len(self.objects[Key])}
 
     def get_object(self, Bucket, Key):

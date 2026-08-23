@@ -31,6 +31,20 @@ def _original_name(key: str) -> str:
     return base.split("__", 1)[1] if "__" in base else base
 
 
+_NOT_FOUND_CODES = {"404", "NoSuchKey", "NotFound"}
+
+
+def _error_code(exc: Exception) -> str:
+    """Pull an S3 error code out of a botocore exception without importing
+    botocore — this module is deliberately client-agnostic so the tests can
+    inject a fake."""
+    response = getattr(exc, "response", None)
+    if not isinstance(response, dict):
+        return ""
+    error = response.get("Error")
+    return str(error.get("Code", "")) if isinstance(error, dict) else ""
+
+
 class S3Corpus:
     def __init__(self, client, bucket: str):
         self.c, self.bucket = client, bucket
@@ -59,11 +73,20 @@ class S3Corpus:
                 )
 
     def _exists(self, key: str) -> bool:
+        """True/False only when S3 actually answered.
+
+        A failure that is not a recognised not-found must not read as
+        "absent": that would tell a caller their document was already gone
+        when it exists, and report an overwrite as a fresh write — wrong
+        answers delivered confidently, exactly when S3 is misbehaving.
+        """
         try:
             self.c.head_object(Bucket=self.bucket, Key=key)
             return True
-        except Exception:  # noqa: BLE001 - any failure to confirm reads as absent
-            return False
+        except Exception as exc:  # noqa: BLE001 - narrowed immediately below
+            if _error_code(exc) in _NOT_FOUND_CODES:
+                return False
+            raise S3Error(f"could not check whether {key} exists: {exc}") from exc
 
     def corpus_key(self, filename: str) -> str:
         """Caller-supplied names become keys only here, so this is the one
@@ -84,6 +107,10 @@ class S3Corpus:
                 f"under {CORPUS_PREFIX}/ and a name containing a separator would "
                 "resolve to a different document"
             )
+        if any(ch < " " for ch in name):
+            # Control characters (NUL, CR, LF, ...) are legal in an S3 key
+            # but fatal on the filesystem later — reject here, not at write time.
+            raise S3Error(f"filename contains a control character: {filename!r}")
         return f"{CORPUS_PREFIX}/{name}"
 
     def find_user_upload(self, user_id: str, filename: str) -> UploadRef | None:
@@ -154,12 +181,19 @@ class S3Corpus:
             except Exception as exc:  # noqa: BLE001
                 raise S3Error(f"could not read {obj['Key']}: {exc}") from exc
             path = (dest / relative).resolve()
-            if path != dest_root and dest_root not in path.parents:
+            # Writing to dest_root itself is never legitimate (a key like
+            # "knowledge/contributed/." resolves relative == "." straight to
+            # dest_root), so it is rejected here rather than exempted by a
+            # `path != dest_root` short-circuit.
+            if path == dest_root or dest_root not in path.parents:
                 raise S3Error(
                     f"refusing to write {obj['Key']!r} outside the cache directory"
                 )
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(body)
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(body)
+            except OSError as exc:
+                raise S3Error(f"could not write {obj['Key']} to the cache: {exc}") from exc
             written.append(path)
         return written
 

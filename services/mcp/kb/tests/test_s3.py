@@ -1,7 +1,9 @@
+from pathlib import Path
+
 import pytest
 
 from kb_mcp.s3 import CHAT_PREFIX, CORPUS_PREFIX, S3Corpus, S3Error, UploadRef
-from tests.fakes import FakeS3
+from tests.fakes import FakeClientError, FakeS3
 
 
 def _corpus():
@@ -121,6 +123,28 @@ def test_download_corpus_refuses_to_escape_the_destination_directory(tmp_path):
         corpus.download_corpus(tmp_path)
 
 
+def test_download_corpus_rejects_a_key_that_resolves_to_the_destination_itself(tmp_path):
+    # A key of "knowledge/contributed/." yields relative == "." and resolves
+    # to dest_root exactly. Writing to the directory itself is never
+    # legitimate and must be rejected, not silently exempted from the check.
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/.", b"weird")
+    with pytest.raises(S3Error):
+        corpus.download_corpus(tmp_path)
+
+
+def test_download_corpus_wraps_a_local_write_failure_as_s3error(tmp_path, monkeypatch):
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/a.md", b"alpha")
+
+    def boom(self, *args, **kwargs):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_bytes", boom)
+    with pytest.raises(S3Error, match="could not write"):
+        corpus.download_corpus(tmp_path)
+
+
 def test_delete_from_corpus_removes_the_object():
     corpus, s3 = _corpus()
     s3.put(f"{CORPUS_PREFIX}/gone.md", b"x")
@@ -133,6 +157,39 @@ def test_delete_reports_false_for_an_absent_object():
     assert corpus.delete_from_corpus("never-existed.md") is False
 
 
+def test_exists_raises_rather_than_reporting_absent_when_s3_fails():
+    """A 403 or a connection flap must not read as "not there" — that tells a
+    caller their document was already gone when it exists."""
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/runbook.md", b"real content")
+
+    def forbidden(**kwargs):
+        raise FakeClientError("403", "AccessDenied: s3:GetObject")
+
+    s3.head_object = forbidden
+    with pytest.raises(S3Error, match="could not check whether"):
+        corpus.delete_from_corpus("runbook.md")
+
+
+def test_a_genuine_404_still_reports_absent():
+    corpus, _ = _corpus()
+    assert corpus.delete_from_corpus("never-existed.md") is False
+
+
+def test_copy_raises_rather_than_misreporting_replacement_when_head_fails():
+    corpus, s3 = _corpus()
+    s3.put(f"{CORPUS_PREFIX}/notes.md", b"existing")
+    s3.put(f"{CHAT_PREFIX}/u1/abc__notes.md", b"new")
+    ref = corpus.find_user_upload("u1", "notes.md")
+
+    def flaky(**kwargs):
+        raise ConnectionError("reset by peer")
+
+    s3.head_object = flaky
+    with pytest.raises(S3Error):
+        corpus.copy_to_corpus(ref)
+
+
 def test_corpus_filenames_containing_a_path_are_rejected():
     corpus, _ = _corpus()
     for bad in ("../../evil.md", "..\\..\\evil.md", "2026/report.md", "/etc/passwd"):
@@ -143,6 +200,15 @@ def test_corpus_filenames_containing_a_path_are_rejected():
 def test_a_plain_filename_is_accepted():
     corpus, _ = _corpus()
     assert corpus.corpus_key("runbook.docx") == f"{CORPUS_PREFIX}/runbook.docx"
+
+
+def test_corpus_filenames_with_control_characters_are_rejected():
+    # Control characters are legal in an S3 key but fatal on the filesystem
+    # later (e.g. embedded NUL raises ValueError from the OS layer).
+    corpus, _ = _corpus()
+    for bad in ("evil\x00.md", "evil\n.md", "evil\r.md"):
+        with pytest.raises(S3Error):
+            corpus.corpus_key(bad)
 
 
 def test_pagination_follows_continuation_token_and_accumulates(monkeypatch):
@@ -179,12 +245,10 @@ def test_pagination_raises_instead_of_looping_forever_on_a_malformed_response(mo
 
 
 class _BrokenClient:
-    """Every S3 call fails except head_object, which reports the object as
-    present. head_object succeeding (rather than also failing) matters:
-    _exists deliberately swallows a head_object failure as "absent" (see
-    corpus_key/_exists), so a client that fails everything would make
-    delete_from_corpus report False instead of exercising its own
-    delete_object wrapping. This fake isolates that wrapping instead."""
+    """Every S3 call fails, uniformly. _exists now raises on any failure that
+    isn't a recognised not-found (see kb_mcp.s3._exists), so head_object can
+    fail here too — delete_from_corpus and copy_to_corpus reach S3Error via
+    _exists itself rather than needing head_object to succeed first."""
 
     def list_objects_v2(self, **kwargs):
         raise RuntimeError("boom")
@@ -199,7 +263,7 @@ class _BrokenClient:
         raise RuntimeError("boom")
 
     def head_object(self, **kwargs):
-        return {"ContentLength": 1}
+        raise RuntimeError("boom")
 
 
 def test_every_public_method_wraps_client_failures_as_s3error(tmp_path):

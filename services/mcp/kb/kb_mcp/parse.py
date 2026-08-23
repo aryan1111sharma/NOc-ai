@@ -4,6 +4,13 @@ from pathlib import Path
 
 SUPPORTED = {".pdf", ".docx", ".xlsx", ".csv", ".md", ".markdown", ".txt", ".html", ".htm"}
 
+# Row-oriented formats whose chunks must carry the header line (see chunk_tabular).
+TABULAR = {".xlsx", ".csv"}
+
+
+class DocumentUnreadable(ValueError):
+    """The file could not be opened as the type its extension claims."""
+
 
 def _strip_html(html: str) -> str:
     text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)

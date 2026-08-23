@@ -1,6 +1,7 @@
 import shutil
 from pathlib import Path
 
+import pytest
 from qdrant_client import QdrantClient
 
 from kb_mcp.ingest import ingest
@@ -197,3 +198,154 @@ def test_prune_removes_entire_deleted_scope_folder(tmp_path: Path):
     assert r["pruned_docs"] == 1
     assert reg.for_scope("hr").known_sources() == set()
     assert reg.for_scope("ev-core").known_sources() == {"ev-core/r.md"}
+
+
+def test_ingest_file_indexes_one_document_with_provenance(tmp_path):
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    doc = tmp_path / "note.md"
+    doc.write_text("Charger QNCH-1 reboots when the gun is unplugged mid-session.",
+                   encoding="utf-8")
+
+    n = ingest_file(
+        doc, source="contributed/note.md", scope_name="contributed", store=store,
+        embedder=emb, max_chars=1800, overlap=200, doc_hash="hash1",
+        extra_payload={"uploaded_by": "noc@quench.local", "uploaded_at": "2026-08-23T10:00:00Z"},
+    )
+    assert n == 1
+
+    hits = store.search(emb.embed(["gun unplugged mid-session"])[0], top_k=5)
+    assert hits and hits[0]["source"] == "contributed/note.md"
+
+    pts, _ = store.c.scroll(store.collection, limit=10, with_payload=True)
+    payload = pts[0].payload
+    assert payload["uploaded_by"] == "noc@quench.local"
+    assert payload["uploaded_at"] == "2026-08-23T10:00:00Z"
+    assert payload["scope"] == "contributed"
+
+
+def test_ingest_file_returns_zero_for_unextractable_content(tmp_path):
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+
+    doc = tmp_path / "blank.txt"
+    doc.write_text("   \n\n  ", encoding="utf-8")
+    n = ingest_file(doc, source="contributed/blank.txt", scope_name="contributed",
+                    store=reg.for_scope("contributed"), embedder=emb,
+                    max_chars=1800, overlap=200, doc_hash="h")
+    assert n == 0
+
+
+def test_unreadable_file_raises_rather_than_indexing_nothing(tmp_path):
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.parse import DocumentUnreadable
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+
+    fake = tmp_path / "not-really.docx"
+    fake.write_text("this is plain text pretending to be Word", encoding="utf-8")
+
+    with pytest.raises(DocumentUnreadable, match="may be corrupt"):
+        ingest_file(fake, source="contributed/not-really.docx", scope_name="contributed",
+                    store=reg.for_scope("contributed"), embedder=emb,
+                    max_chars=1800, overlap=200, doc_hash="h")
+
+
+def test_batch_ingest_skips_an_unreadable_file_and_keeps_going(tmp_path):
+    """One bad document must not cost the whole corpus its index."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {"folder": "ev-core"}},
+         "profiles": {"noc": {"scopes": ["ev-core"], "description": "d"}}},
+        source="test",
+    )
+    scope_dir = tmp_path / "ev-core"
+    scope_dir.mkdir()
+    (scope_dir / "good.md").write_text("Connector lock failure recovery steps.", encoding="utf-8")
+    (scope_dir / "bad.docx").write_text("not a real docx", encoding="utf-8")
+
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+
+    stats = ingest(tmp_path, cfg, reg, emb, max_chars=1800, overlap=200)
+    assert stats["indexed_docs"] == 1
+    assert stats["unreadable_docs"] == 1
+
+
+def test_a_csv_is_chunked_with_its_header_repeated(tmp_path):
+    """chunk_tabular must actually be wired in: a CSV long enough to split
+    should carry its header on every chunk, which chunk_text would not do."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+    store = reg.for_scope("contributed")
+
+    rows = "\n".join(f"QCH-{i},charger {i} offline at the depot site" for i in range(200))
+    doc = tmp_path / "tickets.csv"
+    doc.write_text(f"id,summary\n{rows}\n", encoding="utf-8")
+
+    n = ingest_file(doc, source="contributed/tickets.csv", scope_name="contributed",
+                    store=store, embedder=emb, max_chars=600, overlap=100, doc_hash="h")
+    assert n > 1, "the CSV should have split into several chunks"
+
+    pts, _ = store.c.scroll(store.collection, limit=100, with_payload=True)
+    assert all(p.payload["text"].startswith("id | summary") for p in pts)

@@ -4,8 +4,8 @@ import hashlib
 import logging
 from pathlib import Path
 
-from .chunk import chunk_text
-from .parse import parse_file, SUPPORTED
+from .chunk import chunk_tabular, chunk_text
+from .parse import parse_file, SUPPORTED, TABULAR, DocumentUnreadable
 from .scopes import Scope, ScopesConfig
 
 log = logging.getLogger(__name__)
@@ -51,6 +51,45 @@ def _collect(root: Path, config: ScopesConfig) -> tuple[list[tuple[Path, Scope]]
     return files, skipped_root, skipped_unscoped
 
 
+def ingest_file(path, source: str, scope_name: str, store, embedder, *,
+                max_chars: int, overlap: int, doc_hash: str,
+                extra_payload: dict | None = None) -> int:
+    """Index exactly one document, replacing any previous version of it.
+
+    Shared by the corpus walk and by chat upload, so both paths chunk, embed
+    and stamp payloads identically. Returns the chunk count; 0 means nothing
+    was extractable (a scanned PDF or an empty file), which callers must treat
+    as a failure rather than a silent success.
+    """
+    path = Path(path)
+    store.delete_source(source)  # replace old version (no-op if new)
+    splitter = chunk_tabular if path.suffix.lower() in TABULAR else chunk_text
+
+    try:
+        segments = parse_file(path)
+    except Exception as exc:  # noqa: BLE001 - any parser failure is the same to callers
+        raise DocumentUnreadable(
+            f"{path.name} could not be read as {path.suffix} — the file may be corrupt, "
+            "or saved in a different format than its extension claims."
+        ) from exc
+
+    chunks: list[dict] = []
+    for seg in segments:
+        for text in splitter(seg["text"], max_chars, overlap):
+            chunk = {
+                "source": source, "scope": scope_name, "location": seg["location"],
+                "text": text, "doc_hash": doc_hash, "chunk_idx": len(chunks),
+            }
+            if extra_payload:
+                chunk.update(extra_payload)
+            chunks.append(chunk)
+
+    if not chunks:
+        return 0
+    store.upsert(chunks, embedder.embed([c["text"] for c in chunks]))
+    return len(chunks)
+
+
 def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
            max_chars: int, overlap: int, prune: bool = False) -> dict:
     root = Path(knowledge_dir)
@@ -58,7 +97,7 @@ def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
 
     stats = {
         "indexed_docs": 0, "skipped_docs": 0, "chunks": 0, "pruned_docs": 0,
-        "empty_docs": 0, "skipped_root_files": skipped_root,
+        "empty_docs": 0, "unreadable_docs": 0, "skipped_root_files": skipped_root,
         "skipped_unscoped_files": skipped_unscoped,
     }
 
@@ -74,23 +113,20 @@ def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
             stats["skipped_docs"] += 1
             continue
 
-        store.delete_source(source)  # replace old version (no-op if new)
-        chunks = []
-        for seg in parse_file(path):
-            for text in chunk_text(seg["text"], max_chars, overlap):
-                chunks.append({
-                    "source": source, "scope": scope.name, "location": seg["location"],
-                    "text": text, "doc_hash": h, "chunk_idx": len(chunks),
-                })
-
-        if not chunks:
+        try:
+            n = ingest_file(path, source=source, scope_name=scope.name, store=store,
+                            embedder=embedder, max_chars=max_chars, overlap=overlap,
+                            doc_hash=h)
+        except DocumentUnreadable as exc:
+            stats["unreadable_docs"] += 1
+            log.warning("%s", exc)
+            continue
+        if n == 0:
             stats["empty_docs"] += 1
             log.warning("%s produced no text — scanned PDF or empty file?", source)
             continue
-
-        store.upsert(chunks, embedder.embed([c["text"] for c in chunks]))
         stats["indexed_docs"] += 1
-        stats["chunks"] += len(chunks)
+        stats["chunks"] += n
 
     if prune:
         for collection_store in registry.stores():

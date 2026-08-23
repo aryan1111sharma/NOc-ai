@@ -29,6 +29,14 @@ class Settings(BaseSettings):
     aws_region: str = "ap-south-1"
     contributed_scope: str = "contributed"
     contributed_dir: str = "/knowledge/contributed"  # writable volume nested in the ro mount
+    # Transient downloads land here, and this MUST NOT sit inside the tree the
+    # corpus walker scans. It previously defaulted to contributed_dir, which
+    # meant every uploaded file was written to /knowledge/contributed/<user
+    # id>/<name> and then indexed a SECOND time by the next corpus walk — as
+    # `contributed/<user id>/<name>`, with the uploader's id embedded in the
+    # source string the chat agent cites. A rolled-back upload came back as a
+    # real document the same way.
+    upload_cache_dir: str = "/var/cache/kb-uploads"
     kb_contributor_roles: str = "kb-contributor,ADMIN"
     # A zero or negative cap would reject every upload with a message that
     # reads like the file is too large, hiding the real fault. Fail at startup

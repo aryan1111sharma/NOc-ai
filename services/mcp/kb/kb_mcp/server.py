@@ -94,7 +94,9 @@ def build_writer(settings, config: ScopesConfig, registry, embedder):
         corpus=S3Corpus(client, settings.s3_bucket),
         registry=registry, embedder=embedder,
         scope=settings.contributed_scope,
-        cache_dir=settings.contributed_dir,
+        # Deliberately NOT contributed_dir: a cache inside the walked corpus
+        # tree gets indexed a second time by the next ingest pass.
+        cache_dir=settings.upload_cache_dir,
         contributor_roles=settings.contributor_roles,
         max_upload_mb=settings.kb_max_upload_mb,
         max_chars=settings.chunk_max_chars,

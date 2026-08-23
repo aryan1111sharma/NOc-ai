@@ -354,3 +354,29 @@ async def test_store_failure_raises_rather_than_returning_empty():
     server = build_server(config=CFG, registry=reg, embedder=emb)
     with pytest.raises(ToolError, match="qdrant unreachable"):
         await _call(server, "kb_search_noc", {"query": "anything"})
+
+
+def test_build_writer_caches_outside_the_walked_corpus_tree(monkeypatch):
+    """Regression: cache_dir was wired to contributed_dir, so downloads landed
+    inside the folder the corpus walker scans and were indexed a second time
+    under a source containing the uploader's user id."""
+    from kb_mcp.config import Settings
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.server import build_writer
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {}, "contributed": {}},
+         "profiles": {"noc": {"scopes": ["ev-core", "contributed"], "description": "d"}}},
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+
+    import boto3
+
+    monkeypatch.setattr(boto3, "client", lambda *a, **k: object())
+    settings = Settings(s3_bucket="quench-manthan-kb")
+    writer = build_writer(settings, cfg, reg, e)
+
+    assert str(writer.cache_dir) not in settings.contributed_dir
+    assert "knowledge" not in str(writer.cache_dir)

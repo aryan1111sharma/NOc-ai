@@ -43,3 +43,14 @@ def test_a_zero_or_negative_upload_cap_is_refused_at_startup():
 def test_a_positive_upload_cap_is_accepted():
     assert Settings(kb_max_upload_mb=1).kb_max_upload_mb == 1
     assert Settings(kb_max_upload_mb=100).kb_max_upload_mb == 100
+
+
+def test_the_upload_cache_is_not_inside_the_walked_corpus_tree():
+    """A cache under contributed_dir is walked by the corpus ingest pass, so
+    every upload gets indexed a second time as `contributed/<user id>/<name>`
+    — with the uploader's id in the source string the agent cites — and a
+    rolled-back upload returns as a real document."""
+    s = Settings()
+    assert s.upload_cache_dir == "/var/cache/kb-uploads"
+    assert not s.upload_cache_dir.startswith(s.contributed_dir)
+    assert not s.upload_cache_dir.startswith("/knowledge")

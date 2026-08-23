@@ -32,20 +32,6 @@ modelSpecs:
       preset:
         endpoint: "agents"
         agent_id: "agent_kimi26NOCEngineerV1"
-    # Kept reachable so GLM can be compared side by side once its balance is topped up.
-    - name: "noc-engineer-glm"
-      label: "NOC Engineer (GLM)"
-      description: "Same agent on GLM glm-5.2. Fails while the z.ai account is out of balance."
-      preset:
-        endpoint: "agents"
-        agent_id: "agent_HFlnDrb9elCZbJPDsUATc"
-    # Listed so noc-l1 users keep an entry point once the spec list is prioritised.
-    - name: "noc-l1-support"
-      label: "NOC L1 Support"
-      description: "L1 support assistant (granted to the noc-l1 role)."
-      preset:
-        endpoint: "agents"
-        agent_id: "agent_5HmjjTDnFlY1bqhXxJ1ax"
 
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:

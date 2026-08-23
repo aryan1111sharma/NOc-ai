@@ -140,3 +140,53 @@ def test_parses_csv_and_repeats_header(tmp_path: Path):
 
 def test_spreadsheet_extensions_supported(tmp_path: Path):
     assert ".xlsx" in SUPPORTED and ".csv" in SUPPORTED
+
+
+def test_uncalculated_formula_cells_are_not_silently_dropped(tmp_path: Path):
+    """A workbook never opened in Excel has no cached formula results, so
+    data_only=True returns None for them. Indexing that as blank would lose a
+    whole column of a calculated matrix without any warning."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    s = wb.active
+    s.title = "Matrix"
+    s.append(["A", "B", "Sum"])
+    s.append([3, 4, "=A2+B2"])
+    f = tmp_path / "calc.xlsx"
+    wb.save(f)
+
+    segs = parse_file(f)
+    assert "=A2+B2" in segs[0]["text"]
+
+
+def test_cell_text_prefers_a_cached_value_over_the_formula():
+    from kb_mcp.parse import _cell_text
+    assert _cell_text(7, "=A2+B2") == "7"
+    assert _cell_text(None, "=A2+B2") == "=A2+B2"
+    assert _cell_text(None, None) == ""
+    assert _cell_text(0, None) == "0"
+
+
+def test_phantom_trailing_columns_are_trimmed(tmp_path: Path):
+    """read_only mode inflates the used range to include cells that were
+    written and later cleared, padding every row with empty columns."""
+    from openpyxl import Workbook
+    wb = Workbook()
+    s = wb.active
+    s.title = "Sparse"
+    s.append(["Code", "Meaning"])
+    s["ZZ500"] = "temp"
+    s["ZZ500"] = None
+    f = tmp_path / "sparse.xlsx"
+    wb.save(f)
+
+    segs = parse_file(f)
+    assert segs[0]["text"] == "Code | Meaning"
+
+
+def test_csv_exported_from_excel_has_a_clean_header(tmp_path: Path):
+    f = tmp_path / "excel-export.csv"
+    f.write_text("id,summary\nQCH-1,offline\n", encoding="utf-8-sig")
+    segs = parse_file(f)
+    assert segs[0]["text"].startswith("id | summary")
+    assert "﻿" not in segs[0]["text"]

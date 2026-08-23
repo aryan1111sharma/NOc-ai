@@ -70,29 +70,74 @@ def _rows_to_text(rows: list[list[str]]) -> str:
     return "\n".join(" | ".join(cells) for cells in rows)
 
 
+def _cell_text(value, formula) -> str:
+    """Cached value first, falling back to the formula text.
+
+    A cell whose formula was never evaluated has no cached value; indexing it
+    as blank loses the column silently, so the formula itself is kept — it is
+    at least searchable and visibly uncalculated.
+    """
+    if value is not None:
+        return str(value).strip()
+    if isinstance(formula, str) and formula.startswith("="):
+        return formula.strip()
+    return ""
+
+
+def _trim_empty_columns(rows: list[list[str]]) -> list[list[str]]:
+    """Drop trailing columns that are empty in every row.
+
+    read_only mode reports the used range inflated by any cell ever written
+    to, even one later cleared, so a two-row table can arrive padded to
+    hundreds of columns. Left in place, that padding crowds genuine content
+    out of the chunk window.
+    """
+    width = 0
+    for row in rows:
+        for i, cell in enumerate(row):
+            if cell:
+                width = max(width, i + 1)
+    return [row[:width] for row in rows] if width else []
+
+
 def _parse_xlsx(path: Path) -> list[dict]:
+    """One segment per sheet, rows pipe-joined, sheet name as the location.
+
+    Two workbooks are opened, not one. `data_only=True` yields a formula's
+    cached result, but a workbook generated programmatically was never
+    rendered by Excel and has no cache — every formula cell would come back
+    None and be silently indexed as blank. The second, formula-preserving
+    load supplies the formula text so a cell is never silently empty.
+    """
     from openpyxl import load_workbook  # lazy: keeps server start fast
 
-    wb = load_workbook(str(path), read_only=True, data_only=True)
+    values = load_workbook(str(path), read_only=True, data_only=True)
+    formulas = load_workbook(str(path), read_only=True, data_only=False)
     try:
         segs = []
-        for sheet in wb.worksheets:
+        for sheet, formula_sheet in zip(values.worksheets, formulas.worksheets):
             rows = []
-            for row in sheet.iter_rows(values_only=True):
-                cells = ["" if v is None else str(v).strip() for v in row]
+            for value_row, formula_row in zip(
+                sheet.iter_rows(values_only=True),
+                formula_sheet.iter_rows(values_only=True),
+            ):
+                cells = [_cell_text(v, f) for v, f in zip(value_row, formula_row)]
                 if any(cells):
                     rows.append(cells)
+            rows = _trim_empty_columns(rows)
             if rows:
                 segs.append({"text": _rows_to_text(rows), "location": sheet.title})
         return segs
     finally:
-        wb.close()
+        values.close()
+        formulas.close()
 
 
 def _parse_csv(path: Path) -> list[dict]:
     import csv
 
-    with path.open("r", encoding="utf-8", errors="replace", newline="") as fh:
+    # utf-8-sig transparently strips an Excel BOM and still reads plain UTF-8.
+    with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as fh:
         rows = [[c.strip() for c in row] for row in csv.reader(fh) if any(c.strip() for c in row)]
     return [{"text": _rows_to_text(rows), "location": path.name}] if rows else []
 

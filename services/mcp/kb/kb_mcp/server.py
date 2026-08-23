@@ -84,12 +84,22 @@ def build_writer(settings, config: ScopesConfig, registry, embedder):
         )
         return None
 
-    import boto3  # lazy: tests must never need AWS libraries at import time
-
     from .s3 import S3Corpus
     from .writes import KbWriter
 
-    client = boto3.client("s3", region_name=settings.aws_region)
+    try:
+        import boto3  # lazy: tests must never need AWS libraries at import time
+
+        client = boto3.client("s3", region_name=settings.aws_region)
+    except Exception:  # noqa: BLE001 - any AWS-side failure degrades, never crashes
+        # Uploads are optional; search is not. A malformed AWS_REGION or a
+        # broken boto3 install would otherwise propagate out of build_server
+        # and crash-loop the container, taking search down because an OPTIONAL
+        # write dependency is misconfigured — the opposite of what the
+        # docstring above promises. Log loudly and register no write tools.
+        log.exception("could not build the S3 client — upload tools disabled, search still available")
+        return None
+
     return KbWriter(
         corpus=S3Corpus(client, settings.s3_bucket),
         registry=registry, embedder=embedder,

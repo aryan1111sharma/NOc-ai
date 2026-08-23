@@ -378,5 +378,58 @@ def test_build_writer_caches_outside_the_walked_corpus_tree(monkeypatch):
     settings = Settings(s3_bucket="quench-manthan-kb")
     writer = build_writer(settings, cfg, reg, e)
 
-    assert str(writer.cache_dir) not in settings.contributed_dir
-    assert "knowledge" not in str(writer.cache_dir)
+    assert settings.contributed_dir not in str(writer.cache_dir)
+    assert settings.knowledge_dir not in str(writer.cache_dir)
+
+
+@pytest.mark.asyncio
+async def test_identity_is_resolved_per_call_not_once_per_server(tmp_path):
+    """Regression guard on a Critical-class property. If _caller_from were ever
+    memoised, every write after the first would execute under the FIRST
+    caller's grant: a non-contributor's upload would succeed on someone else's
+    authorisation, and the recorded uploader would be the wrong person.
+
+    The rest of the suite cannot see this — every other test builds a server
+    with one fixed identity, so a memoising implementation passes all of them.
+    """
+    identities = [
+        {"x-user-id": "u1", "x-user-email": "noc@quench.local",
+         "x-user-role": "kb-contributor"},
+        {"x-user-id": "u9", "x-user-email": "guest@quench.local",
+         "x-user-role": "noc-engineer"},
+    ]
+    calls = iter(identities)
+
+    def rotating():
+        return next(calls)
+
+    from kb_mcp.s3 import S3Corpus
+    from kb_mcp.writes import KbWriter
+    from tests.fakes import FakeS3
+
+    s3 = FakeS3()
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), CFG, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    writer = KbWriter(
+        corpus=S3Corpus(s3, "b"), registry=reg, embedder=e, scope="ev-core",
+        cache_dir=tmp_path / "cache", contributor_roles=("kb-contributor",),
+        max_upload_mb=25, max_chars=1800, overlap=200, now=lambda: "2026-08-23T10:00:00Z",
+    )
+    server = build_server(config=CFG, registry=reg, embedder=e, writer=writer,
+                          headers_source=rotating)
+
+    s3.put("chat-uploads/u1/abc__first.md", b"the contributor's own document")
+    # Deliberately under u1's OWN prefix: under a memoising implementation the
+    # second call would still resolve to u1 and the upload would SUCCEED — an
+    # unauthorised write on another user's grant. The test then fails with
+    # "DID NOT RAISE", which is the danger, not merely a wrong error type.
+    s3.put("chat-uploads/u1/abc__second.md", b"reachable only as u1")
+
+    async with Client(server) as client:
+        # First call: a contributor, and it succeeds.
+        await client.call_tool("kb_upload_document", {"filename": "first.md"})
+        # Second call: a different, non-contributing caller. It must be refused
+        # on its OWN identity, not waved through on the first caller's.
+        with pytest.raises(ToolError, match="permission"):
+            await client.call_tool("kb_upload_document", {"filename": "second.md"})

@@ -30,6 +30,11 @@ def chunk_tabular(text: str, max_chars: int, overlap_chars: int) -> list[str]:
     embeds to a vector that matches no plausible question. Repeating the
     header costs a few characters per chunk and makes every chunk
     independently interpretable.
+
+    `overlap_chars` is accepted for signature parity with `chunk_text`, so the
+    two are interchangeable at the call site, but it is deliberately unused:
+    every chunk already repeats the header, which is the context an overlap
+    would otherwise have to carry.
     """
     text = (text or "").strip()
     if not text:
@@ -46,6 +51,18 @@ def chunk_tabular(text: str, max_chars: int, overlap_chars: int) -> list[str]:
     chunks, cur = [], []
     size = 0
     for row in rows:
+        if len(row) > budget:
+            # A row wider than the whole budget cannot share a chunk with
+            # anything. Flush what is pending, then hard-split it: the
+            # max_chars ceiling is what keeps a chunk inside the embedding
+            # model's window, and an over-long chunk is truncated by the
+            # model rather than by us — silently losing the tail.
+            if cur:
+                chunks.append(header + "\n" + "\n".join(cur))
+                cur, size = [], 0
+            for i in range(0, len(row), budget):
+                chunks.append(header + "\n" + row[i:i + budget])
+            continue
         if cur and size + len(row) + 1 > budget:
             chunks.append(header + "\n" + "\n".join(cur))
             cur, size = [], 0

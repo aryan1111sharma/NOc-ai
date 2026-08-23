@@ -2563,6 +2563,10 @@ In `apps/ai-platform/librechat/docker-compose.yml`, replace the `kb-mcp-server` 
       # layer, so every rebuild re-downloaded it before the first ingest could
       # run. A volume makes rebuilds cheap.
       - kb-model-cache:/tmp/fastembed_cache
+      # Transient upload downloads. Deliberately NOT under /knowledge: a cache
+      # inside the walked corpus tree gets indexed a second time by the next
+      # ingest pass, under a source containing the uploader's user id.
+      - kb-upload-cache:/var/cache/kb-uploads
     restart: unless-stopped
 ```
 
@@ -2572,6 +2576,7 @@ In the top-level `volumes:` block of the same file, add:
 ```yaml
   kb-contributed:
   kb-model-cache:
+  kb-upload-cache:
 ```
 
 - [ ] **Step 3: Add the credentials to .env**

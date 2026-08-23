@@ -343,6 +343,25 @@ Every failure is explicit; none may present as success.
 | Identical bytes already indexed | Report the existing source; do not duplicate. The sha256 check already makes this a no-op. |
 | S3 unreachable | Fail loudly. No partial index. |
 
+### 6.1 Known limitation — copy and index are not atomic
+
+Two contributors uploading the **same filename** at the same moment can leave the stored
+object and the indexed text describing different documents. The window is the embedding
+call between writing the corpus object and upserting the chunks; a security review
+reproduced it with a slowed embedder, ending with `"energise the charger during service"`
+stored and `"isolate the charger before service"` indexed, and both callers told they
+succeeded.
+
+Two things narrow it. Indexing now happens **before** the corpus copy, so the window is a
+single S3 PUT rather than a full embed. And the corpus namespace being flat is already
+documented, so same-name collisions are a known property rather than a surprise.
+
+It is not closed. Closing it needs either a conditional write (S3 `If-None-Match`, or an
+ETag re-check immediately before the upsert) or serialisation per corpus key. Neither is
+warranted for a team of this size uploading occasional documents, and both add a failure
+mode of their own. Recorded so the next person meets it deliberately; revisit if
+contributed uploads become frequent enough that two people plausibly race on one filename.
+
 ## 7. Testing
 
 Unit, against a fake S3 client mirroring the fake-server pattern in `services/mcp/cms`:

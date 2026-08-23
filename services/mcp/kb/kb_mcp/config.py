@@ -1,7 +1,13 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # NOTE: env_file is resolved relative to the PROCESS WORKING DIRECTORY, not
+    # this module. A stray .env dropped into services/mcp/kb/ for unrelated
+    # local config will silently override these settings under test. The
+    # container is unaffected — compose sets every value explicitly and there
+    # is no .env at /app.
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     qdrant_url: str = "http://qdrant:6333"
@@ -24,7 +30,10 @@ class Settings(BaseSettings):
     contributed_scope: str = "contributed"
     contributed_dir: str = "/knowledge/contributed"  # writable volume nested in the ro mount
     kb_contributor_roles: str = "kb-contributor,ADMIN"
-    kb_max_upload_mb: int = 25
+    # A zero or negative cap would reject every upload with a message that
+    # reads like the file is too large, hiding the real fault. Fail at startup
+    # instead, where the cause is obvious.
+    kb_max_upload_mb: int = Field(default=25, gt=0)
 
     mcp_transport: str = "stdio"
     mcp_host: str = "127.0.0.1"

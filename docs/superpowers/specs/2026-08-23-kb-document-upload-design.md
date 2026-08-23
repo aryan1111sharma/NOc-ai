@@ -153,6 +153,24 @@ cannot: "what have users added?" is answerable by a filter rather than a guess; 
 batch is pruned without touching curated OCPP specs; and retrieval can later be tuned
 per-scope (`min_score`) if contributed quality differs from curated.
 
+**Provenance can be lost by the batch walk, in one narrow case.** Contributed documents
+are synced from S3 into the corpus directory, so `ingest --prune` also walks them. An
+unchanged file is skipped on its content hash and keeps its `uploaded_by`; but a
+contributed file **edited directly on disk** is re-ingested by the walk with no
+`extra_payload`, silently dropping its uploader. Chat upload is unaffected — it always
+stamps provenance.
+
+Accepted rather than fixed, because the only route to it is an administrator hand-editing
+a file inside the contributed volume, which the upload feature exists to make unnecessary.
+Recorded so it is a known behaviour rather than a surprise. If it does bite, the fix is
+for `ingest()` to read a source's existing provenance before re-ingesting it and pass it
+back through as `extra_payload`.
+
+Relatedly, `list_documents` **merges** provenance across a document's chunks rather than
+taking the first one seen: Qdrant's `scroll` yields points in point-ID (UUID) order, which
+is unrelated to chunk index or recency, so first-wins reported a document's uploader by
+accident — and in testing the chunk *without* provenance won consistently.
+
 `knowledge/MANIFEST.md` — the git-tracked audit list of loaded documents — stays the
 record for the **curated** corpus only. It cannot track contributed uploads: the KB
 container has no write access to the repo, and a manifest updated by a running service

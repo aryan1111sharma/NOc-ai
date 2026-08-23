@@ -222,6 +222,21 @@ To keep the header row available to every chunk of a CSV or sheet, chunking for 
 formats prepends the header line to each chunk rather than relying on the 200-character
 overlap to carry it.
 
+**Known limitations of the pipe-joined representation**, confirmed by exercising the
+parsers rather than assumed:
+
+- A cell whose own text contains `" | "` is indistinguishable from a column separator
+  once joined, and a cell containing a newline reads as a new row. Both distort what the
+  agent quotes back, though neither loses data. Escaping was not added: it would make the
+  common case less readable to the embedding model for a rare input.
+- Ragged rows are safe — openpyxl pads short rows with `None`, which becomes `""`, so
+  column alignment survives.
+- Whole numbers do **not** become floats. `data_only=True` returns an `int` for a cell
+  showing `1`, so it embeds as `"1"` and matches what a person would search for. This was
+  the failure worth checking: `"1.0"` would have silently missed every query.
+- Word headers, footers, footnotes, and tables nested inside a table cell are dropped,
+  because only the top-level document body is walked.
+
 ### 4.8 Vector store and durability
 
 **Qdrant stays local.** `ev_kb` is 190 points / 2.5 MB today; a hundredfold expansion is

@@ -1106,6 +1106,15 @@ class S3Corpus:
             if not resp.get("IsTruncated"):
                 return out
             token = resp.get("NextContinuationToken")
+            if not token:
+                # A truncated response with no token would spin this loop
+                # forever, wedging the server thread on a malformed or
+                # throttled reply. Fail loudly instead — a partial listing is
+                # recoverable, a hung MCP server is not.
+                raise S3Error(
+                    f"S3 reported more results for {prefix!r} but returned no "
+                    "continuation token"
+                )
 
     def corpus_key(self, filename: str) -> str:
         """Caller-supplied names become keys only here, so this is the one

@@ -5,6 +5,12 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.12.2] - 2026-08-23
+
+### Chores
+
+- **ai-platform:** Retire GLM and legacy agents, leaving NOC Engineer (Kimi) ([`e3f58af`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e3f58af1f682e238a58fc05009dd5f62a63d4275))
+
 ## [0.12.1] - 2026-08-17
 
 ### Bug Fixes

@@ -61,6 +61,8 @@ Out of scope for this spec; each would be its own project:
 | D5 | Storage | **S3**, for both LibreChat file storage and the KB corpus | Repo folder made writable; separate Docker named volume |
 | D6 | Bucket | **New `quench-manthan-kb`** (ap-south-1) | Reuse `quench-manthan-data`; two separate buckets |
 | D7 | Credentials | **Dedicated IAM service user**, policy scoped to the one bucket | Reuse the `cjain` personal IAM key |
+| D8 | Document formats | Add **`.docx`, `.xlsx`, `.csv`** parsers to the existing set | PDF/markdown/text only; bundling LibreOffice for legacy `.doc` |
+| D9 | Vector store | **Qdrant stays local**, with snapshots to S3 | Qdrant on EC2; Qdrant Cloud; Aurora pgvector; OpenSearch Serverless; Bedrock Knowledge Bases |
 
 ### 3.1 Why chat, and not a web app
 
@@ -192,6 +194,70 @@ boundary: one contributor cannot reach another's uploaded file by guessing its n
    `uploaded_at` into every chunk payload.
 6. Tool returns `{source, chunks, scope}`; the document is searchable immediately.
 
+### 4.7 Document formats
+
+The parser currently accepts `{.pdf, .md, .markdown, .txt, .html, .htm}`. Word and Excel
+are **not** in that set, and the corpus walker skips unsupported extensions silently — so
+a `.docx` uploaded today would be stored, reported as added, and never indexed. Since
+Word and Excel are exactly what contributors will bring, `parse.py` gains:
+
+| Extension | Parser | Segment / `location` |
+|---|---|---|
+| `.docx` | `python-docx` | Paragraphs and table cell text; nearest preceding heading as location |
+| `.xlsx` | `openpyxl` (read-only mode) | One segment per sheet, rows serialised as text; sheet name as location |
+| `.csv` | stdlib `csv` | One segment per file; header row retained on each chunk |
+| `.doc` | — | Rejected with "re-save as .docx". Supporting legacy binary Word means bundling LibreOffice: a very large dependency for a rare case. |
+
+**Spreadsheets retrieve poorly and the tool description must say so.** Meaning in a
+spreadsheet lives in column headers and row relationships, not in the character sequence,
+so a grid of numbers chunked at 1800 characters embeds to a vector that matches almost
+nothing. This works for *textual* Excel — issue lists, test matrices, per-row notes with
+context — and badly for numeric fleet data. For numeric data the NOC and CMS MCP servers
+query live systems directly, which beats RAG over a stale export on both accuracy and
+freshness. The `kb_upload_document` description states this so the agent steers
+contributors accordingly, and does not reach for a spreadsheet chunk when it should be
+calling a live tool.
+
+To keep the header row available to every chunk of a CSV or sheet, chunking for these
+formats prepends the header line to each chunk rather than relying on the 200-character
+overlap to carry it.
+
+### 4.8 Vector store and durability
+
+**Qdrant stays local.** `ev_kb` is 190 points / 2.5 MB today; a hundredfold expansion is
+still ~250 MB. Managed alternatives (Aurora pgvector ~$45/mo, OpenSearch Serverless
+~$350+/mo, Qdrant Cloud ~$25+/mo — all ap-south-1 ballpark, verify before committing) cost
+one to two orders of magnitude more than the problem is worth at this scale.
+
+Two further reasons, beyond cost:
+
+- **It would not remove a single point of failure.** LibreChat, Mongo, Meilisearch and all
+  eight MCP servers run on the same on-prem host (`172.16.12.188`). Moving only the vector
+  DB adds an internet hop to every search and leaves the SPOF exactly where it was. The
+  vector store should follow the rest of the stack to AWS, never lead it.
+- **Bedrock Knowledge Bases would weaken access control.** `kb_search_<profile>` binds its
+  scope filter *server-side*, so an agent cannot retrieve knowledge it was not granted and
+  the model never passes a scope. Bedrock's retrieval API takes the filter from the
+  caller, moving that guarantee from "structurally impossible" to "the caller promises" —
+  a real downgrade for a system whose scopes will eventually span HR, finance and
+  per-customer knowledge.
+
+The index is **derived**: `ingest` rebuilds it from the corpus, which is why S3 (D5) is
+the decision that actually protects the knowledge. Two additions make recovery fast rather
+than merely possible:
+
+1. **Qdrant snapshot → S3**, scheduled. Restores in seconds instead of re-embedding the
+   whole corpus.
+2. **A Docker volume for the embedding-model cache.** The 209 MB `fastembed` cache
+   currently sits in the container's writable layer at `/tmp/fastembed_cache`, so any
+   rebuild or `--force-recreate` re-downloads it before the first ingest can run. This is
+   a pre-existing defect, and it would otherwise surface as an inexplicable stall the
+   first time someone uploads a document after a redeploy.
+
+**Revisit this decision when** — and not before — the stack moves to AWS as a whole, the
+corpus approaches a few million chunks, HA with a real RTO is required, or compliance
+demands the index itself (not just the source documents) be held off-site.
+
 ## 5. Configuration
 
 `librechat.yaml`:
@@ -213,6 +279,13 @@ LibreChat env: `fileStrategy: s3` plus `AWS_BUCKET_NAME`, `AWS_REGION`,
 KB server env: `S3_BUCKET`, `AWS_REGION`, the same key pair, and
 `KB_CONTRIBUTOR_ROLES` (default `kb-contributor,ADMIN`), `KB_MAX_UPLOAD_MB` (default 25).
 
+New Python dependencies for `services/mcp/kb`: `boto3` (S3), `python-docx` (Word),
+`openpyxl` (Excel). CSV uses the standard library.
+
+New Docker volumes on `kb-mcp-server`: one for the `fastembed` model cache (§4.8), and one
+writable path for the synced contributed corpus — `knowledge/ev-core` stays mounted
+read-only, so only contributed content is writable.
+
 AWS: a new IAM user `manthan-kb-svc` with a policy allowing `s3:GetObject`,
 `s3:PutObject`, `s3:DeleteObject`, `s3:ListBucket` on `quench-manthan-kb` and its two
 prefixes only. The personal `cjain` key is not used by any container — a service outage
@@ -230,7 +303,7 @@ Every failure is explicit; none may present as success.
 |---|---|
 | Caller lacks the role | Refuse, naming the required role. Log user id, tool, and target. |
 | Identity headers absent | Refuse. A missing header is a misconfiguration, never an implicit grant. |
-| Unsupported file type | Refuse, listing the accepted set (`.pdf .md .txt .html .htm .markdown`). |
+| Unsupported file type | Refuse, listing the accepted set (`.pdf .docx .xlsx .csv .md .markdown .txt .html .htm`). `.doc` gets the specific "re-save as .docx" message rather than the generic list. |
 | File exceeds `KB_MAX_UPLOAD_MB` | Refuse before download. |
 | Filename not in caller's prefix | Refuse with "no such upload" — same message whether it is absent or belongs to someone else, so the tool is not an existence oracle for other users' files. |
 | Parse yields no text (scanned PDF) | **Fail** and say so. Today the pipeline logs an `empty_docs` warning and moves on; silently accepting a document that indexed nothing is the worst outcome here. |
@@ -246,6 +319,11 @@ Unit, against a fake S3 client mirroring the fake-server pattern in `services/mc
 - **Cross-user isolation:** a caller cannot resolve another user's upload by filename, and
   the refusal is indistinguishable from a genuinely absent file.
 - Duplicate detection, unsupported type, oversize rejection, empty-parse failure.
+- **Parsers:** a `.docx` with headings and a table yields both paragraph and cell text; a
+  multi-sheet `.xlsx` yields one segment per sheet with the sheet name as location; a
+  `.csv` carries its header row into every chunk; `.doc` is rejected with the specific
+  re-save message. Each new format also gets an empty-file case, since an empty parse must
+  fail rather than report success.
 - `kb_remove_document` deletes the object *and* prunes chunks; a subsequent search misses.
 - `contributed` chunks carry `uploaded_by` / `uploaded_at`; `kb_search_noc` spans both
   scopes.
@@ -278,4 +356,8 @@ phrase that appears only in that PDF.
 4. `kb_remove_document` removes it; the next search no longer returns it.
 5. Re-uploading identical bytes reports "already indexed" and creates no duplicate chunks.
 6. `kb_search_noc` still returns curated `ev-core` content — no regression.
-7. Existing KB test suite passes unchanged.
+7. A `.docx` and a textual `.xlsx` each complete the same round trip as the PDF in (1),
+   with `location` reporting the heading and the sheet name respectively.
+8. Restoring a Qdrant snapshot from S3 reproduces the collection without re-embedding, and
+   a rebuilt `kb-mcp-server` starts without re-downloading the 209 MB model cache.
+9. Existing KB test suite passes unchanged.

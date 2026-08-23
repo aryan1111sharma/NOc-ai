@@ -228,30 +228,95 @@ def _parse_docx(path: Path) -> list[dict]:
 
     Word has no pages until it is rendered, so `location` uses the document's
     own structure instead: a heading is the most useful thing to cite back.
+
+    The body is walked in document order rather than through `doc.paragraphs`
+    and `doc.tables`. Those are two independent collections, so iterating them
+    separately loses the interleaving and tags every table with whichever
+    heading happened to come last in the file — which would cite a fault table
+    against the wrong procedure.
     """
     import docx  # imported lazily: a parser dependency must not slow server start
+    from docx.table import Table
+    from docx.text.paragraph import Paragraph
 
     doc = docx.Document(str(path))
     segs: list[dict] = []
     current = path.name
-    for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            continue
-        if para.style is not None and (para.style.name or "").startswith("Heading"):
-            current = text
-            continue
-        segs.append({"text": text, "location": current})
-    for table in doc.tables:
-        rows = []
-        for row in table.rows:
-            cells = [c.text.strip() for c in row.cells]
-            if any(cells):
-                rows.append(" | ".join(cells))
-        if rows:
-            segs.append({"text": "\n".join(rows), "location": current})
+
+    for child in doc.element.body.iterchildren():
+        if child.tag.endswith("}p"):
+            para = Paragraph(child, doc)
+            text = para.text.strip()
+            if not text:
+                continue
+            if para.style is not None and (para.style.name or "").startswith("Heading"):
+                current = text
+                continue
+            segs.append({"text": text, "location": current})
+        elif child.tag.endswith("}tbl"):
+            rows = []
+            for row in Table(child, doc).rows:
+                # A horizontally merged cell is repeated once per column it
+                # spans; emitting it each time duplicates text into the
+                # embedding, so keep only the first appearance.
+                cells, previous = [], None
+                for cell in row.cells:
+                    if previous is not None and cell._tc is previous:
+                        continue
+                    previous = cell._tc
+                    cells.append(cell.text.strip())
+                if any(cells):
+                    rows.append(" | ".join(cells))
+            if rows:
+                segs.append({"text": "\n".join(rows), "location": current})
+
     return segs
 ```
+
+Add these two regression tests as well — the heading test above has only one heading,
+so a correct and an incorrect implementation both pass it:
+```python
+def test_each_table_gets_the_heading_it_sits_under(tmp_path: Path):
+    """Regression: tables were previously tagged with the last heading in the
+    whole document, so a table under one section was cited as another."""
+    from docx import Document
+
+    doc = Document()
+    doc.add_heading("Section A", level=1)
+    t1 = doc.add_table(rows=1, cols=2)
+    t1.cell(0, 0).text = "A-Code"
+    t1.cell(0, 1).text = "value under A"
+    doc.add_heading("Section B", level=1)
+    t2 = doc.add_table(rows=1, cols=2)
+    t2.cell(0, 0).text = "B-Code"
+    t2.cell(0, 1).text = "value under B"
+    f = tmp_path / "sections.docx"
+    doc.save(f)
+
+    segs = parse_file(f)
+    by_text = {s["text"].split(" | ")[0]: s["location"] for s in segs}
+    assert by_text["A-Code"] == "Section A"
+    assert by_text["B-Code"] == "Section B"
+
+
+def test_merged_cells_are_not_duplicated(tmp_path: Path):
+    from docx import Document
+
+    doc = Document()
+    table = doc.add_table(rows=1, cols=3)
+    table.cell(0, 0).merge(table.cell(0, 1))
+    table.cell(0, 0).text = "Merged Header"
+    table.cell(0, 2).text = "Col3"
+    f = tmp_path / "merged.docx"
+    doc.save(f)
+
+    segs = parse_file(f)
+    assert segs[0]["text"] == "Merged Header | Col3"
+```
+
+**Known accepted gaps** (do not fix here): headers, footers, footnotes and tables nested
+inside a table cell are silently dropped, because only the top-level body is walked.
+Recorded so the limitation is known rather than discovered later.
 
 Then wire it into `parse_file`, immediately after the existing `.pdf` branch:
 ```python
@@ -1137,16 +1202,114 @@ In `ingest.py`, replace the body of the per-file loop inside `ingest()` — from
         stats["chunks"] += n
 ```
 
-- [ ] **Step 6: Run the whole suite**
+- [ ] **Step 6: Make one unreadable file not abort a whole batch**
+
+Found during Task 3's code review: a corrupt or mis-named file raises out of the parser
+(`PackageNotFoundError` for a fake `.docx`, and the `.pdf` branch has the same exposure).
+`parse_file` is called with no guard, so a single bad file aborts the entire ingest run —
+and on the upload path it would surface a raw library exception to a NOC engineer.
+
+Guard it once, centrally, where both paths meet. Add to `services/mcp/kb/kb_mcp/parse.py`:
+```python
+class DocumentUnreadable(ValueError):
+    """The file could not be opened as the type its extension claims."""
+```
+
+Wrap the parse call inside `ingest_file`:
+```python
+    try:
+        segments = parse_file(path)
+    except Exception as exc:  # noqa: BLE001 - any parser failure is the same to callers
+        raise DocumentUnreadable(
+            f"{path.name} could not be read as {path.suffix} — the file may be corrupt, "
+            "or saved in a different format than its extension claims."
+        ) from exc
+
+    for seg in segments:
+```
+(replacing the bare `for seg in parse_file(path):` line, and importing `DocumentUnreadable`
+alongside the other `parse` imports).
+
+Then make the batch walk survive it — in `ingest()`, wrap the `ingest_file` call:
+```python
+        try:
+            n = ingest_file(path, source=source, scope_name=scope.name, store=store,
+                            embedder=embedder, max_chars=max_chars, overlap=overlap,
+                            doc_hash=h)
+        except DocumentUnreadable as exc:
+            stats["unreadable_docs"] += 1
+            log.warning("%s", exc)
+            continue
+```
+and add `"unreadable_docs": 0` to the `stats` dict initialiser.
+
+Test it — append to `tests/test_ingest.py`:
+```python
+def test_unreadable_file_raises_rather_than_indexing_nothing(tmp_path):
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest_file
+    from kb_mcp.parse import DocumentUnreadable
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"contributed": {}},
+         "profiles": {"noc": {"scopes": ["contributed"], "description": "d"}}},
+        source="test",
+    )
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+
+    fake = tmp_path / "not-really.docx"
+    fake.write_text("this is plain text pretending to be Word", encoding="utf-8")
+
+    with pytest.raises(DocumentUnreadable, match="may be corrupt"):
+        ingest_file(fake, source="contributed/not-really.docx", scope_name="contributed",
+                    store=reg.for_scope("contributed"), embedder=emb,
+                    max_chars=1800, overlap=200, doc_hash="h")
+
+
+def test_batch_ingest_skips_an_unreadable_file_and_keeps_going(tmp_path):
+    """One bad document must not cost the whole corpus its index."""
+    from qdrant_client import QdrantClient
+
+    from kb_mcp.ingest import ingest
+    from kb_mcp.scopes import parse_scopes
+    from kb_mcp.store import StoreRegistry
+    from tests.fakes import FakeEmbedder
+
+    cfg = parse_scopes(
+        {"scopes": {"ev-core": {"folder": "ev-core"}},
+         "profiles": {"noc": {"scopes": ["ev-core"], "description": "d"}}},
+        source="test",
+    )
+    scope_dir = tmp_path / "ev-core"
+    scope_dir.mkdir()
+    (scope_dir / "good.md").write_text("Connector lock failure recovery steps.", encoding="utf-8")
+    (scope_dir / "bad.docx").write_text("not a real docx", encoding="utf-8")
+
+    emb = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=emb.dim)
+    reg.ensure_all()
+
+    stats = ingest(tmp_path, cfg, reg, emb, max_chars=1800, overlap=200)
+    assert stats["indexed_docs"] == 1
+    assert stats["unreadable_docs"] == 1
+```
+
+- [ ] **Step 7: Run the whole suite**
 
 Run: `python -m pytest -v`
 Expected: PASS — the pre-existing ingest tests must still pass, proving the refactor changed no behaviour.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add services/mcp/kb/kb_mcp/ingest.py services/mcp/kb/kb_mcp/parse.py services/mcp/kb/tests/test_ingest.py
-git commit -m "refactor(kb): extract ingest_file so upload and corpus walk share one pipeline"
+git commit -m "refactor(kb): extract ingest_file and survive one unreadable document"
 ```
 
 ---
@@ -1563,7 +1726,7 @@ from pathlib import Path
 
 from .identity import Caller, is_contributor
 from .ingest import ingest_file
-from .parse import SUPPORTED
+from .parse import SUPPORTED, DocumentUnreadable
 from .s3 import S3Corpus
 
 log = logging.getLogger(__name__)
@@ -1655,13 +1818,19 @@ class KbWriter:
                     "message": f"{ref.filename} is already in the knowledge base, unchanged."}
 
         self.corpus.copy_to_corpus(ref)
-        chunks = ingest_file(
-            local, source=source, scope_name=self.scope, store=store,
-            embedder=self.embedder, max_chars=self.max_chars, overlap=self.overlap,
-            doc_hash=doc_hash,
-            extra_payload={"uploaded_by": caller.email or caller.user_id,
-                           "uploaded_at": self.now()},
-        )
+        try:
+            chunks = ingest_file(
+                local, source=source, scope_name=self.scope, store=store,
+                embedder=self.embedder, max_chars=self.max_chars, overlap=self.overlap,
+                doc_hash=doc_hash,
+                extra_payload={"uploaded_by": caller.email or caller.user_id,
+                               "uploaded_at": self.now()},
+            )
+        except DocumentUnreadable as exc:
+            # The object was already copied; take it back out so a failed upload
+            # leaves nothing behind for a later corpus walk to trip over.
+            self.corpus.delete_from_corpus(ref.filename)
+            raise UploadRejected(str(exc)) from exc
         if chunks == 0:
             # Leave nothing half-done: the object was copied, so take it back out.
             self.corpus.delete_from_corpus(ref.filename)

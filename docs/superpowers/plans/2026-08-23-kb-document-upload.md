@@ -622,6 +622,11 @@ def chunk_tabular(text: str, max_chars: int, overlap_chars: int) -> list[str]:
     embeds to a vector that matches no plausible question. Repeating the
     header costs a few characters per chunk and makes every chunk independently
     interpretable.
+
+    `overlap_chars` is accepted for signature parity with `chunk_text`, so the
+    two are interchangeable at the call site, but it is deliberately unused:
+    every chunk already repeats the header, which is the context an overlap
+    would otherwise have to carry.
     """
     text = (text or "").strip()
     if not text:
@@ -638,6 +643,18 @@ def chunk_tabular(text: str, max_chars: int, overlap_chars: int) -> list[str]:
     chunks, cur = [], []
     size = 0
     for row in rows:
+        if len(row) > budget:
+            # A row wider than the whole budget cannot share a chunk with
+            # anything. Flush what is pending, then hard-split it: the
+            # max_chars ceiling is what keeps a chunk inside the embedding
+            # model's window, and an over-long chunk is truncated by the
+            # model rather than by us — silently losing the tail.
+            if cur:
+                chunks.append(header + "\n" + "\n".join(cur))
+                cur, size = [], 0
+            for i in range(0, len(row), budget):
+                chunks.append(header + "\n" + row[i:i + budget])
+            continue
         if cur and size + len(row) + 1 > budget:
             chunks.append(header + "\n" + "\n".join(cur))
             cur, size = [], 0
@@ -646,6 +663,34 @@ def chunk_tabular(text: str, max_chars: int, overlap_chars: int) -> list[str]:
     if cur:
         chunks.append(header + "\n" + "\n".join(cur))
     return chunks
+```
+
+Add these regression tests as well:
+```python
+def test_tabular_row_wider_than_the_budget_is_split_not_overflowed():
+    """The max_chars ceiling keeps a chunk inside the embedding model's
+    window. An over-long chunk is truncated by the model, not by us, so the
+    tail of a wide row would vanish silently."""
+    header = "id | notes"
+    wide = "QCH-1 | " + ("x" * 2000)
+    chunks = chunk_tabular(f"{header}\n{wide}", max_chars=800, overlap_chars=0)
+    assert len(chunks) > 1
+    assert all(len(c) <= 800 for c in chunks)
+    assert all(c.startswith(header) for c in chunks)
+
+    rebuilt = "".join(c[len(header) + 1:] for c in chunks)
+    assert rebuilt == wide
+
+
+def test_tabular_wide_row_does_not_swallow_its_neighbours():
+    header = "id | notes"
+    rows = ["QCH-1 | short", "QCH-2 | " + ("y" * 2000), "QCH-3 | also short"]
+    chunks = chunk_tabular(header + "\n" + "\n".join(rows), max_chars=800, overlap_chars=0)
+    assert all(len(c) <= 800 for c in chunks)
+    body = "".join(c[len(header) + 1:] for c in chunks)
+    assert "QCH-1 | short" in body
+    assert "QCH-3 | also short" in body
+    assert ("y" * 2000) in body
 ```
 
 - [ ] **Step 4: Run to verify it passes**

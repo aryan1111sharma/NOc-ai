@@ -154,6 +154,114 @@ async def test_build_server_gates_each_dependency_independently(monkeypatch):
     assert warn_calls == []
 
 
+def _writer_server(tmp_path, headers):
+    """Build a server with write tools and a stubbed header source."""
+    from kb_mcp.s3 import S3Corpus
+    from kb_mcp.writes import KbWriter
+    from tests.fakes import FakeS3
+
+    s3 = FakeS3()
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), CFG, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    writer = KbWriter(
+        corpus=S3Corpus(s3, "b"), registry=reg, embedder=e, scope="ev-core",
+        cache_dir=tmp_path, contributor_roles=("kb-contributor",), max_upload_mb=25,
+        max_chars=1800, overlap=200, now=lambda: "2026-08-23T10:00:00Z",
+    )
+    mcp = build_server(config=CFG, registry=reg, embedder=e, writer=writer,
+                       headers_source=lambda: headers)
+    return mcp, s3
+
+
+@pytest.mark.asyncio
+async def test_write_tools_are_registered_when_a_writer_is_supplied(tmp_path):
+    mcp, _ = _writer_server(tmp_path, {})
+    async with Client(mcp) as client:
+        names = {t.name for t in await client.list_tools()}
+    assert {"kb_upload_document", "kb_remove_document", "kb_list_documents"} <= names
+
+
+@pytest.mark.asyncio
+async def test_write_tools_are_absent_without_a_writer():
+    """A server with no bucket configured must still serve search. Tools that
+    exist and always fail are a worse signal than tools that are not there."""
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), CFG, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    mcp = build_server(config=CFG, registry=reg, embedder=e)
+    async with Client(mcp) as client:
+        names = {t.name for t in await client.list_tools()}
+    assert "kb_upload_document" not in names
+    assert "kb_search_noc" in names
+
+
+@pytest.mark.asyncio
+async def test_upload_tool_succeeds_for_a_contributor(tmp_path):
+    headers = {"x-user-id": "u1", "x-user-email": "noc@quench.local",
+               "x-user-role": "kb-contributor"}
+    mcp, s3 = _writer_server(tmp_path, headers)
+    s3.put("chat-uploads/u1/abc__note.md", b"Gun 2 fails to unlock after a session ends.")
+    async with Client(mcp) as client:
+        result = await client.call_tool("kb_upload_document", {"filename": "note.md"})
+    payload = json.loads(result.content[0].text)
+    assert payload["chunks"] == 1
+    assert payload["source"] == "ev-core/note.md"
+
+
+@pytest.mark.asyncio
+async def test_upload_tool_refuses_a_non_contributor(tmp_path):
+    headers = {"x-user-id": "u1", "x-user-email": "a@b.com", "x-user-role": "noc-engineer"}
+    mcp, s3 = _writer_server(tmp_path, headers)
+    s3.put("chat-uploads/u1/abc__note.md", b"body")
+    async with Client(mcp) as client:
+        with pytest.raises(ToolError, match="permission"):
+            await client.call_tool("kb_upload_document", {"filename": "note.md"})
+
+
+@pytest.mark.asyncio
+async def test_upload_tool_refuses_when_identity_headers_are_missing(tmp_path):
+    """get_http_headers() returns {} when there is no HTTP request. That must
+    never read as an implicit grant."""
+    mcp, s3 = _writer_server(tmp_path, {})
+    s3.put("chat-uploads/u1/abc__note.md", b"body")
+    async with Client(mcp) as client:
+        with pytest.raises(ToolError, match="X-User-Id"):
+            await client.call_tool("kb_upload_document", {"filename": "note.md"})
+
+
+@pytest.mark.asyncio
+async def test_list_documents_tool_needs_no_contributor_role(tmp_path):
+    contributor = {"x-user-id": "u1", "x-user-email": "noc@quench.local",
+                   "x-user-role": "kb-contributor"}
+    mcp, s3 = _writer_server(tmp_path, contributor)
+    s3.put("chat-uploads/u1/abc__note.md", b"listed content for the document list")
+    async with Client(mcp) as client:
+        await client.call_tool("kb_upload_document", {"filename": "note.md"})
+
+    reader = {"x-user-id": "u9", "x-user-email": "reader@quench.local",
+              "x-user-role": "noc-engineer"}
+    mcp2, _ = _writer_server(tmp_path, reader)
+    # Rebuild against the same store is not possible here; assert instead that
+    # the tool is callable without a contributor role and returns a list.
+    async with Client(mcp2) as client:
+        result = await client.call_tool("kb_list_documents", {})
+    # An empty list yields no content block at all (result.content == []),
+    # while result.data still carries the parsed value -- so this reads
+    # result.data directly rather than result.content[0].text, which would
+    # IndexError whenever the store this server was built against is empty.
+    assert isinstance(result.data, list)
+
+
+@pytest.mark.asyncio
+async def test_remove_tool_refuses_a_non_contributor(tmp_path):
+    headers = {"x-user-id": "u1", "x-user-email": "a@b.com", "x-user-role": "noc-engineer"}
+    mcp, _ = _writer_server(tmp_path, headers)
+    async with Client(mcp) as client:
+        with pytest.raises(ToolError, match="permission"):
+            await client.call_tool("kb_remove_document", {"source": "ev-core/note.md"})
+
+
 async def test_store_failure_raises_rather_than_returning_empty():
     """An empty list means 'not in the knowledge base'. A search failure must
     never be mistaken for that. Matching on the underlying message (not just

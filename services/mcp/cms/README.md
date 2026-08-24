@@ -1,7 +1,7 @@
 # noc-mcp-agent · cms-mcp-server
 
 A mostly **read-only** MCP server for the **legacy CMS / old NOC** at **quenchcms.com** — some
-chargers still live only in this old system. It complements the current-NOC `mcp-server`;
+chargers still live only in this old system. It complements the current-NOC `noc-mcp-server`;
 your assistant can query both. It also exposes a small, curated set of **gated, audited**
 device-command writes for on-charger recovery (see [Device commands (gated)](#device-commands-gated)).
 

@@ -18,6 +18,8 @@ commands, or returns raw file contents.
 | `platform_git` | Current branch, latest commit (SHA/author/date/subject), working-tree cleanliness |
 | `platform_filesystem` | Shallow directory listing (name/type/size) — metadata only, never file contents |
 | `platform_api` | This server's own name/transport/tool list (not cross-server discovery — see below) |
+| `platform_mcp_discovery` | Static source scan of `services/mcp/*`: which servers exist and what `@mcp.tool` names each declares |
+| `platform_config_validate` | Cross-checks docker-compose.yml / librechat.yaml / `services/mcp/*` for drift (missing build paths, mismatched ports/addresses, missing `requirements.txt`) |
 
 ## Why it needs the repository mounted
 
@@ -67,9 +69,6 @@ duplicate the thinking — **none of them exist yet**:
 - Database health
 - Network diagnostics
 - Performance analysis
-- Configuration validation
-- **MCP Discovery** (cross-server tool enumeration — `platform_api` today is deliberately
-  scoped to *this* server only so it doesn't collide with this later)
 - Architecture validation
 - Documentation validation
 - Infrastructure intelligence

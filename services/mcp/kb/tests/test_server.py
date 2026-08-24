@@ -56,7 +56,88 @@ async def test_one_tool_generated_per_profile():
     server = build_server(config=CFG, registry=reg, embedder=emb)
     async with Client(server) as c:
         names = {t.name for t in await c.list_tools()}
-    assert names == {"kb_search_noc", "kb_search_chargezone", "kb_search_hr"}
+    assert names == {
+        "kb_search_noc", "kb_search_chargezone", "kb_search_hr",
+        "kb_list_scopes", "kb_ingest_status",
+    }
+
+
+async def test_list_scopes_reports_scopes_and_profiles():
+    reg, emb = _seeded()
+    server = build_server(config=CFG, registry=reg, embedder=emb)
+    data = await _call(server, "kb_list_scopes", {})
+
+    scopes = {s["name"]: s for s in data["scopes"]}
+    assert scopes["ev-core"] == {"name": "ev-core", "folder": "ev-core", "confidential": False}
+    assert scopes["hr"]["confidential"] is True
+
+    profiles = {p["name"]: p for p in data["profiles"]}
+    assert profiles["noc"]["scopes"] == ["ev-core"]
+    assert profiles["noc"]["description"] == "EV/OCPP reference."
+    assert profiles["hr"]["min_score"] == 0.99
+
+
+async def test_list_scopes_does_not_expose_document_contents():
+    reg, emb = _seeded()
+    server = build_server(config=CFG, registry=reg, embedder=emb)
+    data = await _call(server, "kb_list_scopes", {})
+    dumped = json.dumps(data)
+    assert "Error 42" not in dumped and "ocpp.md" not in dumped
+
+
+async def test_ingest_status_reports_document_counts_per_collection():
+    reg, emb = _seeded()
+    server = build_server(config=CFG, registry=reg, embedder=emb)
+    data = await _call(server, "kb_ingest_status", {})
+
+    by_collection = {c["collection"]: c for c in data["collections"]}
+    shared = by_collection["ev_kb"]
+    assert sorted(shared["scopes"]) == ["chargezone", "ev-core"]
+    assert shared["indexed"] is True
+    assert shared["document_count"] == 2  # ev-core/ocpp.md + chargezone/sla.md
+
+    confidential = by_collection["kb_hr"]
+    assert confidential["scopes"] == ["hr"]
+    assert confidential["document_count"] == 1
+
+
+async def test_ingest_status_reports_uncreated_collection_as_not_indexed():
+    """A scope declared in config but never ingested has no collection yet (see
+    store.py's search()) — status must say so rather than crash or fabricate a count."""
+    cfg = parse_scopes(
+        {
+            "scopes": {"ev-core": {}, "unused": {"confidential": True}},
+            "profiles": {"noc": {"scopes": ["ev-core"], "description": "d"}},
+        },
+        source="test",
+    )
+    e = FakeEmbedder()
+    reg = StoreRegistry(QdrantClient(":memory:"), cfg, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()  # "unused" (kb_unused) is created empty; only ev-core gets a document
+    reg.for_scope("ev-core").upsert(
+        [_chunk("ev-core/a.md", "ev-core", "some text")], e.embed(["some text"]),
+    )
+    server = build_server(config=cfg, registry=reg, embedder=e)
+    data = await _call(server, "kb_ingest_status", {})
+
+    by_collection = {c["collection"]: c for c in data["collections"]}
+    assert by_collection["ev_kb"]["document_count"] == 1
+    assert by_collection["kb_unused"]["indexed"] is True
+    assert by_collection["kb_unused"]["document_count"] == 0
+
+
+async def test_ingest_status_does_not_trigger_ingestion(monkeypatch):
+    """Regression guard: calling the status tool must never import or invoke the ingest
+    pipeline. If it ever did, this monkeypatch would make the call blow up."""
+    import kb_mcp.ingest as ingest_module
+
+    def _boom(*a, **kw):
+        raise AssertionError("kb_ingest_status must never call ingest()")
+
+    monkeypatch.setattr(ingest_module, "ingest", _boom)
+    reg, emb = _seeded()
+    server = build_server(config=CFG, registry=reg, embedder=emb)
+    await _call(server, "kb_ingest_status", {})  # must not raise
 
 
 async def test_tool_description_comes_from_profile_config():

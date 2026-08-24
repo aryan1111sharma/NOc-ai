@@ -17,7 +17,9 @@ services:
     depends_on:
       - mongodb
       - meilisearch
-      - mcp-server
+      - noc-mcp-server
+      # Provider requests are routed through the filtering proxy (see its service block).
+      - tool-filter-proxy
     env_file:
       - .env
     environment:
@@ -65,7 +67,7 @@ services:
     restart: unless-stopped
 
   # Read-only NOC MCP server (this repo). Exposes 153 GET endpoints as tools over HTTP.
-  mcp-server:
+  noc-mcp-server:
     build: ../../../services/mcp/noc
     container_name: noc-mcp-server
     environment:
@@ -191,6 +193,37 @@ services:
       - REPO_ROOT=/workspace
     volumes:
       - ../../..:/workspace:ro
+    restart: unless-stopped
+
+  # OpenAI-compatible tool-filtering proxy (this repo, services/tool-filter-proxy/).
+  # Sits between LibreChat and the model providers and shrinks the `tools[]` array on each
+  # chat-completion request (~196 tools / ~43k tokens -> 10-30 tools), then streams the
+  # provider response straight back. Everything else — messages, params, Authorization,
+  # SSE, status codes, errors — is relayed unchanged.
+  #
+  # Build context is the REPO ROOT, not the service dir: the image vendors the
+  # platform-agnostic filtering core (filtering/) and the Tool Registry (registry/).
+  #
+  # ROLLBACK: point librechat.yaml's two `baseURL` values back at the provider URLs (they
+  # are recorded in this service's PROXY_UPSTREAMS below) and `docker compose up -d api`.
+  # Softer option, no config edit: set PROXY_PASSTHROUGH_ONLY=true here and restart this
+  # service — filtering is skipped and every request is forwarded verbatim.
+  tool-filter-proxy:
+    build:
+      context: ../../..
+      dockerfile: services/tool-filter-proxy/Dockerfile
+    container_name: tool-filter-proxy
+    # No published port: internal-only, same posture as the MCP servers. LibreChat
+    # reaches it over the compose network by service name.
+    environment:
+      - PROXY_HOST=0.0.0.0
+      - PROXY_PORT=8108
+      # Route prefix -> real provider base URL. LibreChat's GLM/Kimi `baseURL` values
+      # point at http://tool-filter-proxy:8108/<prefix>.
+      - >-
+        PROXY_UPSTREAMS={"glm":"https://api.z.ai/api/coding/paas/v4","kimi":"https://api.kimi.com/coding/v1"}
+      - PROXY_FILTER_TOP_K=20
+      - PROXY_PASSTHROUGH_ONLY=false
     restart: unless-stopped
 
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only

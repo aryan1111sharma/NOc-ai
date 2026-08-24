@@ -51,6 +51,9 @@ def build_server(config: ScopesConfig | None = None, registry=None, embedder=Non
     for profile in config.profiles.values():
         _register(mcp, profile, registry, embedder)
 
+    _register_list_scopes(mcp, config)
+    _register_ingest_status(mcp, config, registry)
+
     return mcp
 
 
@@ -67,3 +70,68 @@ def _register(mcp: FastMCP, profile: Profile, registry, embedder) -> None:
         return search_many(pairs, embedder.embed([query])[0], top_k=top_k, min_score=floor)
 
     mcp.tool(name=f"kb_search_{profile.name}", description=_description(profile))(kb_search)
+
+
+_LIST_SCOPES_DESCRIPTION = (
+    "List the knowledge scopes and search profiles currently configured (from "
+    "scopes.yaml): each scope's name, source folder, and whether it is confidential; "
+    "and each profile's name, description, min_score, and which scopes it searches. "
+    "Read-only — reports configuration shape only, never document contents. Use this to "
+    "see which kb_search_<profile> tool covers a given topic, or to check why a search "
+    "came back empty."
+)
+
+
+def _register_list_scopes(mcp: FastMCP, config: ScopesConfig) -> None:
+    """One global, config-only tool (not per-profile): the scopes/profiles shape is not
+    sensitive beyond what list_tools() already reveals via each kb_search_<profile>
+    tool's own name and description."""
+
+    def kb_list_scopes() -> dict:
+        return {
+            "scopes": [
+                {"name": s.name, "folder": s.folder, "confidential": s.confidential}
+                for s in config.scopes.values()
+            ],
+            "profiles": [
+                {
+                    "name": p.name,
+                    "description": p.description,
+                    "scopes": list(p.scopes),
+                    "min_score": p.min_score,
+                }
+                for p in config.profiles.values()
+            ],
+        }
+
+    mcp.tool(name="kb_list_scopes", description=_LIST_SCOPES_DESCRIPTION)(kb_list_scopes)
+
+
+_INGEST_STATUS_DESCRIPTION = (
+    "Report what is currently indexed, per underlying vector-store collection: which "
+    "scopes route to it, whether the collection has been created yet, and how many "
+    "distinct source documents it holds. Reads live index state only — it does NOT run "
+    "or trigger ingestion; re-indexing is a separate, human-run operation "
+    "(`python -m kb_mcp.ingest`)."
+)
+
+
+def _register_ingest_status(mcp: FastMCP, config: ScopesConfig, registry) -> None:
+    def kb_ingest_status() -> dict:
+        scopes_by_collection: dict[str, list[str]] = {}
+        for name in config.scopes:
+            store = registry.for_scope(name)
+            scopes_by_collection.setdefault(store.collection, []).append(name)
+
+        collections = []
+        for store in registry.stores():
+            exists = store.c.collection_exists(store.collection)
+            collections.append({
+                "collection": store.collection,
+                "scopes": sorted(scopes_by_collection.get(store.collection, [])),
+                "indexed": exists,
+                "document_count": len(store.known_sources()) if exists else 0,
+            })
+        return {"collections": sorted(collections, key=lambda c: c["collection"])}
+
+    mcp.tool(name="kb_ingest_status", description=_INGEST_STATUS_DESCRIPTION)(kb_ingest_status)

@@ -1,0 +1,29 @@
+schema_version: 1
+mcp_server: kb
+tools:
+- tool_name: kb_search_noc
+  domain: Knowledge Base
+  description: Search the 'noc' knowledge base (EV/OCPP reference, runbooks) with scope isolation bound
+    server-side
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: kb_list_scopes
+  domain: Knowledge Base
+  description: List configured knowledge scopes and search profiles from scopes.yaml (configuration shape
+    only)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: kb_ingest_status
+  domain: Knowledge Base
+  description: Report live index state (documents indexed per collection); never triggers ingestion
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

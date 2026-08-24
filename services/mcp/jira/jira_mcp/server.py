@@ -177,3 +177,30 @@ def _register_tools(mcp: FastMCP, client: JiraAuthClient) -> None:
             for t in data.get("transitions", [])
         ]
         return _drop_empty({"status": status, "transitions": transitions})
+
+    @mcp.tool
+    async def jira_project_meta(project_key: str) -> dict:
+        """Reference metadata for an Ecog Jira project by key (e.g. 'ECOG'): {key, name,
+        statuses, issue_types, priorities}. Use it to confirm valid status/issue-type/
+        priority names before building a jira_search JQL filter. Read-only."""
+        proj = await _get_json(client, f"/rest/api/3/project/{project_key}")
+        status_groups = await _get_json(client, f"/rest/api/3/project/{project_key}/statuses")
+        priorities = await _get_json(client, "/rest/api/3/priority")
+
+        issue_types = [t.get("name") for t in (proj.get("issueTypes") or []) if t.get("name")]
+        statuses: list[str] = []
+        seen: set = set()
+        for grp in (status_groups or []):
+            for s in grp.get("statuses", []):
+                n = s.get("name")
+                if n and n not in seen:
+                    seen.add(n)
+                    statuses.append(n)
+        prio_names = [p.get("name") for p in (priorities or []) if p.get("name")]
+        return _drop_empty({
+            "key": proj.get("key") or project_key,
+            "name": proj.get("name"),
+            "statuses": statuses,
+            "issue_types": issue_types,
+            "priorities": prio_names,
+        })

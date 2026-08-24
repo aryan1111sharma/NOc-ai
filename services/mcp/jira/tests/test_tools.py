@@ -125,6 +125,43 @@ async def test_server_registers_only_read_tools(mock_client):
 
     assert names == {
         "jira_search", "jira_get_issue", "jira_get_comments", "jira_get_issue_transitions",
+        "jira_project_meta",
     }
     forbidden = ("create", "update", "delete", "add", "edit", "post", "assign", "move")
     assert not [n for n in names if any(f in n for f in forbidden)]
+
+
+@pytest.mark.asyncio
+async def test_jira_project_meta_flattens(mock_client):
+    def handler(request: httpx.Request) -> httpx.Response:
+        p = request.url.path
+        if p == "/rest/api/3/project/ECOG":
+            return httpx.Response(200, json={"key": "ECOG", "name": "Ecog",
+                "issueTypes": [{"name": "Task"}, {"name": "Bug"}]})
+        if p == "/rest/api/3/project/ECOG/statuses":
+            return httpx.Response(200, json=[
+                {"name": "Task", "statuses": [{"name": "To Do"}, {"name": "Done"}]},
+                {"name": "Bug", "statuses": [{"name": "To Do"}, {"name": "QA"}]}])
+        if p == "/rest/api/3/priority":
+            return httpx.Response(200, json=[{"name": "High"}, {"name": "Medium"}, {"name": "Low"}])
+        return httpx.Response(404, json={})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        res = await c.call_tool("jira_project_meta", {"project_key": "ECOG"})
+
+    assert res.data["key"] == "ECOG" and res.data["name"] == "Ecog"
+    assert res.data["issue_types"] == ["Task", "Bug"]
+    assert res.data["statuses"] == ["To Do", "Done", "QA"]  # unique, first-seen order
+    assert res.data["priorities"] == ["High", "Medium", "Low"]
+
+
+@pytest.mark.asyncio
+async def test_jira_project_meta_auth_failure_raises(mock_client):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(403, json={})
+
+    mcp = build_server(client=mock_client(handler))
+    async with Client(mcp) as c:
+        with pytest.raises(Exception, match="Jira auth failed"):
+            await c.call_tool("jira_project_meta", {"project_key": "ECOG"})

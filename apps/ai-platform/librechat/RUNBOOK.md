@@ -4,7 +4,7 @@
 **NOC MCP server** (:8100) and legacy **CMS MCP server** (:8101), all via Docker Compose.
 
 ```
-LibreChat (:3080)  →  GLM (z.ai)  →  mcp-server (:8100)   →  NOC backend
+LibreChat (:3080)  →  GLM (z.ai)  →  noc-mcp-server (:8100)   →  NOC backend
                                   →  cms-mcp-server (:8101) →  legacy CMS
 ```
 
@@ -44,7 +44,7 @@ cd E:\cjain\noc-mcp-agent\chat
 docker compose ps
 
 # 4. Confirm the NOC MCP server authenticated (no auth errors)
-docker compose logs mcp-server
+docker compose logs noc-mcp-server
 ```
 
 Then open **http://localhost/** and **register an account** (registration is open). nginx
@@ -241,11 +241,11 @@ Browse to `http://<SERVER_HOST>/` (LibreChat), `http://<SERVER_HOST>:3091` (admi
 | Action | Command |
 |---|---|
 | Status | `docker compose ps` |
-| Follow NOC MCP logs (live tool calls) | `docker compose logs -f mcp-server` |
+| Follow NOC MCP logs (live tool calls) | `docker compose logs -f noc-mcp-server` |
 | Restart just LibreChat | `docker compose restart api` |
 | Stop (keeps data) | `docker compose down` |
 | Stop + wipe chats/search data | `docker compose down -v` |
-| Rebuild after MCP code changes | `docker compose up -d --build mcp-server` |
+| Rebuild after MCP code changes | `docker compose up -d --build noc-mcp-server` |
 
 ## Versioning & releases
 
@@ -277,5 +277,5 @@ and tags it. It does **not** push — you review first.
 
 - **`cannot connect to the docker API`** → Docker Desktop isn't running. Start it, re-check `docker version`.
 - **GLM `429 Insufficient balance`** → recharge the GLM account; not a stack problem.
-- **NOC auth errors in `mcp-server` logs** → fix `NOC_EMAIL`/`NOC_PASSWORD` in `.env`, then `docker compose up -d mcp-server`.
+- **NOC auth errors in `noc-mcp-server` logs** → fix `NOC_EMAIL`/`NOC_PASSWORD` in `.env`, then `docker compose up -d noc-mcp-server`.
 - **Port 80 already in use** → stop the other process or change the nginx `"80:80"` mapping in `docker-compose.yml`.

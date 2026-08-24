@@ -1,9 +1,13 @@
-# noc-mcp-agent · mcp-server
+# noc-mcp-agent · noc-mcp-server
 
-A **read-only** [FastMCP](https://gofastmcp.com) server that exposes the QuenchNOC backend's
-GET endpoints as MCP tools. It authenticates to the NOC as a service account and never
-performs writes — only `GET` operations are surfaced (every other method is excluded at the
-route-map layer).
+A [FastMCP](https://gofastmcp.com) server that exposes the QuenchNOC backend as MCP tools.
+It is **mostly read-only**: every `GET` operation in the backend's OpenAPI spec is
+auto-exposed as a tool, and every other method is excluded at the route-map layer by
+default. On top of that, a small, deliberately curated set of write operations is
+hand-registered — see "Curated write tools" below — each going through its own module so
+every write this server can make is explicit and reviewable in one place, rather than a
+blanket route-map flip. See `NOC_MCP_REMAINING_TOOLS.md` (repo root) for what was
+deliberately left out and why.
 
 ## How it works
 
@@ -102,7 +106,33 @@ The long tail (~110 other on-charger GET endpoints) stays reachable via
 `get_control_center_api_catalog` + the GET-locked generic proxy. The `logs`/`metrics` tools need
 an admin-level service account; others are customer/operator level.
 
-## SSH command execution (the one non-read-only capability)
+## Curated write tools
+
+Each family below is one module, each hand-registers its own tools onto the shared
+`NocAuthClient` — no shared abstraction beyond that, matching this server's existing
+`control_center.py`/`ssh_exec.py` convention of one file per concern. None of these are
+1:1 wrappers over a raw backend endpoint with an arbitrary body — every argument is a named,
+typed parameter read from the backend's actual OpenAPI schema. See
+`NOC_MCP_REMAINING_TOOLS.md` for what was deliberately excluded from this wave and why.
+
+- **`tickets.py`** — `ticket_create`, `ticket_add_comment`, `ticket_assign`,
+  `ticket_set_status`, `ticket_add_visit`, `ticket_reopen`, `ticket_verify`,
+  `ticket_update`, `ticket_link`.
+- **`alerts.py`** — `alert_acknowledge`, `alert_resolve`.
+- **`diagnostics.py`** — `charger_request_log_download`, `charger_export_state_logs`
+  (both create an async export/download job; neither returns log content directly).
+- **`maintenance.py`** — `maintenance_window_create` (suppresses alerts/notifications for
+  the window by default — the tool's own docstring tells the calling model to confirm scope
+  and time range with the user first).
+- **`charger_support.py`** — `charger_generate_qr_token`.
+
+None of these use the two-step prepare/execute gate `charger_ssh_execute` uses below — that
+pattern is reserved for HIGH/CRITICAL-risk physical-hardware actions. These are all
+LOW/MEDIUM-risk business-data writes (backend-validated, individually scoped, no
+fleet-wide blast radius), consistent with the risk classification in
+`NOC_MCP_REMAINING_TOOLS.md`.
+
+## SSH command execution (still the one non-read-only *physical hardware* capability)
 
 Two tools run arbitrary shell commands on a **live** charger over its WebSocket PTY, behind a
 mandatory two-step guardrail:

@@ -1,0 +1,1167 @@
+schema_version: 1
+tools:
+  me_api_v1_auth_me_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_users_api_v1_auth_users_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_user_audit_logs_api_v1_auth_users__user_id__audit_logs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_user_extra_permissions_endpoint_api_v1_auth_users__user_id__extra_permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_user_denied_permissions_endpoint_api_v1_auth_users__user_id__denied_permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_user_effective_permissions_api_v1_auth_users__user_id__effective_permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_my_effective_notification_preferences_api_v1_auth_me_notification_preferences_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_user_notification_preferences_admin_api_v1_auth_users__user_id__notification_preferences_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_live_session_api_v1_public_chargers__charger_id__session_live_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_by_serial_api_v1_public_chargers_by_serial_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  generate_public_qr_token_api_v1_public_chargers__charger_id__qr_token_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_visits_public_api_v1_public_chargers__charger_id__visits_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_public_release_notes_api_v1_public_releases__release_id__notes_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_chargers_api_v1_chargers_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  dashboard_summary_api_v1_dashboard_summary_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_chargers_for_map_api_v1_chargers_map_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_by_id_api_v1_chargers__charger_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_charger_models_api_v1_charger_models_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_model_api_v1_charger_models__model_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_customers_api_v1_customers_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_customer_api_v1_customers__customer_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_latest_telemetry_api_v1_chargers__charger_id__telemetry_latest_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_telemetry_history_api_v1_chargers__charger_id__telemetry_history_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_alarm_history_api_v1_chargers__charger_id__history_alarms_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_active_sessions_api_v1_chargers__charger_id__sessions_active_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_session_history_api_v1_chargers__charger_id__history_sessions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_session_by_id_endpoint_api_v1_sessions__session_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_session_events_api_v1_chargers__charger_id__sessions__session_id__events_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_state_logs_api_v1_chargers__charger_id__state_logs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_state_log_api_v1_chargers__charger_id__state_logs__log_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_telemetry_aggregated_api_v1_chargers__charger_id__telemetry_aggregated_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_state_log_export_job_api_v1_exports__job_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_commands_api_v1_chargers__charger_id__commands_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_command_api_v1_commands__command_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_stats_api_v1_stats_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_session_statistics_api_v1_stats_sessions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_failed_sessions_api_v1_stats_sessions_failed_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_filtered_sessions_api_v1_stats_sessions_list_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_alarm_statistics_api_v1_stats_alarms_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_filtered_alarms_api_v1_stats_alarms_list_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  error_trends_api_v1_stats_error_trends_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  error_trends_by_client_api_v1_stats_error_trends_by_client_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  error_trends_by_error_type_api_v1_stats_error_trends_by_error_type_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  error_trends_summary_api_v1_stats_error_trends_summary_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  error_trends_export_api_v1_stats_error_trends_export_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_versions_api_v1_chargers__charger_id__versions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_stability_api_v1_chargers__charger_id__stability_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ocpp_config_api_v1_chargers__charger_id__config_ocpp_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ocpp_config_cache_api_v1_chargers__charger_id__ocpp_config_cache_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  upload_status_api_v1_chargers__charger_id__upload_status__upload_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ssh_status_api_v1_chargers__charger_id__ssh_status_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_proxy_status_api_v1_ssh_status_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_categories_api_v1_ticket_categories_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_tickets_api_v1_tickets_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  export_tickets_api_v1_tickets_export_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ticket_api_v1_tickets__ticket_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_comments_api_v1_tickets__ticket_id__comments_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_attachments_api_v1_tickets__ticket_id__attachments_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  download_attachment_api_v1_ticket_attachments__attachment_id__download_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_history_api_v1_tickets__ticket_id__history_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_visits_api_v1_tickets__ticket_id__visits_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  dashboard_stats_api_v1_tickets_stats_dashboard_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  engineer_stats_api_v1_tickets_stats_engineers_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_fault_stats_api_v1_tickets_stats_chargers_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_tags_api_v1_ticket_tags_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_auto_rules_api_v1_ticket_auto_rules_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_notifications_api_v1_ticket_notifications_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  notification_count_api_v1_ticket_notifications_count_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  unread_count_api_v1_ticket_notifications_unread_count_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ticket_settings_api_v1_ticket_settings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_vendor_codes_api_v1_ticket_settings_vendor_codes_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_sla_rules_api_v1_ticket_settings_sla_rules_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_smtp_settings_endpoint_api_v1_smtp_settings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_email_notification_settings_endpoint_api_v1_email_notification_settings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_roles_api_v1_roles_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_role_api_v1_roles__slug__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_role_permissions_api_v1_roles__slug__permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_role_permission_preview_api_v1_roles__slug__permission_preview_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_teams_api_v1_teams_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_team_api_v1_teams__slug__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_team_members_api_v1_teams__slug__members_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  users_for_assignment_api_v1_teams__slug__users_for_assignment_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_team_permissions_api_v1_teams__slug__permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_permissions_api_v1_permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_categories_api_v1_permissions_categories_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_dashboard_summary_api_v1_monitoring_dashboard_summary_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_services_health_api_v1_monitoring_services_health_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_aws_infrastructure_api_v1_monitoring_infrastructure_aws_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  query_cloudwatch_metric_api_v1_monitoring_infrastructure_aws_metrics_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  query_metrics_api_v1_monitoring_metrics_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_available_metrics_api_v1_monitoring_metrics_available_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_application_performance_api_v1_monitoring_application_performance_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_container_metrics_api_v1_monitoring_containers_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_container_snapshot_api_v1_monitoring_containers_snapshot_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_charger_communication_health_api_v1_monitoring_charger_communication_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_alerts_api_v1_monitoring_alerts_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_alert_rules_api_v1_monitoring_alert_rules_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_dashboards_api_v1_monitoring_dashboards_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_maintenance_windows_api_v1_monitoring_maintenance_windows_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_services_api_v1_logs_services_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_logs_api_v1_logs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_log_download_status_api_v1_chargers__charger_id__logs_download__job_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  redirect_to_log_download_api_v1_chargers__charger_id__logs_download__job_id__download_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_log_downloads_api_v1_chargers__charger_id__logs_downloads_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_releases_api_v1_releases_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_stats_api_v1_releases_stats_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_release_notes_draft_api_v1_releases__release_id__notes_draft_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_release_api_v1_releases__release_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_tasks_by_release_api_v1_releases__release_id__tasks_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_task_api_v1_releases__release_id__tasks__task_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_bugs_by_release_api_v1_releases__release_id__bugs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_bug_api_v1_releases__release_id__bugs__bug_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_comments_api_v1_releases__release_id__comments_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_bug_comments_api_v1_releases__release_id__bugs__bug_id__comments_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_bug_timeline_api_v1_releases__release_id__bugs__bug_id__timeline_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_timeline_api_v1_releases__release_id__timeline_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_upload_status_api_v1_admin_rule_files_status_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_endpoints_catalog_api_v1_admin_endpoints_catalog_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_alarm_mappings_api_v1_admin_alarm_mappings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_rbac_rules_api_v1_admin_rules_rbac_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_alarm_mappings_api_v1_admin_rules_alarm_mappings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_genone_api_api_v1_admin_rules_genone_api_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ecog_action_apis_api_v1_admin_ecog_action_apis_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_ecog_action_api_api_v1_admin_ecog_action_apis__api_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  lookup_coordinates_api_v1_geo_lookup_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_map_filters_api_v1_map_filters_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_nightly_restart_jobs_api_v1_nightly_restart_jobs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_nightly_restart_job_api_v1_nightly_restart_jobs__job_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_nightly_restart_settings_endpoint_api_v1_nightly_restart_settings_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_session_details_api_v1_reports_session_details_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_customer_status_api_v1_reports_customer_status_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_commissioned_api_v1_reports_commissioned_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_commission_pending_api_v1_reports_commission_pending_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_alert_details_api_v1_reports_alert_details_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_charger_ticket_status_api_v1_reports_charger_ticket_status_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_warranty_summary_api_v1_reports_warranty_summary_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_user_permissions_api_v1_reports_user_permissions_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_fault_frequency_api_v1_reports_fault_frequency_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_session_failures_api_v1_reports_session_failures_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_nightly_restart_api_v1_reports_nightly_restart_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_ticket_resolution_api_v1_reports_ticket_resolution_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  report_charger_energy_api_v1_reports_charger_energy_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_vendors_api_v1_vendors_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_vendor_api_v1_vendors__vendor_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_cpos_api_v1_cpos_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_cpo_api_v1_cpos__cpo_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  list_error_code_configs_api_v1_error_code_configs_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_error_code_config_api_v1_error_code_configs__config_id__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  health_check_health_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  proxy_api_call_api_v1_chargers__charger_id__proxy_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  is_live_api_charger_IsLive_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  log_version_api_charger_LogVersion_get:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  get_control_center_api_catalog:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_charging_status:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_session_details:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_meters:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_ocpp_status:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_network_status:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_system_info:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_allocation_state:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_pm_power:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_alarms:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_temperature:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_list_log_sources:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_logs:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_get_device_metrics:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_create:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_add_comment:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_assign:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_set_status:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_add_visit:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_reopen:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_verify:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_update:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  ticket_link:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  alert_acknowledge:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  alert_resolve:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_request_log_download:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_export_state_logs:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  maintenance_window_create:
+    enabled: true
+    approval_required: true
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_generate_qr_token:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_ssh_prepare:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  charger_ssh_execute:
+    enabled: true
+    approval_required: true
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_details:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_sessions:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_alerts:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_action_history:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_list_charger_actions:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_list_chargers:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_types:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_noc_summary:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_recent_alerts:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_list_customers:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_list_service_engineers:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_charger_firmware:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_get_fleet_firmware:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_run_device_query:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_run_device_action_prepare:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_run_device_action_execute:
+    enabled: true
+    approval_required: true
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cms_read_device_log:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  jira_search:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  jira_get_issue:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  jira_get_comments:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  jira_get_issue_transitions:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  jira_project_meta:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_search:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_get_issue:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_get_comments:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_get_issue_transitions:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_export:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_stats:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_project_meta:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  cz_jira_list_dashboards:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  sd_list_requests:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  sd_get_request:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  sd_get_request_comments:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  sd_list_servicedesks:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  sd_set_session_cookie:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  kb_search_noc:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  kb_list_scopes:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  kb_ingest_status:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  create_excel:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  create_word:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  create_pdf:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_health:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_project:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_python:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_git:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_filesystem:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_api:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_mcp_discovery:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'
+  platform_config_validate:
+    enabled: true
+    approval_required: false
+    updated_by: system-default
+    updated_at: '2026-08-19T00:00:00Z'

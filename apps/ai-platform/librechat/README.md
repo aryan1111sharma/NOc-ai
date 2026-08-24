@@ -5,7 +5,7 @@ links) driven by **GLM 5.2**, using the read-only **NOC MCP server** (`../servic
 live NOC data.
 
 ```
-LibreChat (web UI :3080)  →  GLM 5.2 (z.ai API)  →  mcp-server (:8100, 153 read-only tools)  →  NOC backend
+LibreChat (web UI :3080)  →  GLM 5.2 (z.ai API)  →  noc-mcp-server (:8100, 153 read-only tools)  →  NOC backend
 ```
 
 ## Prerequisites
@@ -36,11 +36,11 @@ Then set `GLM_API_KEY` and the `NOC_*` read-only credentials.
 ## Run
 
 ```bash
-docker compose up -d          # builds mcp-server, starts LibreChat + mongo + meilisearch
+docker compose up -d          # builds noc-mcp-server, starts LibreChat + mongo + meilisearch
 # open http://localhost/      — register an account (open registration)
 # (nginx fronts everything on port 80; for LAN/remote access use http://<SERVER_HOST>/
 # instead, where SERVER_HOST is set in .env — see RUNBOOK.md)
-docker compose logs -f mcp-server   # check the MCP server logged in to NOC
+docker compose logs -f noc-mcp-server   # check the MCP server logged in to NOC
 ```
 
 ## Wire GLM + NOC tools together (in LibreChat)

@@ -33,7 +33,7 @@ fi
 
 # compose service name : the port it listens on inside the compose network.
 mcp_servers=(
-  "mcp-server:8100"
+  "noc-mcp-server:8100"
   "cms-mcp-server:8101"
   "jira-mcp-server:8102"
   "docgen-mcp-server:8103"

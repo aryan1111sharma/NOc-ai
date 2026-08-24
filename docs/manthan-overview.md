@@ -74,7 +74,7 @@ Each backend system is exposed by its own FastMCP server over HTTP. LibreChat re
 
 | Server (MCP name) | Port | Backend | What it does | Access |
 |---|---|---|---|---|
-| **noc** (`mcp-server`) | 8100 | QuenchNOC backend (current fleet, ~346) | Charger status, telemetry, tickets, control-centre on-charger tools; one audited SSH-exec capability. | Read-only + 1 gated exec |
+| **noc** (`noc-mcp-server`) | 8100 | QuenchNOC backend (current fleet, ~346) | Charger status, telemetry, tickets, control-centre on-charger tools; one audited SSH-exec capability. | Read-only + 1 gated exec |
 | **cms** (`cms-mcp-server`) | 8101 | Legacy CMS at quenchcms.com (~1079) | Per-charger details, sessions, firmware/release info; some gated device commands. Authoritative for fleet totals. | Mostly read-only |
 | **jira** (`jira-mcp-server`) | 8102 | Ecog Atlassian Cloud Jira (REST v3) | Ecog vendor tickets. _Note: primary live Ecog ticket access is via **ecog_sd** below._ | Read-only |
 | **docgen** (`docgen-mcp-server`) | 8103 | — (local) | Generates Excel/Word files from tabular/report data and returns a download link. | Generates files |

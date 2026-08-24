@@ -9,7 +9,7 @@ def _payload(result):
     return json.loads(result.content[0].text)
 
 
-async def test_all_six_tools_registered(client):
+async def test_all_eight_tools_registered(client):
     tools = await client.list_tools()
     names = {t.name for t in tools}
     assert names == {
@@ -19,6 +19,8 @@ async def test_all_six_tools_registered(client):
         "platform_git",
         "platform_filesystem",
         "platform_api",
+        "platform_mcp_discovery",
+        "platform_config_validate",
     }
 
 
@@ -101,7 +103,7 @@ async def test_filesystem_rejects_non_directory(client):
 async def test_api_describes_itself_not_other_servers(client):
     data = _payload(await client.call_tool("platform_api", {}))
     assert data["server_name"] == "Platform Intelligence (read-only)"
-    assert data["tool_count"] == 6
+    assert data["tool_count"] == 8
     assert "platform_health" in data["tools"]
     # Scope discipline: no cross-server keys like "other_servers" / "discovered_servers".
     assert set(data.keys()) == {"server_name", "transport", "tool_count", "tools"}

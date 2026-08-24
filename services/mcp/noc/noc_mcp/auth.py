@@ -8,8 +8,12 @@ token), so this client:
 * proactively re-logs-in shortly before the token's ``exp``, and
 * reactively re-logs-in once on a ``401`` and retries the request.
 
-All NOC calls made through the MCP tools are GETs (read-only, idempotent), so retrying a
-request after re-login is safe.
+Retrying after a 401 is safe regardless of HTTP method: a 401 means the backend's auth
+middleware rejected the request before any handler/business logic ran, so no write (ticket
+creation, alert resolve, etc.) has been applied yet — the retried request is the first
+attempt that actually reaches the handler. This is a narrower guarantee than "safe to retry
+any failure" — it does not cover, and this client does not attempt to cover, retrying after
+a timeout or connection error, where whether the write already landed is genuinely unknown.
 """
 
 from __future__ import annotations

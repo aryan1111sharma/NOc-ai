@@ -1,0 +1,141 @@
+schema_version: 1
+mcp_server: cms
+tools:
+- tool_name: cms_get_charger_details
+  domain: Fleet & Chargers
+  description: 'Full profile for one charger: metadata + live status merged'
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_charger_sessions
+  domain: Telemetry & Sessions
+  description: Recent charging-session logs for one charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_charger_alerts
+  domain: Alarms & Monitoring
+  description: Recent alert/fault logs for one charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_charger_action_history
+  domain: Device Commands
+  description: Remote-command execution history for one charger (does not run any command)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_list_charger_actions
+  domain: Device Commands
+  description: Catalog of device API commands available for a charger (reference only)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_list_chargers
+  domain: Fleet & Chargers
+  description: List all chargers (id + customer), searchable
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_charger_types
+  domain: Fleet & Chargers
+  description: Charger types/models defined in the legacy CMS
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_noc_summary
+  domain: Fleet & Chargers
+  description: 'Fleet totals per customer: total/online/offline/faulty'
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_recent_alerts
+  domain: Alarms & Monitoring
+  description: Fleet-wide recent alerts/faults
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_list_customers
+  domain: Customers & Engineers
+  description: Customers in the legacy CMS (id, name, contact, country)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_list_service_engineers
+  domain: Customers & Engineers
+  description: Service engineers registered in the legacy CMS
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_charger_firmware
+  domain: Fleet & Chargers
+  description: Firmware/release version running on one charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_get_fleet_firmware
+  domain: Fleet & Chargers
+  description: Firmware/release versions across many chargers (bounded fan-out, online-only by default)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_run_device_query
+  domain: Device Commands
+  description: Run a read-only device diagnostic (GET-type command only) on one live charger
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_run_device_action_prepare
+  domain: Device Commands
+  description: Stage a write-type device command from an 8-command allowlist; returns a one-time confirmation
+    token (does not execute)
+  capability: CONTROL
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_run_device_action_execute
+  domain: Device Commands
+  description: Execute an allowlisted, token-approved write command on a live charger (reset, reboot,
+    stop outlet, OCPP restart/start/stop, clear RFID cache)
+  capability: CONTROL
+  risk: HIGH
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cms_read_device_log
+  domain: Device Commands
+  description: Read a session/alert state-log or command-output blob by server file path (path regex-constrained)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

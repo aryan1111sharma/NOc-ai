@@ -1,0 +1,1478 @@
+schema_version: 1
+mcp_server: noc
+tools:
+- tool_name: me_api_v1_auth_me_get
+  domain: Auth / RBAC
+  description: Me
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_users_api_v1_auth_users_get
+  domain: Auth / RBAC
+  description: List Users
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_user_audit_logs_api_v1_auth_users__user_id__audit_logs_get
+  domain: Auth / RBAC
+  description: Get User Audit Logs
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_user_extra_permissions_endpoint_api_v1_auth_users__user_id__extra_permissions_get
+  domain: Auth / RBAC
+  description: Get User Extra Permissions Endpoint
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_user_denied_permissions_endpoint_api_v1_auth_users__user_id__denied_permissions_get
+  domain: Auth / RBAC
+  description: Get User Denied Permissions Endpoint
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_user_effective_permissions_api_v1_auth_users__user_id__effective_permissions_get
+  domain: Auth / RBAC
+  description: Get User Effective Permissions
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_my_effective_notification_preferences_api_v1_auth_me_notification_preferences_get
+  domain: Auth / RBAC
+  description: Get My Effective Notification Preferences
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_user_notification_preferences_admin_api_v1_auth_users__user_id__notification_preferences_get
+  domain: Auth / RBAC
+  description: Get User Notification Preferences Admin
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_live_session_api_v1_public_chargers__charger_id__session_live_get
+  domain: Public (customer-facing)
+  description: Get live or latest session for a charger (public)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_by_serial_api_v1_public_chargers_by_serial_get
+  domain: Public (customer-facing)
+  description: Get charger by serial number (public)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: generate_public_qr_token_api_v1_public_chargers__charger_id__qr_token_get
+  domain: Public (customer-facing)
+  description: Generate signed QR token for a charger (public)
+  capability: CONTROL
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_visits_public_api_v1_public_chargers__charger_id__visits_get
+  domain: Public (customer-facing)
+  description: List active visits for a charger (public)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_public_release_notes_api_v1_public_releases__release_id__notes_get
+  domain: Public (customer-facing)
+  description: Get Public Release Notes
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_chargers_api_v1_chargers_get
+  domain: Fleet & Chargers
+  description: List all chargers
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: dashboard_summary_api_v1_dashboard_summary_get
+  domain: Fleet & Chargers
+  description: Dashboard summary
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_chargers_for_map_api_v1_chargers_map_get
+  domain: Fleet & Chargers
+  description: Get all chargers for map view
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_by_id_api_v1_chargers__charger_id__get
+  domain: Fleet & Chargers
+  description: Get a single charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_charger_models_api_v1_charger_models_get
+  domain: Fleet & Chargers
+  description: List all charger models
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_model_api_v1_charger_models__model_id__get
+  domain: Fleet & Chargers
+  description: Get a charger model
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_customers_api_v1_customers_get
+  domain: Fleet & Chargers
+  description: List all customers
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_customer_api_v1_customers__customer_id__get
+  domain: Fleet & Chargers
+  description: Get a customer
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_latest_telemetry_api_v1_chargers__charger_id__telemetry_latest_get
+  domain: Telemetry & Sessions
+  description: Latest telemetry snapshot
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_telemetry_history_api_v1_chargers__charger_id__telemetry_history_get
+  domain: Telemetry & Sessions
+  description: Paginated telemetry history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_alarm_history_api_v1_chargers__charger_id__history_alarms_get
+  domain: Fleet & Chargers
+  description: Paginated alarm history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_active_sessions_api_v1_chargers__charger_id__sessions_active_get
+  domain: Telemetry & Sessions
+  description: Get currently active charging sessions
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_session_history_api_v1_chargers__charger_id__history_sessions_get
+  domain: Telemetry & Sessions
+  description: Paginated charging session history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_session_by_id_endpoint_api_v1_sessions__session_id__get
+  domain: Telemetry & Sessions
+  description: Get a single session by ID
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_session_events_api_v1_chargers__charger_id__sessions__session_id__events_get
+  domain: Telemetry & Sessions
+  description: Get session lifecycle events
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_state_logs_api_v1_chargers__charger_id__state_logs_get
+  domain: Telemetry & Sessions
+  description: State logs from GenOne telemetry
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_state_log_api_v1_chargers__charger_id__state_logs__log_id__get
+  domain: Telemetry & Sessions
+  description: Get a single state log
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_telemetry_aggregated_api_v1_chargers__charger_id__telemetry_aggregated_get
+  domain: Telemetry & Sessions
+  description: Aggregated telemetry from TimescaleDB
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_state_log_export_job_api_v1_exports__job_id__get
+  domain: Fleet & Chargers
+  description: Get state-log export job status
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_commands_api_v1_chargers__charger_id__commands_get
+  domain: Telemetry & Sessions
+  description: Command history for a charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_command_api_v1_commands__command_id__get
+  domain: Telemetry & Sessions
+  description: Get a single command with its result
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_stats_api_v1_stats_get
+  domain: Fleet & Chargers
+  description: System-wide statistics
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_session_statistics_api_v1_stats_sessions_get
+  domain: Telemetry & Sessions
+  description: Fleet-wide session statistics
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_failed_sessions_api_v1_stats_sessions_failed_get
+  domain: Telemetry & Sessions
+  description: Detailed failed session analysis
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_filtered_sessions_api_v1_stats_sessions_list_get
+  domain: Telemetry & Sessions
+  description: Filtered session history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_alarm_statistics_api_v1_stats_alarms_get
+  domain: Alarms & Monitoring
+  description: Fleet-wide alarm statistics
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_filtered_alarms_api_v1_stats_alarms_list_get
+  domain: Alarms & Monitoring
+  description: Filtered alarm history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: error_trends_api_v1_stats_error_trends_get
+  domain: Fleet & Chargers
+  description: Error trend time series
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: error_trends_by_client_api_v1_stats_error_trends_by_client_get
+  domain: Fleet & Chargers
+  description: Customer error ranking
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: error_trends_by_error_type_api_v1_stats_error_trends_by_error_type_get
+  domain: Fleet & Chargers
+  description: Error type breakdown
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: error_trends_summary_api_v1_stats_error_trends_summary_get
+  domain: Fleet & Chargers
+  description: Error trends summary cards
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: error_trends_export_api_v1_stats_error_trends_export_get
+  domain: Fleet & Chargers
+  description: Export error trends data
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_versions_api_v1_chargers__charger_id__versions_get
+  domain: Fleet & Chargers
+  description: Get software versions for a charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_stability_api_v1_chargers__charger_id__stability_get
+  domain: Fleet & Chargers
+  description: Get connection stability for a charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ocpp_config_api_v1_chargers__charger_id__config_ocpp_get
+  domain: Fleet & Chargers
+  description: Get OCPP configuration from charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ocpp_config_cache_api_v1_chargers__charger_id__ocpp_config_cache_get
+  domain: Fleet & Chargers
+  description: Read cached OCPP configuration for a charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: upload_status_api_v1_chargers__charger_id__upload_status__upload_id__get
+  domain: Fleet & Chargers
+  description: Check chunked upload processing status
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ssh_status_api_v1_chargers__charger_id__ssh_status_get
+  domain: SSH & Proxy
+  description: Get SSH connection status
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_proxy_status_api_v1_ssh_status_get
+  domain: SSH & Proxy
+  description: Get overall SSH proxy status
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_categories_api_v1_ticket_categories_get
+  domain: Tickets & Support
+  description: List ticket categories
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_tickets_api_v1_tickets_get
+  domain: Tickets & Support
+  description: List tickets
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: export_tickets_api_v1_tickets_export_get
+  domain: Tickets & Support
+  description: Export tickets to CSV
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ticket_api_v1_tickets__ticket_id__get
+  domain: Tickets & Support
+  description: Get ticket detail
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_comments_api_v1_tickets__ticket_id__comments_get
+  domain: Tickets & Support
+  description: List comments
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_attachments_api_v1_tickets__ticket_id__attachments_get
+  domain: Tickets & Support
+  description: List attachments
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: download_attachment_api_v1_ticket_attachments__attachment_id__download_get
+  domain: Tickets & Support
+  description: Download attachment via S3 presigned URL
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_history_api_v1_tickets__ticket_id__history_get
+  domain: Tickets & Support
+  description: Get ticket audit history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_visits_api_v1_tickets__ticket_id__visits_get
+  domain: Tickets & Support
+  description: List visit logs
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: dashboard_stats_api_v1_tickets_stats_dashboard_get
+  domain: Tickets & Support
+  description: Ticket dashboard stats
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: engineer_stats_api_v1_tickets_stats_engineers_get
+  domain: Tickets & Support
+  description: Engineer performance
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: charger_fault_stats_api_v1_tickets_stats_chargers_get
+  domain: Tickets & Support
+  description: Repeated charger faults
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_tags_api_v1_ticket_tags_get
+  domain: Tickets & Support
+  description: List all tags
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_auto_rules_api_v1_ticket_auto_rules_get
+  domain: Tickets & Support
+  description: List auto-ticket rules
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_notifications_api_v1_ticket_notifications_get
+  domain: Tickets & Support
+  description: List in-app notifications
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: notification_count_api_v1_ticket_notifications_count_get
+  domain: Tickets & Support
+  description: Get notification count
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: unread_count_api_v1_ticket_notifications_unread_count_get
+  domain: Tickets & Support
+  description: Get unread notification count
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ticket_settings_api_v1_ticket_settings_get
+  domain: Tickets & Support
+  description: Get ticket settings
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_vendor_codes_api_v1_ticket_settings_vendor_codes_get
+  domain: Tickets & Support
+  description: List all vendor error codes
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_sla_rules_api_v1_ticket_settings_sla_rules_get
+  domain: Tickets & Support
+  description: List SLA rules
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_smtp_settings_endpoint_api_v1_smtp_settings_get
+  domain: Admin & Config
+  description: Get Smtp Settings Endpoint
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_email_notification_settings_endpoint_api_v1_email_notification_settings_get
+  domain: Admin & Config
+  description: Get Email Notification Settings Endpoint
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_roles_api_v1_roles_get
+  domain: Auth / RBAC
+  description: List Roles
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_role_api_v1_roles__slug__get
+  domain: Auth / RBAC
+  description: Get Role
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_role_permissions_api_v1_roles__slug__permissions_get
+  domain: Auth / RBAC
+  description: List Role Permissions
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_role_permission_preview_api_v1_roles__slug__permission_preview_get
+  domain: Auth / RBAC
+  description: Get Role Permission Preview
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_teams_api_v1_teams_get
+  domain: Auth / RBAC
+  description: List Teams
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_team_api_v1_teams__slug__get
+  domain: Auth / RBAC
+  description: Get Team
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_team_members_api_v1_teams__slug__members_get
+  domain: Auth / RBAC
+  description: List Team Members
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: users_for_assignment_api_v1_teams__slug__users_for_assignment_get
+  domain: Auth / RBAC
+  description: Users For Assignment
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_team_permissions_api_v1_teams__slug__permissions_get
+  domain: Auth / RBAC
+  description: Get Team Permissions
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_permissions_api_v1_permissions_get
+  domain: Auth / RBAC
+  description: List Permissions
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_categories_api_v1_permissions_categories_get
+  domain: Auth / RBAC
+  description: List Categories
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_dashboard_summary_api_v1_monitoring_dashboard_summary_get
+  domain: Alarms & Monitoring
+  description: Monitoring dashboard summary
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_services_health_api_v1_monitoring_services_health_get
+  domain: Alarms & Monitoring
+  description: Real-time service health checks
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_aws_infrastructure_api_v1_monitoring_infrastructure_aws_get
+  domain: Alarms & Monitoring
+  description: AWS resource status and metrics
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: query_cloudwatch_metric_api_v1_monitoring_infrastructure_aws_metrics_get
+  domain: Alarms & Monitoring
+  description: Generic CloudWatch metric query
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: query_metrics_api_v1_monitoring_metrics_get
+  domain: Alarms & Monitoring
+  description: Query stored application/system metrics
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_available_metrics_api_v1_monitoring_metrics_available_get
+  domain: Alarms & Monitoring
+  description: List available metrics and dimensions
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_application_performance_api_v1_monitoring_application_performance_get
+  domain: Alarms & Monitoring
+  description: Application performance summary
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_container_metrics_api_v1_monitoring_containers_get
+  domain: Alarms & Monitoring
+  description: Container CPU and memory metrics
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_container_snapshot_api_v1_monitoring_containers_snapshot_get
+  domain: Alarms & Monitoring
+  description: Real-time container stats snapshot
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_charger_communication_health_api_v1_monitoring_charger_communication_get
+  domain: Alarms & Monitoring
+  description: Charger communication health
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_alerts_api_v1_monitoring_alerts_get
+  domain: Alarms & Monitoring
+  description: List alert history
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_alert_rules_api_v1_monitoring_alert_rules_get
+  domain: Alarms & Monitoring
+  description: List alert rules
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_dashboards_api_v1_monitoring_dashboards_get
+  domain: Alarms & Monitoring
+  description: List dashboard configs
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_maintenance_windows_api_v1_monitoring_maintenance_windows_get
+  domain: Alarms & Monitoring
+  description: List maintenance windows
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_services_api_v1_logs_services_get
+  domain: Logs
+  description: List Services
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_logs_api_v1_logs_get
+  domain: Logs
+  description: Get Logs
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_log_download_status_api_v1_chargers__charger_id__logs_download__job_id__get
+  domain: Fleet & Chargers
+  description: Get Log Download Status
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: redirect_to_log_download_api_v1_chargers__charger_id__logs_download__job_id__download_get
+  domain: Fleet & Chargers
+  description: Redirect To Log Download
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_log_downloads_api_v1_chargers__charger_id__logs_downloads_get
+  domain: Fleet & Chargers
+  description: List Log Downloads
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_releases_api_v1_releases_get
+  domain: Releases & Engineering
+  description: List Releases
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_stats_api_v1_releases_stats_get
+  domain: Releases & Engineering
+  description: Get Stats
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_release_notes_draft_api_v1_releases__release_id__notes_draft_get
+  domain: Releases & Engineering
+  description: Get Release Notes Draft
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_release_api_v1_releases__release_id__get
+  domain: Releases & Engineering
+  description: Get Release
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_tasks_by_release_api_v1_releases__release_id__tasks_get
+  domain: Releases & Engineering
+  description: List Tasks By Release
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_task_api_v1_releases__release_id__tasks__task_id__get
+  domain: Releases & Engineering
+  description: Get Task
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_bugs_by_release_api_v1_releases__release_id__bugs_get
+  domain: Releases & Engineering
+  description: List Bugs By Release
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_bug_api_v1_releases__release_id__bugs__bug_id__get
+  domain: Releases & Engineering
+  description: Get Bug
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_comments_api_v1_releases__release_id__comments_get
+  domain: Releases & Engineering
+  description: List Comments
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_bug_comments_api_v1_releases__release_id__bugs__bug_id__comments_get
+  domain: Releases & Engineering
+  description: List Bug Comments
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_bug_timeline_api_v1_releases__release_id__bugs__bug_id__timeline_get
+  domain: Releases & Engineering
+  description: List Bug Timeline
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_timeline_api_v1_releases__release_id__timeline_get
+  domain: Releases & Engineering
+  description: List Timeline
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_upload_status_api_v1_admin_rule_files_status_get
+  domain: Admin & Config
+  description: Get Upload Status
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_endpoints_catalog_api_v1_admin_endpoints_catalog_get
+  domain: Admin & Config
+  description: Get Endpoints Catalog
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_alarm_mappings_api_v1_admin_alarm_mappings_get
+  domain: Admin & Config
+  description: Get Alarm Mappings
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_rbac_rules_api_v1_admin_rules_rbac_get
+  domain: Admin & Config
+  description: List Rbac Rules
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_alarm_mappings_api_v1_admin_rules_alarm_mappings_get
+  domain: Admin & Config
+  description: List Alarm Mappings
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_genone_api_api_v1_admin_rules_genone_api_get
+  domain: Admin & Config
+  description: List Genone Api
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ecog_action_apis_api_v1_admin_ecog_action_apis_get
+  domain: Admin & Config
+  description: List configured ECOG charger action APIs
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_ecog_action_api_api_v1_admin_ecog_action_apis__api_id__get
+  domain: Admin & Config
+  description: Get a single ECOG action API definition
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: lookup_coordinates_api_v1_geo_lookup_get
+  domain: Map / Geo
+  description: Find state, region, and country by coordinates
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_map_filters_api_v1_map_filters_get
+  domain: Map / Geo
+  description: Get map filter options
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_nightly_restart_jobs_api_v1_nightly_restart_jobs_get
+  domain: Admin & Config
+  description: List nightly charger-restart batch runs
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_nightly_restart_job_api_v1_nightly_restart_jobs__job_id__get
+  domain: Admin & Config
+  description: Get one nightly restart batch with per-charger results
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_nightly_restart_settings_endpoint_api_v1_nightly_restart_settings_get
+  domain: Admin & Config
+  description: Get nightly restart window settings
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_session_details_api_v1_reports_session_details_get
+  domain: Reporting
+  description: Bulk session details report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_customer_status_api_v1_reports_customer_status_get
+  domain: Reporting
+  description: Customer-wise charger status report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_commissioned_api_v1_reports_commissioned_get
+  domain: Reporting
+  description: Commissioned chargers report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_commission_pending_api_v1_reports_commission_pending_get
+  domain: Reporting
+  description: Commission-pending chargers report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_alert_details_api_v1_reports_alert_details_get
+  domain: Alarms & Monitoring
+  description: Alert / alarm details report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_charger_ticket_status_api_v1_reports_charger_ticket_status_get
+  domain: Reporting
+  description: Charger status with open ticket counts
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_warranty_summary_api_v1_reports_warranty_summary_get
+  domain: Reporting
+  description: Charger warranty summary report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_user_permissions_api_v1_reports_user_permissions_get
+  domain: Reporting
+  description: User roles and permissions report
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_fault_frequency_api_v1_reports_fault_frequency_get
+  domain: Reporting
+  description: Fault frequency analysis by alarm key and error code
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_session_failures_api_v1_reports_session_failures_get
+  domain: Reporting
+  description: Sessions that ended with abnormal stop reasons
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_nightly_restart_api_v1_reports_nightly_restart_get
+  domain: Reporting
+  description: Nightly restart job summary report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_ticket_resolution_api_v1_reports_ticket_resolution_get
+  domain: Reporting
+  description: Ticket lifecycle and resolution time report
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: report_charger_energy_api_v1_reports_charger_energy_get
+  domain: Reporting
+  description: Per-charger session count and energy delivery summary
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_vendors_api_v1_vendors_get
+  domain: Vendors & CPOs
+  description: List all vendors
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_vendor_api_v1_vendors__vendor_id__get
+  domain: Vendors & CPOs
+  description: Get a vendor
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_cpos_api_v1_cpos_get
+  domain: Vendors & CPOs
+  description: List all CPOs
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_cpo_api_v1_cpos__cpo_id__get
+  domain: Vendors & CPOs
+  description: Get a CPO
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: list_error_code_configs_api_v1_error_code_configs_get
+  domain: Admin & Config
+  description: List all error code configs
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_error_code_config_api_v1_error_code_configs__config_id__get
+  domain: Admin & Config
+  description: Get an error code config
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: health_check_health_get
+  domain: Health
+  description: Health Check
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get
+  domain: SSH & Proxy
+  description: Proxy API call to charger (path-based, for HMI)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: proxy_api_call_api_v1_chargers__charger_id__proxy_get
+  domain: SSH & Proxy
+  description: Proxy API call to charger (query-based, for web tools)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: is_live_api_charger_IsLive_get
+  domain: Health
+  description: Is Live
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: log_version_api_charger_LogVersion_get
+  domain: Health
+  description: Log Version
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: openapi-generated
+    last_reviewed: '2026-08-19'
+- tool_name: get_control_center_api_catalog
+  domain: On-Charger Control Center
+  description: RBAC-authoritative catalog of ~124 GET endpoints across on-charger services (network/RFID/power/charging/dev-tools)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_charging_status
+  domain: On-Charger Control Center
+  description: Per-gun connected/PLC/OCPP live charging status
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_session_details
+  domain: On-Charger Control Center
+  description: Active/last session or recent session history for a charger
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_meters
+  domain: On-Charger Control Center
+  description: Live AC/DC meter readings (+ IMD when gun_id given)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_ocpp_status
+  domain: On-Charger Control Center
+  description: OCPP connection status and config keys
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_network_status
+  domain: On-Charger Control Center
+  description: Network + GSM signal/operator status
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_system_info
+  domain: On-Charger Control Center
+  description: Hardware, software version, and RTC identity
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_allocation_state
+  domain: On-Charger Control Center
+  description: Per-gun power allocation state
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_pm_power
+  domain: On-Charger Control Center
+  description: Power-module count and per-module output
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_alarms
+  domain: On-Charger Control Center
+  description: Latched alarms and pending errors (fleet or per-gun)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_temperature
+  domain: On-Charger Control Center
+  description: Thermal sensor readings and thresholds
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_list_log_sources
+  domain: On-Charger Control Center
+  description: Enumerate on-charger log sources (admin-tier account)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_logs
+  domain: On-Charger Control Center
+  description: Fetch logs for one on-charger source (admin-tier account)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_get_device_metrics
+  domain: On-Charger Control Center
+  description: On-charger CPU/memory/disk metrics (admin-tier account)
+  capability: READ
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_create
+  domain: Tickets & Support
+  description: Create a new ticket, optionally linked to a charger/session/alarm
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_add_comment
+  domain: Tickets & Support
+  description: Add an internal or customer-visible comment to a ticket
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_assign
+  domain: Tickets & Support
+  description: Assign, reassign, or unassign a ticket to a user and/or team
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_set_status
+  domain: Tickets & Support
+  description: Change a ticket's status (Open/Assigned/.../Closed/Reopened)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_add_visit
+  domain: Tickets & Support
+  description: Log a field-service visit (findings/actions/next steps)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_reopen
+  domain: Tickets & Support
+  description: Reopen a closed ticket with a required reason
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_verify
+  domain: Tickets & Support
+  description: Verify or reject a ticket's resolution
+  capability: WRITE
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_update
+  domain: Tickets & Support
+  description: Partially update ticket fields (title, priority, assignment, etc.)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: ticket_link
+  domain: Tickets & Support
+  description: Link two tickets (e.g. mark as duplicate)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: alert_acknowledge
+  domain: Alarms & Monitoring
+  description: Mark an alert as being looked at (no resolution implied)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: alert_resolve
+  domain: Alarms & Monitoring
+  description: Mark an alert resolved once the underlying issue is actually fixed
+  capability: WRITE
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_request_log_download
+  domain: Logs
+  description: Start an async on-charger log-download job (returns a job id, not log content)
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_export_state_logs
+  domain: Logs
+  description: Request a state-log export/zip job by log id or time range
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: maintenance_window_create
+  domain: Admin & Config
+  description: Create a maintenance window that suppresses alerts/notifications fleet-wide for a time
+    range
+  capability: CONTROL
+  risk: MEDIUM
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_generate_qr_token
+  domain: Charger Support
+  description: Mint a signed QR token for the customer-facing QR-scan ticket flow
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_ssh_prepare
+  domain: SSH & Proxy
+  description: Stage an arbitrary shell command for a charger and return a one-time confirmation token
+    (does not execute)
+  capability: CONTROL
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: charger_ssh_execute
+  domain: SSH & Proxy
+  description: Execute the staged command on a live charger's SSH PTY using the one-time token (no command
+    denylist)
+  capability: DESTRUCTIVE
+  risk: CRITICAL
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

@@ -15,9 +15,14 @@ from __future__ import annotations
 from fastmcp import FastMCP
 
 from .config import settings as _default_settings
-from .tools import api_info, filesystem, git_info, health, project, python_env
+from .tools import (
+    api_info, config_validate, filesystem, git_info, health, mcp_discovery, project,
+    python_env,
+)
 
-_TOOL_MODULES = (health, project, python_env, git_info, filesystem, api_info)
+_TOOL_MODULES = (
+    health, project, python_env, git_info, filesystem, api_info, mcp_discovery, config_validate,
+)
 
 
 def build_server(settings=None) -> FastMCP:

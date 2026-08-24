@@ -1,11 +1,16 @@
-"""Build the read-only NOC MCP server from the bundled OpenAPI spec.
+"""Build the NOC MCP server from the bundled OpenAPI spec.
 
 The NOC backend does not serve its OpenAPI spec publicly, so a snapshot generated from the
 FastAPI app is bundled at ``noc_mcp/openapi/noc_openapi.json``. Regenerate it with
 ``scripts/generate_openapi.py`` when the backend API changes.
 
-Only ``GET`` operations are exposed (as MCP tools); every other method is excluded, which
-enforces the read-only guarantee at the MCP layer regardless of the service account's role.
+Only ``GET`` operations from the OpenAPI spec are auto-exposed as tools; every other method
+is excluded at the route-map level. A small, deliberately curated set of write operations —
+tickets, alert acknowledge/resolve, diagnostics job-creation, maintenance windows, and one
+SSH-exec escape hatch — is hand-registered on top, each going through its own dedicated
+module (tickets.py, alerts.py, diagnostics.py, maintenance.py, charger_support.py,
+ssh_exec.py) rather than a blanket route-map flip, so every write this server can make is
+explicit and reviewable in one place.
 """
 
 from __future__ import annotations
@@ -17,11 +22,16 @@ from pathlib import Path
 from fastmcp import FastMCP
 from fastmcp.server.providers.openapi import MCPType, RouteMap
 
+from .alerts import _register_alert_tools
 from .auth import NocAuthClient
+from .charger_support import _register_charger_support_tools
 from .config import settings
 from .control_center import _register_control_center_tools
+from .diagnostics import _register_diagnostics_tools
+from .maintenance import _register_maintenance_tools
 from .readonly import ReadOnlyProxyMiddleware
 from .ssh_exec import _register_ssh_tools
+from .tickets import _register_ticket_tools
 
 _SPEC_PATH = Path(__file__).parent / "openapi" / "noc_openapi.json"
 _CATALOG_CSV = Path(__file__).parent / "catalog" / "rbac-rules.csv"
@@ -115,11 +125,16 @@ def build_server(client: NocAuthClient | None = None, ssh_ws_url_builder=None) -
     mcp = FastMCP.from_openapi(
         openapi_spec=load_spec(),
         client=client,
-        name="QuenchNOC Assistant (read-only)",
+        name="QuenchNOC Assistant",
         route_maps=_ROUTE_MAPS,
     )
     _register_control_center_catalog(mcp)
     _register_control_center_tools(mcp, client)
     _register_ssh_tools(mcp, client, ssh_ws_url_builder)
+    _register_ticket_tools(mcp, client)
+    _register_alert_tools(mcp, client)
+    _register_diagnostics_tools(mcp, client)
+    _register_maintenance_tools(mcp, client)
+    _register_charger_support_tools(mcp, client)
     mcp.add_middleware(ReadOnlyProxyMiddleware())
     return mcp

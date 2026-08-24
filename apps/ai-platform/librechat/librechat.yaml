@@ -50,7 +50,7 @@ modelSpecs:
 # Allow LibreChat to reach the internal MCP server containers (SSRF protection allowlist).
 mcpSettings:
   allowedAddresses:
-    - "mcp-server:8100"
+    - "noc-mcp-server:8100"
     - "cms-mcp-server:8101"
     - "jira-mcp-server:8102"
     - "docgen-mcp-server:8103"
@@ -64,10 +64,17 @@ endpoints:
     # GLM (Zhipu / z.ai) ??? OpenAI-compatible API. Key comes from apps/ai-platform/librechat/.env (GLM_API_KEY).
     - name: "GLM"
       apiKey: "${GLM_API_KEY}"
-      # GLM Coding Plan endpoint (OpenAI-compatible). NOT the general /api/paas/v4 endpoint,
-      # which is pay-as-you-go and returns 429 "insufficient balance". Verified: this URL
+      # Routed through the tool-filtering proxy (services/tool-filter-proxy/), which
+      # trims the ~196-tool / ~43k-token `tools[]` block to 10-30 relevant tools and
+      # streams the provider response back unchanged. The proxy maps the /glm prefix to
+      # the real upstream, configured in docker-compose.yml as PROXY_UPSTREAMS.
+      #
+      # ROLLBACK: restore the direct URL below and restart the api service.
+      #   baseURL: "https://api.z.ai/api/coding/paas/v4"
+      # That is the GLM Coding Plan endpoint — NOT the general /api/paas/v4 endpoint,
+      # which is pay-as-you-go and returns 429 "insufficient balance". Verified: it
       # returns 200 and GLM-5.2 emits tool calls correctly.
-      baseURL: "https://api.z.ai/api/coding/paas/v4"
+      baseURL: "http://tool-filter-proxy:8108/glm"
       models:
         # Text models (NOC Q&A + tools): glm-5.x, glm-4.x. "-turbo"/"-air" = faster/lighter.
         # Vision models (image analysis): glm-4.6v, glm-4.5v.
@@ -92,12 +99,16 @@ endpoints:
     # balance is topped up, and the two can be A/B'd on the same NOC questions.
     - name: "Kimi"
       apiKey: "${KIMI_API_KEY}"
-      # "Kimi For Coding" subscription endpoint - this is what an sk-kimi-* key binds to.
-      # NOT https://api.moonshot.ai/v1 (pay-as-you-go platform) and NOT api.moonshot.cn
-      # (mainland platform). All three are separate accounts with non-interchangeable
-      # keys; an sk-kimi-* key returns 401 "Invalid Authentication" on the other two.
-      # Same trap as the GLM coding-plan endpoint above.
-      baseURL: "https://api.kimi.com/coding/v1"
+      # Routed through the tool-filtering proxy (see the GLM endpoint above for why).
+      #
+      # ROLLBACK: restore the direct URL below and restart the api service.
+      #   baseURL: "https://api.kimi.com/coding/v1"
+      # That is the "Kimi For Coding" subscription endpoint — what an sk-kimi-* key binds
+      # to. NOT https://api.moonshot.ai/v1 (pay-as-you-go platform) and NOT
+      # api.moonshot.cn (mainland platform). All three are separate accounts with
+      # non-interchangeable keys; an sk-kimi-* key returns 401 "Invalid Authentication"
+      # on the other two. Same trap as the GLM coding-plan endpoint above.
+      baseURL: "http://tool-filter-proxy:8108/kimi"
       models:
         # These are the canonical ids from GET /coding/v1/models. Verified 2026-08-06:
         # all four return finish_reason "tool_calls" correctly. Measured round-trip on a
@@ -126,7 +137,7 @@ endpoints:
 mcpServers:
   noc:
     type: streamable-http
-    url: "http://mcp-server:8100/mcp"
+    url: "http://noc-mcp-server:8100/mcp"
     # timeout for tool calls (ms); NOC reports/telemetry can be slow.
     timeout: 60000
   cms:

@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     min_score_default: float = 0.5
     knowledge_dir: str = "/knowledge"
     scopes_file: str = "/knowledge/scopes.yaml"
+    # Departmental KBs live here, not in scopes.yaml, so creating one is a data
+    # change on the /knowledge mount rather than a YAML edit plus a rebuild.
+    kb_registry_file: str = "/knowledge/kb-registry.json"
+    # Read-only view of the control plane's departments.json. The set of valid
+    # departments has exactly one definition, and it is not in this codebase.
+    departments_file: str = "/config/departments.json"
+
+    # "dept" serves the per-department search/write tools; "admin" serves only
+    # the kb_admin_* control tools. Splitting them across two endpoints means a
+    # department agent cannot reach KB administration even by mistake, without
+    # relying solely on LibreChat-side ACL to hide it.
+    kb_role: str = "dept"
+    # How often to re-read the registry. The admin plane runs in a separate
+    # process, so the dept plane learns about a new KB by noticing the file
+    # changed. 0 disables polling (tests, stdio use).
+    reload_interval_seconds: float = 5.0
+
 
     # --- contributed uploads (see 2026-08-23-kb-document-upload-design.md) ---
     s3_bucket: str = ""                       # empty disables the write tools entirely

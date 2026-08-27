@@ -210,3 +210,75 @@ def warn_missing_folders(config: ScopesConfig, knowledge_dir) -> None:
         if not (root / scope.folder).is_dir():
             log.warning("scope %r declares folder %r which does not exist under %s",
                         scope.name, scope.folder, root)
+
+
+def _load_yaml_raw(path) -> dict:
+    """Read scopes.yaml into its raw mapping without validating it.
+
+    The registry has to be merged in *before* validation, not after: profiles
+    declared in YAML may reference scopes the registry contributes (and vice
+    versa), so validating the two halves separately would reject a config that
+    is correct as a whole.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise ScopesConfigError(f"scopes config not found: {p}")
+    try:
+        raw = yaml.load(p.read_text(encoding="utf-8"), Loader=_DupCheckLoader)
+    except ScopesConfigError:
+        raise
+    except yaml.YAMLError as exc:
+        raise ScopesConfigError(f"{p} is not valid YAML: {exc}") from exc
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ScopesConfigError(f"{p}: top level must be a mapping")
+    return raw
+
+
+def merge_registry(raw: dict, records, *, source: str) -> dict:
+    """Overlay registry-defined knowledge bases onto the raw YAML config.
+
+    Collisions are refused rather than resolved. A silent winner here would
+    mean a KB the Super Admin created is quietly not the one being served, or
+    that a departmental scope resolves to the shared corpus - both look like
+    working systems while pointing at the wrong documents.
+    """
+    from .registry import to_raw_config
+
+    scopes = dict(raw.get("scopes") or {})
+    profiles = dict(raw.get("profiles") or {})
+    reg_scopes, reg_profiles = to_raw_config(records)
+
+    for name in reg_scopes:
+        if name in scopes:
+            raise ScopesConfigError(
+                f"{source}: scope {name!r} is declared in scopes.yaml and in the KB "
+                "registry; remove it from scopes.yaml (the registry owns departmental scopes)"
+            )
+    for name in reg_profiles:
+        if name in profiles:
+            raise ScopesConfigError(
+                f"{source}: profile {name!r} is declared in scopes.yaml and in the KB "
+                "registry; remove it from scopes.yaml (the registry owns departmental profiles)"
+            )
+
+    scopes.update(reg_scopes)
+    profiles.update(reg_profiles)
+    return {"scopes": scopes, "profiles": profiles}
+
+
+def load_effective_scopes(scopes_file, registry_file) -> ScopesConfig:
+    """The config the server actually serves: scopes.yaml + the KB registry.
+
+    scopes.yaml keeps the shared, repo-shipped corpus; the registry holds every
+    departmental KB. Splitting them this way is what removes the "edit YAML and
+    restart" step from creating a KB, without giving up any of the validation
+    parse_scopes already performs on the combined result.
+    """
+    from .registry import load_registry
+
+    raw = _load_yaml_raw(scopes_file)
+    records = load_registry(registry_file)
+    merged = merge_registry(raw, records, source=str(scopes_file))
+    return parse_scopes(merged, source=f"{scopes_file}+{registry_file}")

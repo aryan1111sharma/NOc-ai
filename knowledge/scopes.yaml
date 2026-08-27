@@ -1,30 +1,58 @@
-# Knowledge scopes and the profiles that bundle them.
+# Knowledge scopes, and the shared corpora that are not owned by any department.
 #
 # A document's top-level folder under knowledge/ is its scope. Files sitting at
 # the root belong to no scope and are skipped (which is why MANIFEST.md and this
 # file are not indexed as knowledge).
 #
-# Each profile becomes one MCP tool, kb_search_<profile>, with its scope filter
-# bound server-side. An agent is granted knowledge by being given that tool —
-# the model never passes a scope and cannot request one it wasn't granted.
+# ---------------------------------------------------------------------------
+# WHAT LIVES HERE, AND WHAT NO LONGER DOES
 #
-# Non-confidential scopes share the ev_kb collection, separated by a payload
-# filter. A scope marked `confidential: true` gets its own Qdrant collection so
-# no filter defect can expose it.
+# This file declares only the SHARED, repo-shipped corpus. Departmental
+# knowledge bases are no longer declared here - they live in kb-registry.json
+# next to this file, because they are administered at runtime by a Super Admin
+# and must not require a YAML edit, an image rebuild or a restart to create.
+#
+# kb-mcp loads scopes.yaml and kb-registry.json together and validates the
+# merged result, so a profile here may reference a scope the registry
+# contributes and vice versa. A name declared in both is a hard error rather
+# than a silent winner: the registry owns departmental scopes and profiles.
+#
+# ---------------------------------------------------------------------------
+# WHY THE SPLIT IS DRAWN HERE
+#
+# ev-core is cross-cutting EV/OCPP reference material owned by the platform, not
+# by a department. It is non-confidential, so it shares the `ev_kb` collection
+# behind a payload filter, and it is never a write target - which is precisely
+# what stops any one department from mutating shared reference material.
+#
+# A departmental scope is the opposite on both counts: confidential, so it gets
+# its OWN Qdrant collection (no filter defect can expose it), and writable by
+# exactly the department that owns it.
+#
+# Scope and profile names are identifiers, not filenames: profile names are
+# embedded verbatim into the MCP tool name (f"kb_search_{profile.name}" in
+# server.py), and confidential scope names become collection-name material via
+# store.collection_for's slugify. Both are constrained to ^[A-Za-z0-9_-]+$ at
+# config-load time so an unsafe identifier fails loudly at startup instead of
+# silently downstream. The `folder` field is deliberately NOT constrained this
+# way: it is a real filesystem path and may contain spaces.
 #
 # Run `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` after changing
-# this file or the corpus. Names must match ^[A-Za-z0-9_-]+$; the `folder` field
-# is unconstrained and may contain spaces.
+# the file corpus.
 #
 # See docs/superpowers/specs/2026-07-19-agent-centric-knowledge-scopes-design.md
 
 scopes:
+  # Cross-cutting EV/OCPP reference. Non-confidential: shares the ev_kb
+  # collection with any other non-confidential scope, separated by payload
+  # filter. Granted to a department by listing it in that KB's `shared_scopes`
+  # in kb-registry.json - read-only, always.
   ev-core:
     folder: ev-core
 
-profiles:
-  noc:
-    scopes: [ev-core]
-    description: >-
-      EV/OCPP protocol reference, charger model specs and firmware notes, and
-      NOC operational runbooks.
+# No profiles are declared here. Every search profile is a departmental
+# knowledge base, and those are defined in kb-registry.json.
+#
+# If a future shared, department-independent profile is needed, declare it here
+# and it will merge alongside the registry's - just don't reuse a name the
+# registry already owns.

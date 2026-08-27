@@ -259,10 +259,6 @@ def _parse_xlsx(path: Path) -> list[dict]:
             if rows:
                 segs.append({"text": _rows_to_text(rows), "location": sheet.title})
         return segs
-    except ParseError:
-        raise
-    except Exception as e:
-        raise ParseError(f"cannot open workbook: {e}") from e
     finally:
         for workbook in (values, formulas):
             if workbook is not None:
@@ -418,7 +414,10 @@ def parse_file(path: Path) -> list[dict]:
     if ext == ".rtf":
         return _parse_rtf(path)
 
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    # utf-8-sig transparently strips an Excel BOM and still reads plain UTF-8.
+    # Without it a .csv exported from Excel keeps the BOM glued to its first header
+    # cell, so that column silently fails to match any query naming it.
+    raw = path.read_text(encoding="utf-8-sig", errors="replace")
     if ext in (".csv", ".tsv"):
         return _parse_delimited(path, raw)
     if ext == ".json":

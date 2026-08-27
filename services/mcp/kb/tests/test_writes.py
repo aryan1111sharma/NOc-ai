@@ -136,10 +136,13 @@ def test_the_not_found_message_never_contains_the_requested_filename(tmp_path):
 
 
 def test_unsupported_extension_is_refused_with_the_accepted_list(tmp_path):
+    # .pptx was the example here until the parser gained it; an extension used to
+    # stand for "unsupported" has to be one the indexer genuinely cannot read, or
+    # the test starts passing for the wrong reason as SUPPORTED grows.
     writer, s3, _, _ = _writer(tmp_path)
-    s3.put(f"{CHAT_PREFIX}/u1/abc__slides.pptx", b"x")
+    s3.put(f"{CHAT_PREFIX}/u1/abc__archive.zip", b"x")
     with pytest.raises(UploadRejected, match=r"\.docx"):
-        writer.upload(CONTRIBUTOR, "slides.pptx")
+        writer.upload(CONTRIBUTOR, "archive.zip")
 
 
 def test_legacy_doc_gets_a_specific_message(tmp_path):

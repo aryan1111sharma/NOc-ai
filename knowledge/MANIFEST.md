@@ -12,6 +12,27 @@ Run `docker exec kb-mcp-server python -m kb_mcp.ingest --prune` after changing t
 `knowledge/` folder. See
 `docs/superpowers/specs/2026-07-19-agent-centric-knowledge-scopes-design.md`.
 
+## Departmental knowledge bases
+
+One confidential scope per control-plane department (see
+`apps/ai-platform/librechat/roles/departments.json`). Each gets its **own Qdrant collection**
+rather than a shared collection with a payload filter, so cross-department exposure cannot be
+caused by a filter defect.
+
+| Department | Scope / folder | Profile → MCP tool | Qdrant collection | Documents |
+|---|---|---|---|---|
+| Sales | `dept-sales` | `sales` → `kb_search_sales` | `kb_dept_sales` | 0 (empty) |
+| Finance | `dept-finance` | `finance` → `kb_search_finance` | `kb_dept_finance` | 0 (empty) |
+| NOC | `dept-noc` | `noc` → `kb_search_noc` | `kb_dept_noc` (+ shared `ev_kb`) | 0 (empty) |
+| Service | `dept-service` | `service` → `kb_search_service` | `kb_dept_service` | 0 (empty) |
+
+`noc` keeps `ev-core` alongside its own scope because the EV/OCPP reference is genuinely
+cross-cutting and `kb_search_noc` was already bound to the existing NOC agent.
+
+A department is granted its knowledge by giving an agent that department's `kb_search_*` tool
+and sharing the agent to the matching `dept-*` group. The model never passes a scope and
+cannot request one it was not given.
+
 ## Phase 1 — sample corpus (synthetic + public OCPP; for pipeline validation)
 
 | File | Scope | Source | Notes |

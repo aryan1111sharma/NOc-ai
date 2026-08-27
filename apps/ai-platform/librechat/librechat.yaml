@@ -44,6 +44,7 @@ mcpSettings:
     - "chargezone-jira-mcp-server:8105"
     - "kb-mcp-server:8106"
     - "platform-mcp-server:8107"
+    - "kb-admin-mcp-server:8109"
 
 endpoints:
   custom:
@@ -148,6 +149,17 @@ mcpServers:
   kb:
     type: streamable-http
     url: "http://kb-mcp-server:8106/mcp"
+    timeout: 60000
+  # Super Admin control plane for knowledge bases (same service, KB_ROLE=admin).
+  # Exposes only kb_admin_* - creating, assigning, listing and deleting KBs - and
+  # deliberately no kb_search_*. Share this server with the Super Admin's agent
+  # ONLY: any agent that can reach it can re-assign any department's KB.
+  #
+  # Department agents use `kb` above, which has no administration tool at all, so
+  # a department head has nothing to call even if they build their own agent.
+  kb_admin:
+    type: streamable-http
+    url: "http://kb-admin-mcp-server:8109/mcp"
     timeout: 60000
   # Platform Intelligence (services/mcp/platform/). Read-only introspection of this
   # repository itself (health, structure, git state) ??? not an external backend.

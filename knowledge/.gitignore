@@ -1,4 +1,14 @@
+# Knowledge documents are deliberately NOT committed: they may be large or
+# proprietary. MANIFEST.md records what is loaded so the corpus stays auditable.
 *
 !.gitignore
 !MANIFEST.md
 !scopes.yaml
+# The KB registry is configuration, not corpus: tracking it means a fresh
+# checkout reproduces the same knowledge bases, departments and isolation.
+!kb-registry.json
+
+# ...but DO track the departmental folder structure, so a fresh checkout
+# reproduces the scope layout that scopes.yaml declares. Contents stay ignored.
+!*/
+!*/.gitkeep

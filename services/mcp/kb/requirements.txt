@@ -4,3 +4,10 @@ qdrant-client>=1.12
 fastembed>=0.4
 pymupdf>=1.24
 pyyaml>=6.0
+# Document formats for KB ingestion. All pure-Python and small; each maps to exactly
+# one parser branch in kb_mcp/parse.py.
+python-docx>=1.1      # .docx
+openpyxl>=3.1         # .xlsx / .xlsm (data_only=True -> computed values, not formulas)
+xlrd>=2.0             # legacy .xls only (xlrd 2.x deliberately dropped .xlsx)
+python-pptx>=0.6       # .pptx
+striprtf>=0.0.26      # .rtf

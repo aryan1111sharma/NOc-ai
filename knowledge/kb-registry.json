@@ -1,0 +1,78 @@
+{
+  "$comment": [
+    "Knowledge bases of the AI platform - one record per KB, and the only place they are defined.",
+    "",
+    "This file is DATA, not code. It lives on the /knowledge bind mount, so a Super Admin can",
+    "create, re-assign or delete a knowledge base with no scopes.yaml edit, no image rebuild and",
+    "no container restart: kb-mcp re-reads it on an interval and re-derives everything from it.",
+    "",
+    "Managed by the kb_admin_* tools on the admin plane (kb-admin-mcp-server, port 8109), which",
+    "is a separate endpoint from the department-facing one so a department agent has no KB",
+    "administration tool to call. Hand-edit only if that plane is unavailable.",
+    "",
+    "Each record drives, automatically:",
+    "  name       -> search profile -> tools kb_search_<name>, kb_upload_<name>, kb_delete_<name>,",
+    "                kb_documents_<name>, kb_reindex_<name>",
+    "  scope      -> a confidential scope -> its OWN Qdrant collection kb_<scope>, never a shared",
+    "                collection with a payload filter, so isolation cannot fail open",
+    "  folder     -> the document directory under knowledge/",
+    "  department -> the LibreChat group the KB is assigned to (see roles/departments.json)",
+    "",
+    "Knowledge bases are INDEPENDENT resources. A department may hold any number of them, and",
+    "department is optional metadata - grouping and display only. Isolation is per-KB: each has",
+    "its own scope and therefore its own Qdrant collection, so two KBs in one department never",
+    "share storage. Which KBs an agent may use is decided by the tools attached to that agent.",
+    "",
+    "shared_scopes grants additional READ access to non-confidential corpora declared in",
+    "scopes.yaml (currently ev-core). It never becomes a write target - writes always land in",
+    "the KB's own confidential scope - so a department cannot mutate shared reference material.",
+    "",
+    "See docs/superpowers/specs/2026-07-19-agent-centric-knowledge-scopes-design.md"
+  ],
+  "version": 1,
+  "knowledge_bases": [
+    {
+      "name": "noc",
+      "department": "dept-noc",
+      "scope": "dept-noc",
+      "folder": "dept-noc",
+      "description": "EV/OCPP protocol reference, charger model specs and firmware notes, NOC operational runbooks, and the NOC department knowledge base.",
+      "shared_scopes": [
+        "ev-core"
+      ],
+      "created_at": "2026-07-19T00:00:00+00:00"
+    },
+    {
+      "name": "sales",
+      "department": "dept-sales",
+      "scope": "dept-sales",
+      "folder": "dept-sales",
+      "description": "Sales department knowledge base.",
+      "created_at": "2026-07-19T00:00:00+00:00"
+    },
+    {
+      "name": "finance",
+      "department": "dept-finance",
+      "scope": "dept-finance",
+      "folder": "dept-finance",
+      "description": "Finance department knowledge base.",
+      "created_at": "2026-07-19T00:00:00+00:00"
+    },
+    {
+      "name": "service",
+      "department": "dept-service",
+      "scope": "dept-service",
+      "folder": "dept-service",
+      "description": "Service department knowledge base.",
+      "created_at": "2026-07-19T00:00:00+00:00"
+    },
+    {
+      "name": "testkb",
+      "department": "dept-test",
+      "scope": "dept-test",
+      "folder": "dept-test",
+      "description": "Fifth test department knowledge base.",
+      "created_at": "2026-08-26T09:49:08+00:00"
+    }
+  ]
+}

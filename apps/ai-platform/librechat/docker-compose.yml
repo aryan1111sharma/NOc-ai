@@ -19,7 +19,21 @@ name: chat
 
 services:
   api:
-    image: ghcr.io/danny-avila/librechat:latest
+    # Stock upstream LibreChat PLUS the Knowledge Bases admin page (custom-image/).
+    # The patches are applied on top of the exact upstream image rather than built from
+    # LibreChat source, so this differs from production only by that patch set - see
+    # custom-image/Dockerfile for the full rationale.
+    #
+    # Without this build block compose pulls bare ghcr.io/danny-avila/librechat:latest and
+    # the stack comes up looking healthy but with no /knowledge-bases page and no
+    # /api/knowledge-bases route - a silent feature loss, since nothing else references
+    # custom-image/. BASE is passed explicitly so the base tag is visible here rather than
+    # only in the Dockerfile's ARG default.
+    build:
+      context: ./custom-image
+      args:
+        BASE: ghcr.io/danny-avila/librechat:latest
+    image: noc-librechat-kb:local
     container_name: noc-librechat
     # No published port: nginx (below) is the only browser-facing entry point, on :80.
     depends_on:
@@ -117,8 +131,56 @@ services:
       - MCP_PORT=8106
       - QDRANT_URL=http://qdrant:6333
       - KNOWLEDGE_DIR=/knowledge
+      # Department-facing plane: search + per-department write tools, and NO
+      # kb_admin_* tool. KB administration lives on kb-admin-mcp-server below,
+      # so a department agent cannot reach it even if its ACL were wrong.
+      - KB_ROLE=dept
+      - KB_REGISTRY_FILE=/knowledge/kb-registry.json
+      - DEPARTMENTS_FILE=/config/departments.json
+      # Re-read the registry on this interval, so a KB created on the admin
+      # plane (a separate process) appears here without a restart.
+      - RELOAD_INTERVAL_SECONDS=5
     volumes:
-      - ../../../knowledge:/knowledge:ro
+      # Writable (was :ro) so the departmental KB tools can upload and delete documents
+      # from chat. The write path is still narrow: kb_upload_*/kb_delete_* bind their
+      # target scope server-side and reject any filename containing a path separator,
+      # so a caller cannot reach outside its own department folder.
+      - ../../../knowledge:/knowledge
+      # The control plane's department list, read-only. Mounting it is what keeps
+      # departments out of this service's code: kb_admin_create_kb validates against
+      # this file, so a fifth department needs no change here and no rebuild.
+      - ./roles/departments.json:/config/departments.json:ro
+      # The BGE embedding model (~450MB) is downloaded from HuggingFace on first
+      # use. Without this cache every restart re-downloads it, which turns a
+      # 5-second restart into a multi-minute outage of every KB search tool.
+      - kb-model-cache:/root/.cache
+    restart: unless-stopped
+
+  # Super Admin control plane for knowledge bases. Same image, same registry file,
+  # same Qdrant - only the role differs, so this is not a second RAG system: it is
+  # the same one with a different tool surface.
+  #
+  # It exists as a separate endpoint rather than extra tools on kb-mcp-server so
+  # that "a department head cannot create, re-assign or delete knowledge bases" is
+  # a property of what is reachable from their agent, not only of LibreChat ACL.
+  # Expose this server only to the Super Admin's agent.
+  kb-admin-mcp-server:
+    build: ../../../services/mcp/kb
+    container_name: kb-admin-mcp-server
+    depends_on:
+      - qdrant
+    environment:
+      - MCP_TRANSPORT=http
+      - MCP_HOST=0.0.0.0
+      - MCP_PORT=8109
+      - QDRANT_URL=http://qdrant:6333
+      - KNOWLEDGE_DIR=/knowledge
+      - KB_ROLE=admin
+      - KB_REGISTRY_FILE=/knowledge/kb-registry.json
+      - DEPARTMENTS_FILE=/config/departments.json
+    volumes:
+      - ../../../knowledge:/knowledge
+      - ./roles/departments.json:/config/departments.json:ro
     restart: unless-stopped
 
   # Read-only MCP server for Ecog's Atlassian Cloud Jira (vendor tracker).
@@ -246,3 +308,4 @@ volumes:
   ecog-sd-cookies:
   docgen-files:
   qdrant-data:
+  kb-model-cache:

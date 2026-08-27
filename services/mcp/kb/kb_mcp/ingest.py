@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from .chunk import chunk_text
-from .parse import parse_file, SUPPORTED
+from .parse import ParseError, parse_file, SUPPORTED
 from .scopes import Scope, ScopesConfig
 
 log = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
 
     stats = {
         "indexed_docs": 0, "skipped_docs": 0, "chunks": 0, "pruned_docs": 0,
-        "empty_docs": 0, "skipped_root_files": skipped_root,
+        "empty_docs": 0, "unreadable_docs": 0, "skipped_root_files": skipped_root,
         "skipped_unscoped_files": skipped_unscoped,
     }
 
@@ -76,7 +76,19 @@ def ingest(knowledge_dir, config: ScopesConfig, registry, embedder, *,
 
         store.delete_source(source)  # replace old version (no-op if new)
         chunks = []
-        for seg in parse_file(path):
+        try:
+            segments = parse_file(path)
+        except ParseError as e:
+            # One unreadable file must not abort the whole corpus. A bulk reindex runs
+            # over documents that arrived by any route (upload, or dropped into the
+            # folder), so aborting would let a single bad PDF block indexing for every
+            # other department document. Upload stays strict — it parse-checks the file
+            # it just wrote and rolls back — so this path only forgives pre-existing
+            # files, and reports them in `unreadable_docs` rather than hiding them.
+            stats["unreadable_docs"] += 1
+            log.warning("%s could not be parsed, skipping: %s", source, e)
+            continue
+        for seg in segments:
             for text in chunk_text(seg["text"], max_chars, overlap):
                 chunks.append({
                     "source": source, "scope": scope.name, "location": seg["location"],
@@ -107,7 +119,7 @@ def main() -> None:  # pragma: no cover - thin CLI wiring, exercised by the live
 
     from .config import settings
     from .embed import FastembedEmbedder
-    from .scopes import load_scopes, warn_missing_folders
+    from .scopes import load_effective_scopes, warn_missing_folders
     from .store import StoreRegistry
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -115,7 +127,11 @@ def main() -> None:  # pragma: no cover - thin CLI wiring, exercised by the live
     ap.add_argument("--prune", action="store_true", help="remove chunks for files no longer present")
     args = ap.parse_args()
 
-    config = load_scopes(settings.scopes_file)
+    # Departmental KBs live in kb-registry.json, not scopes.yaml, so the effective
+    # config is the merge of both. Using load_scopes here made this CLI fail with
+    # "'profiles' must be a mapping" the moment departmental KBs moved to the
+    # registry -- the server already used the merged loader, so only this CLI broke.
+    config = load_effective_scopes(settings.scopes_file, settings.kb_registry_file)
     warn_missing_folders(config, settings.knowledge_dir)
 
     registry = StoreRegistry(

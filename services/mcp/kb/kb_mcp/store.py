@@ -99,6 +99,9 @@ class StoreRegistry:
 
     def __init__(self, client: QdrantClient, config: ScopesConfig,
                  shared_collection: str, dim: int):
+        # Kept so a live reload can rebuild the registry against a new config
+        # without reconnecting to Qdrant (see server._Plane.reload).
+        self.client = client
         self._by_collection: dict[str, KbStore] = {}
         self._by_scope: dict[str, KbStore] = {}
         # A confidential scope's collection name is derived by slugifying —

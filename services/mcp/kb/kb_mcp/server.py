@@ -499,12 +499,14 @@ def _build_admin_server(deps=None) -> FastMCP:
     )(kb_admin_list_kbs)
     mcp.tool(
         name="kb_admin_create_kb",
-        description=("Create a knowledge base and assign it to an existing department. `name` "
-                     "becomes the kb_search_<name> tool; `department` must already exist "
-                     "(use kb_admin_list_departments). Optional `shared_scopes` additionally "
-                     "grants read access to non-confidential shared corpora such as ev-core. "
-                     "Refused if the name, scope or department is already taken — one "
-                     f"department has exactly one knowledge base. {_ADMIN_NOTE}"),
+        description=("Create a knowledge base and label it with a department. `name` becomes "
+                     "the kb_search_<name> tool. `department` is a grouping label: it need "
+                     "NOT already exist (use kb_admin_list_departments to see the ones in "
+                     "play), and several knowledge bases may share one - each still gets its "
+                     "own scope and its own vector collection, so they stay isolated from "
+                     "each other. Optional `shared_scopes` additionally grants read access to "
+                     "non-confidential shared corpora such as ev-core. Refused only if the "
+                     f"name, scope or folder is already taken. {_ADMIN_NOTE}"),
     )(kb_admin_create_kb)
     mcp.tool(
         name="kb_admin_assign_department",

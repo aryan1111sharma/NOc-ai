@@ -53,7 +53,11 @@ _VALIDATORS = {
 # '?', '#', '%', '\', ':', '=', '&' or whitespace -- none of which can appear in a legitimate
 # NOC backend URL built from this repo's constants, and every one of which changes how a
 # decoding receiver parses the request.
-_SAFE_URL = re.compile(r"^/[A-Za-z0-9._~/-]*$")
+#
+# \A..\Z, not ^..$: Python's '$' also matches before a trailing newline, which would let a
+# request-splitting character through the one check that is meant to hold whatever built the
+# URL. Same reasoning as identifiers._CHARGER_ID_ALLOWED.
+_SAFE_URL = re.compile(r"\A/[A-Za-z0-9._~/-]*\Z")
 
 
 def build_url(template: str, **ids: Any) -> Tuple[Optional[str], Optional[str]]:

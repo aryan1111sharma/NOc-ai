@@ -131,6 +131,23 @@ def test_unsafe_session_ids_are_rejected(session_id):
     assert reason is not None and reason.startswith("ValueError: session_id")
 
 
+@pytest.mark.parametrize("value", ["CHG-1\n", "..\n", "S1\n", "a\n", "CHG-1\n\n"])
+def test_a_trailing_newline_does_not_slip_past_either_validator(value):
+    """Python's '$' also matches BEFORE a trailing newline; the anchors are \\A..\\Z.
+
+    ``"..\\n"`` is the one that mattered: it is not equal to ``".."``, so it would also have
+    slipped past the dot-segment check and been percent-encoded into a URL as ``..%0A``.
+    """
+    assert validate_charger_id(value) is not None
+    assert validate_session_id(value) is not None
+
+
+@pytest.mark.parametrize("template", ["/api/v1/reports/session-failures\n",
+                                      "/api/v1/reports/a\nb"])
+def test_a_trailing_newline_does_not_slip_past_the_url_backstop(template):
+    assert build_url(template)[0] is None
+
+
 def test_session_and_charger_validators_share_one_rule_set():
     """One definition of "safe identifier", two names -- not two drifting copies."""
     for value in ("CHG-1", "S1", "..", "a/b", "a?b", "", None):

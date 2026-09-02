@@ -119,6 +119,8 @@ def _assert_rejected(seen, out, port=None, path=None):
     "a/..",
     "x/../../y",
     "..%2f",
+    "CHG-1\n",     # Python's '$' matches before a trailing newline; the anchor must be \\Z
+    "..\n",        # ... and this one would also have slipped past the dot-segment check
     "",
     "   ",
     "\t\n",

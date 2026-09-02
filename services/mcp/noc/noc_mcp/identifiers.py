@@ -29,7 +29,11 @@ from typing import Any, Optional
 
 # No '/', '?', '#', '%', '\', ':' or '~' -- none of which belong in a charger id, and each of
 # which changes how a decoding receiver parses the URL.
-_CHARGER_ID_ALLOWED = re.compile(r"^[A-Za-z0-9._-]+$")
+#
+# Anchored with \A..\Z, NOT ^..$: in Python '$' also matches immediately BEFORE a trailing
+# newline, so '^[A-Za-z0-9._-]+$' accepts "CHG-1\n" -- and, worse, "..\n", which then slips
+# past the dot-segment check below because it is not equal to "..". \Z is a true end-of-string.
+_CHARGER_ID_ALLOWED = re.compile(r"\A[A-Za-z0-9._-]+\Z")
 
 # Session ids carry the *same* hazard as charger ids -- ``/chargers/{charger_id}/sessions/
 # {session_id}/events`` splices them into the same decoded-then-routed path -- so they get the
@@ -44,7 +48,7 @@ _CHARGER_ID_ALLOWED = re.compile(r"^[A-Za-z0-9._-]+$")
 # the short prefixed ids this repo's fixtures use (``S1``, ``S-old``). '.' is admitted for the
 # same reason it is on charger ids: it is RFC 3986 *unreserved*, so it cannot change how a
 # decoding receiver parses the path -- and the dot-segment check below still rejects '.'/'..'.
-_SESSION_ID_ALLOWED = re.compile(r"^[A-Za-z0-9._-]+$")
+_SESSION_ID_ALLOWED = re.compile(r"\A[A-Za-z0-9._-]+\Z")  # \Z, not $ -- see above
 
 
 def _validate(value: Any, *, kind: str, allowed: re.Pattern) -> Optional[str]:

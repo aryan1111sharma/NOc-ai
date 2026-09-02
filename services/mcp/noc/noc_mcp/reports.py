@@ -15,7 +15,7 @@ from typing import Optional
 
 from fastmcp import FastMCP
 
-from .freshness import HISTORY, stamp
+from .freshness import HISTORY, is_error, stamp
 
 # report name -> one-line description, surfaced in the tool schema.
 REPORTS = {
@@ -70,7 +70,7 @@ async def _fetch_report(client, report: str, **filters) -> dict:
     if report not in REPORTS:
         return {"error": f"unknown report {report!r}", "valid_reports": sorted(REPORTS)}
     out = await _get(client, f"/api/v1/reports/{report}", _params(**filters))
-    return out if "error" in out else stamp(out, source=HISTORY)
+    return out if is_error(out) else stamp(out, source=HISTORY)
 
 
 async def _fetch_stats(client, metric: str, **filters) -> dict:
@@ -78,7 +78,7 @@ async def _fetch_stats(client, metric: str, **filters) -> dict:
         return {"error": f"unknown metric {metric!r}", "valid_metrics": sorted(STATS)}
     suffix = f"/{metric}" if metric else ""
     out = await _get(client, f"/api/v1/stats{suffix}", _params(**filters))
-    return out if "error" in out else stamp(out, source=HISTORY)
+    return out if is_error(out) else stamp(out, source=HISTORY)
 
 
 def _describe(mapping: dict) -> str:
@@ -118,8 +118,8 @@ def _register_report_tools(mcp: FastMCP, client) -> None:
         to_ts: Optional[str] = None,
     ) -> dict:
         return await _fetch_report(client, report, hours=hours, limit=limit,
-                                   customer_name=customer_name, charger_id=charger_id,
-                                   from_ts=from_ts, to_ts=to_ts)
+                                    customer_name=customer_name, charger_id=charger_id,
+                                    from_ts=from_ts, to_ts=to_ts)
 
     @mcp.tool(description=_STATS_DESC)
     async def noc_stats(
@@ -132,5 +132,5 @@ def _register_report_tools(mcp: FastMCP, client) -> None:
         to_ts: Optional[str] = None,
     ) -> dict:
         return await _fetch_stats(client, metric, hours=hours, limit=limit,
-                                  customer_name=customer_name, charger_id=charger_id,
-                                  from_ts=from_ts, to_ts=to_ts)
+                                   customer_name=customer_name, charger_id=charger_id,
+                                   from_ts=from_ts, to_ts=to_ts)

@@ -105,6 +105,36 @@ async def test_empty_charger_id_is_rejected_without_a_request(charger_id):
     assert "error" in out and out["port"] == 8003 and out["path"] == "api/v1/charging/status"
 
 
+@pytest.mark.parametrize("charger_id", [".", ".."])
+@pytest.mark.asyncio
+async def test_dot_segment_charger_id_is_rejected_without_a_request(charger_id):
+    # '.' and '..' are RFC 3986 unreserved: quote() leaves them alone and httpx then
+    # normalises the segment away, escaping /api/v1/chargers/ entirely.
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
+    assert seen == [], f"escaped the charger segment: {[str(r.url) for r in seen]}"
+    assert "error" in out
+
+
+@pytest.mark.parametrize("charger_id", ["../..", "a/..", "x/../../y", "..%2f", "..a", "a.."])
+@pytest.mark.asyncio
+async def test_dotted_charger_ids_stay_inside_one_encoded_segment(charger_id):
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
+    assert len(seen) == 1
+    raw = seen[0].url.raw_path.decode()
+    _assert_safe(seen[0])
+    assert raw.startswith("/api/v1/chargers/")
+    assert raw.endswith("/proxy/8003/api/v1/charging/status")
+    # exactly one segment between the collection and the /proxy/ marker
+    segment = raw[len("/api/v1/chargers/"):-len("/proxy/8003/api/v1/charging/status")]
+    assert "/" not in segment, f"charger_id escaped its segment: {segment!r}"
+
+
+
+
 # --------------------------------------------------------------------------------------
 # port
 # --------------------------------------------------------------------------------------

@@ -51,6 +51,12 @@ def _validate_proxy_url(charger_id: Any, port: Any, path: Any) -> Tuple[Optional
         return None, "ValueError: charger_id must be a non-empty string"
     # safe="" so '/', '?', '&' and '#' are percent-encoded and cannot escape this segment.
     charger_seg = quote(charger_id, safe="")
+    if charger_seg in (".", ".."):
+        # '.' and '..' are RFC 3986 *unreserved*, so quote() passes them through untouched and
+        # httpx then normalises the dot segment away -- the one input that still escapes the
+        # segment after encoding. Any other dotted id ("a/..") keeps its '/' encoded and stays
+        # one opaque segment, so only the bare dot segments need rejecting.
+        return None, f"ValueError: charger_id must not be a path segment ({charger_id!r})"
 
     if isinstance(port, bool):  # bool is an int subclass; never a real port
         return None, f"ValueError: port must be an integer (got {port!r})"

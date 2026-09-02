@@ -216,3 +216,51 @@ def test_audit_logger_is_configured_after_registration():
     audit = _logging.getLogger("noc_mcp.ssh_audit")
     assert audit.handlers, "ssh_audit logger has no handler -> audit records are dropped"
     assert audit.getEffectiveLevel() <= _logging.INFO
+
+
+# --- charger_id validation (shared validator; see noc_mcp/identifiers.py) --------------
+# The WS PTY URL is built by interpolating charger_id, and charger_ssh_prepare's response is
+# what a human approves. A crafted id could steer the PTY to a charger other than the one the
+# approval preview showed -- a confused deputy on live hardware.
+
+_BAD_IDS = [
+    "CHG-1/../CHG-2",
+    "CHG-1/ws/ssh-terminal/CHG-2",
+    "CHG-1?x=1",
+    "CHG-1#f",
+    "..",
+    ".",
+    "a b",
+    "a%2Fb",
+    "",
+    "   ",
+]
+
+
+@pytest.mark.parametrize("charger_id", _BAD_IDS)
+@pytest.mark.asyncio
+async def test_prepare_rejects_unsafe_charger_id_without_minting(charger_id):
+    ssh_exec._PENDING.clear()
+    async with fake_ssh_server() as base:
+        async with Client(_server(base)) as c:
+            res = (await c.call_tool("charger_ssh_prepare", {
+                "charger_id": charger_id, "command": "uptime",
+                "ssh_username": "torizon", "ssh_password": "s3cret"})).data
+    assert "error" in res
+    assert "confirmation_token" not in res
+    assert ssh_exec._PENDING == {}, "a token was minted for an unsafe charger_id"
+
+
+@pytest.mark.parametrize("charger_id", _BAD_IDS)
+def test_default_ws_url_builder_rejects_unsafe_charger_id(charger_id):
+    # Fail-closed backstop for any path that bypasses prepare.
+    with pytest.raises(ValueError):
+        ssh_exec._default_ws_url_builder(charger_id)
+
+
+@pytest.mark.parametrize("charger_id", ["CHG-1", "QC_0012", "abc.def-9",
+                                        "60f1a2b3c4d5e6f708192a3b", "NORMAL"])
+def test_default_ws_url_builder_accepts_real_charger_ids(charger_id):
+    url = ssh_exec._default_ws_url_builder(charger_id)
+    assert url.endswith(f"/ws/ssh-terminal/{charger_id}")
+    assert url.startswith(("ws://", "wss://"))

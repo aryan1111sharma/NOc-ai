@@ -2,15 +2,22 @@
 
 Separate from test_control_center.py (which covers behaviour) because these assert a security
 invariant with its own fixture shape: a transport that *captures* outgoing requests so we can
-assert on the wire, not on the return value. Keeping them in one named file makes the
-invariant easy to find, easy to run in isolation, and hard to delete by accident.
+assert on what actually goes out, not on the return value.
+
+THE ORACLE DECODES. An earlier version of this file asserted against ``request.url.raw_path``,
+which is still percent-encoded -- so ``"?" not in raw`` and ``_WRITE_PATH not in raw`` passed
+trivially, because the ``/`` were ``%2F`` and the ``?`` was ``%3F``. That measured the
+client-side wire, which is precisely the layer that does NOT reflect what a decoding receiver
+sees, and it passed over a live arbitrary-port / arbitrary-path GET SSRF. Every assertion here
+now decodes first. tests/test_receiver_model.py takes the stronger route and asserts on a real
+router's resolved path_params.
 
 The invariant: no model-controlled string reaching ``_proxy_get`` may alter the *structure* of
-the outgoing URL — it may not add a query parameter (the NOC charger-proxy route honours
-``?method=`` and will forward that verb to live charger hardware), and it may not escape its
-path segment. Reaching ``POST /api/v1/pin/contactor/dual`` on port 8003 (catalog: "Dual
-Contactor Control", admin) actuates contactors on live high-voltage EV charging hardware.
+the outgoing URL as a decoding receiver parses it -- it may not add a query parameter, may not
+escape its path segment, and may not choose the port or the on-charger path.
 """
+
+from urllib.parse import unquote
 
 import httpx
 import pytest
@@ -27,8 +34,10 @@ _LOGIN = "/api/v1/auth/login"
 _WRITE_PORT = 8003
 _WRITE_PATH = "api/v1/pin/contactor/dual"
 
-# The two confirmed attack payloads.
+# Confirmed attack payloads.
 _EVIL_CHARGER_ID = f"CHG-1/proxy/{_WRITE_PORT}/{_WRITE_PATH}?method=POST&x="
+# The port+path hijack: survives encoding because the receiver decodes before routing.
+_EVIL_CHARGER_ID_HIJACK = "CHG-1/proxy/8005/api/v1/devtools/logs/x"
 _EVIL_PATH_TRAVERSAL = f"api/v1/devtools/logs/../../../../{_WRITE_PATH}?method=POST"
 
 
@@ -51,88 +60,86 @@ def _client(handler):
 
 
 def _assert_safe(request: httpx.Request) -> None:
-    """Every outgoing charger-proxy request must be a GET that cannot actuate hardware."""
+    """Assert an outgoing request is safe *as a decoding receiver would parse it*."""
     assert request.method == "GET"
-    # url.params: the NOC proxy route reads ?method= and forwards THAT verb to the charger.
     assert "method" not in request.url.params, f"method query smuggled: {request.url}"
-    # raw_path is the un-decoded path+query; url.path percent-decodes %2F back into '/',
-    # which would mask exactly the escape we are testing for.
-    raw = request.url.raw_path.decode()
-    assert "?" not in raw, f"query string smuggled: {raw}"
-    assert _WRITE_PATH not in raw, f"reached a write endpoint: {raw}"
 
+    # Decode exactly like the receiving ASGI server does before it routes.
+    decoded = unquote(request.url.raw_path.decode())
 
-# --------------------------------------------------------------------------------------
-# charger_id
-# --------------------------------------------------------------------------------------
+    assert "?" not in decoded, f"query separator survives decoding: {decoded}"
+    assert "#" not in decoded, f"fragment separator survives decoding: {decoded}"
+    assert _WRITE_PATH not in decoded, f"reached a write endpoint: {decoded}"
+    # The route template splits on '/proxy/'; a second one lets the caller re-split the route
+    # and choose the port + on-charger path.
+    assert decoded.count("/proxy/") == 1, f"route re-split possible: {decoded}"
 
-@pytest.mark.asyncio
-async def test_charger_id_cannot_smuggle_method_query():
-    seen, handler = _capturing()
-    async with _client(handler) as c:
-        await _proxy_get(c, _EVIL_CHARGER_ID, 8003, "api/v1/charging/status")
-    for r in seen:
-        _assert_safe(r)
-    # Whatever went out kept the intended endpoint as its real tail.
-    for r in seen:
-        assert r.url.raw_path.decode().endswith("/proxy/8003/api/v1/charging/status")
-
-
-@pytest.mark.parametrize("evil", ["?", "&", "#", "/", "?method=POST", "a/b", "x#frag"])
-@pytest.mark.asyncio
-async def test_charger_id_reserved_chars_are_encoded_not_interpreted(evil):
-    seen, handler = _capturing()
-    charger_id = f"CHG{evil}1"
-    async with _client(handler) as c:
-        await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
-    assert len(seen) == 1
-    raw = seen[0].url.raw_path.decode()
-    _assert_safe(seen[0])
-    # No reserved character survives raw inside the charger_id segment.
-    segment = raw.split("/api/v1/chargers/", 1)[1].split("/proxy/", 1)[0]
-    for ch in "?&#/":
-        assert ch not in segment, f"{ch!r} not encoded in {segment!r}"
-    assert raw.endswith("/proxy/8003/api/v1/charging/status")
-
-
-@pytest.mark.parametrize("charger_id", ["", "   ", "\t\n"])
-@pytest.mark.asyncio
-async def test_empty_charger_id_is_rejected_without_a_request(charger_id):
-    seen, handler = _capturing()
-    async with _client(handler) as c:
-        out = await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
-    assert seen == []
-    assert "error" in out and out["port"] == 8003 and out["path"] == "api/v1/charging/status"
-
-
-@pytest.mark.parametrize("charger_id", [".", ".."])
-@pytest.mark.asyncio
-async def test_dot_segment_charger_id_is_rejected_without_a_request(charger_id):
-    # '.' and '..' are RFC 3986 unreserved: quote() leaves them alone and httpx then
-    # normalises the segment away, escaping /api/v1/chargers/ entirely.
-    seen, handler = _capturing()
-    async with _client(handler) as c:
-        out = await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
-    assert seen == [], f"escaped the charger segment: {[str(r.url) for r in seen]}"
-    assert "error" in out
-
-
-@pytest.mark.parametrize("charger_id", ["../..", "a/..", "x/../../y", "..%2f", "..a", "a.."])
-@pytest.mark.asyncio
-async def test_dotted_charger_ids_stay_inside_one_encoded_segment(charger_id):
-    seen, handler = _capturing()
-    async with _client(handler) as c:
-        await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
-    assert len(seen) == 1
-    raw = seen[0].url.raw_path.decode()
-    _assert_safe(seen[0])
-    assert raw.startswith("/api/v1/chargers/")
-    assert raw.endswith("/proxy/8003/api/v1/charging/status")
-    # exactly one segment between the collection and the /proxy/ marker
-    segment = raw[len("/api/v1/chargers/"):-len("/proxy/8003/api/v1/charging/status")]
+    head, _, _tail = decoded.partition("/proxy/")
+    assert head.startswith("/api/v1/chargers/"), decoded
+    segment = head[len("/api/v1/chargers/"):]
     assert "/" not in segment, f"charger_id escaped its segment: {segment!r}"
+    assert segment not in (".", ".."), f"charger_id is a dot segment: {segment!r}"
+    assert ".." not in decoded.split("/"), f"dot segment survives decoding: {decoded}"
 
 
+def _assert_rejected(seen, out, port=None, path=None):
+    """No request left the process, and the caller got the structured error shape."""
+    assert seen == [], f"a request was made: {[str(r.url) for r in seen]}"
+    assert "error" in out
+    if port is not None:
+        assert out["port"] == port
+    if path is not None:
+        assert out["path"] == path
+
+
+# --------------------------------------------------------------------------------------
+# charger_id -- validated, not merely encoded
+# --------------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("charger_id", [
+    _EVIL_CHARGER_ID,
+    _EVIL_CHARGER_ID_HIJACK,
+    "CHG-1/proxy/8003/api/v1/pin/contactor/status?x=",
+    "CHG-1?method=POST",
+    "CHG-1#frag",
+    "CHG-1&a=b",
+    "CHG-1/x",
+    "a%2Fb",
+    "a b",
+    "a:b",
+    "a~b",
+    "a\\b",
+    ".",
+    "..",
+    "../..",
+    "a/..",
+    "x/../../y",
+    "..%2f",
+    "",
+    "   ",
+    "\t\n",
+])
+@pytest.mark.asyncio
+async def test_unsafe_charger_ids_are_rejected_without_a_request(charger_id):
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
+    _assert_rejected(seen, out, port=8003, path="api/v1/charging/status")
+
+
+@pytest.mark.parametrize("charger_id", [
+    "CHG-1", "QC_0012", "abc.def-9", "60f1a2b3c4d5e6f708192a3b", "OFFLINE", "..a", "a..",
+])
+@pytest.mark.asyncio
+async def test_real_charger_ids_still_pass_unchanged(charger_id):
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await _proxy_get(c, charger_id, 8003, "api/v1/charging/status")
+    assert out == {"ok": True}
+    assert len(seen) == 1
+    _assert_safe(seen[0])
+    assert str(seen[0].url) == (
+        f"http://noc.test/api/v1/chargers/{charger_id}/proxy/8003/api/v1/charging/status")
 
 
 # --------------------------------------------------------------------------------------
@@ -140,14 +147,13 @@ async def test_dotted_charger_ids_stay_inside_one_encoded_segment(charger_id):
 # --------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("port", ["8003/api/v1/pin/contactor/dual?method=POST", "80x", None,
-                                  "..", 0, 70000])
+                                  "..", 0, 70000, True])
 @pytest.mark.asyncio
 async def test_non_numeric_or_out_of_range_port_is_rejected(port):
     seen, handler = _capturing()
     async with _client(handler) as c:
         out = await _proxy_get(c, "CHG-1", port, "api/v1/charging/status")
-    assert seen == []
-    assert "error" in out
+    _assert_rejected(seen, out)
 
 
 @pytest.mark.asyncio
@@ -176,8 +182,7 @@ async def test_dot_segment_paths_are_rejected_without_a_request(path):
     seen, handler = _capturing()
     async with _client(handler) as c:
         out = await _proxy_get(c, "CHG-1", 8005, path)
-    assert seen == [], f"a request was made for {path!r}: {[str(r.url) for r in seen]}"
-    assert "error" in out and out["port"] == 8005 and out["path"] == path
+    _assert_rejected(seen, out, port=8005, path=path)
 
 
 @pytest.mark.parametrize("path", [
@@ -197,26 +202,57 @@ async def test_structurally_unsafe_paths_are_rejected_without_a_request(path):
     seen, handler = _capturing()
     async with _client(handler) as c:
         out = await _proxy_get(c, "CHG-1", 8003, path)
-    assert seen == [], f"a request was made for {path!r}: {[str(r.url) for r in seen]}"
-    assert "error" in out and out["port"] == 8003 and out["path"] == path
+    _assert_rejected(seen, out, port=8003, path=path)
+
+
+@pytest.mark.parametrize("source", [
+    "app", "ocpp", "syslog", "kern.log", "app-2026-09-01.log",
+    # service/unit-style names the widened allowlist deliberately admits
+    "qflex-charging.service", "qflex@1.service", "app:main", "a+b",
+])
+@pytest.mark.asyncio
+async def test_plausible_log_source_names_are_not_rejected(source):
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await _proxy_get(c, "CHG-1", 8005, f"api/v1/devtools/logs/{source}")
+    assert out == {"ok": True}, f"log source {source!r} was rejected"
+    assert len(seen) == 1
+    _assert_safe(seen[0])
 
 
 # --------------------------------------------------------------------------------------
-# legitimate behaviour is unchanged
+# legitimate behaviour is byte-identical to before the hardening
 # --------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("port,path", [
     (8003, "api/v1/charging/status"),
     (8003, "api/v1/charging/status/1"),
     (8003, "api/v1/session_details/active/1"),
-    (8002, "api/pm/get_all_power"),
-    (8006, "error-generator/errors/by-gun/1"),
-    (8006, "temp/thresholds"),
-    (8005, "api/v1/devtools/logs/app"),
+    (8003, "api/v1/session_details/history"),
+    (8003, "api/v1/devices/meters"),
+    (8003, "api/v1/devices/imd/1"),
+    (8003, "api/v1/ocpp/status"),
+    (8003, "api/v1/config/ocpp"),
+    (8000, "api/v1/network/status"),
+    (8000, "api/v1/network/gsm/status"),
+    (8000, "api/v1/system/hardware"),
+    (8000, "api/v1/system/software"),
     (8000, "api/v1/system/rtc"),
+    (8002, "api/state"),
+    (8002, "api/pm_count"),
+    (8002, "api/pm/get_all_power"),
+    (8006, "error-generator/alarms/latched"),
+    (8006, "error-generator/errors/pending"),
+    (8006, "error-generator/errors/by-gun/1"),
+    (8006, "temp/sensors"),
+    (8006, "temp/thresholds"),
+    (8005, "api/v1/devtools/logs/sources"),
+    (8005, "api/v1/devtools/logs/app"),
+    (8005, "api/v1/devtools/metrics"),
 ])
 @pytest.mark.asyncio
-async def test_legitimate_calls_produce_the_exact_same_url_as_before(port, path):
+async def test_every_curated_url_is_unchanged(port, path):
+    """Covers every (port, path) the 13 curated tools can emit -- byte-identical URLs."""
     seen, handler = _capturing()
     async with _client(handler) as c:
         out = await _proxy_get(c, "CHG-1", port, path)
@@ -225,28 +261,10 @@ async def test_legitimate_calls_produce_the_exact_same_url_as_before(port, path)
     assert str(seen[0].url) == f"http://noc.test/api/v1/chargers/CHG-1/proxy/{port}/{path}"
 
 
-@pytest.mark.asyncio
-async def test_realistic_charger_ids_are_not_mangled():
-    # NOC charger ids seen in the wild: alphanumerics, dashes, underscores, dots.
-    seen, handler = _capturing()
-    async with _client(handler) as c:
-        for cid in ["CHG-1", "QC_0012", "abc.def-9", "60f1a2b3c4d5e6f708192a3b"]:
-            await _proxy_get(c, cid, 8003, "api/v1/charging/status")
-    urls = [str(r.url) for r in seen]
-    assert urls == [
-        "http://noc.test/api/v1/chargers/CHG-1/proxy/8003/api/v1/charging/status",
-        "http://noc.test/api/v1/chargers/QC_0012/proxy/8003/api/v1/charging/status",
-        "http://noc.test/api/v1/chargers/abc.def-9/proxy/8003/api/v1/charging/status",
-        "http://noc.test/api/v1/chargers/60f1a2b3c4d5e6f708192a3b/proxy/8003"
-        "/api/v1/charging/status",
-    ]
-
-
 # --------------------------------------------------------------------------------------
-# end-to-end: no curated tool can be steered onto a write endpoint
+# end-to-end: no curated tool can be steered off its intended endpoint
 # --------------------------------------------------------------------------------------
 
-# Every curated tool, with the hostile value in each of its free-form string arguments.
 _CURATED_CALLS = [
     ("charger_get_charging_status", {}),
     ("charger_get_charging_status", {"gun_id": 1}),
@@ -269,14 +287,14 @@ _CURATED_CALLS = [
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("evil_id", [_EVIL_CHARGER_ID, _EVIL_CHARGER_ID_HIJACK])
 @pytest.mark.parametrize("tool_name,extra", _CURATED_CALLS)
-async def test_no_curated_tool_can_be_steered_onto_a_write_endpoint(tool_name, extra):
+async def test_no_curated_tool_can_be_steered_by_charger_id(tool_name, extra, evil_id):
     seen, handler = _capturing()
     async with Client(build_server(_client(handler))) as mcp:
-        await mcp.call_tool(tool_name, {"charger_id": _EVIL_CHARGER_ID, **extra})
-    assert seen, "expected at least the (harmless, encoded) request to be attempted"
-    for r in seen:
-        _assert_safe(r)
+        await mcp.call_tool(tool_name, {"charger_id": evil_id, **extra})
+    assert seen == [], (
+        f"{tool_name} sent a request for a rejected charger_id: {[str(r.url) for r in seen]}")
 
 
 @pytest.mark.asyncio
@@ -287,23 +305,26 @@ async def test_charger_get_logs_source_cannot_traverse_to_a_write_endpoint():
         "..%2F..%2Fpin%2Fcontactor%2Fdual",
         "app?method=POST",
         "app/../../../pin/contactor/dual",
+        "app#x",
     ]
     async with Client(build_server(_client(handler))) as mcp:
         for source in evil_sources:
             await mcp.call_tool(
                 "charger_get_logs", {"charger_id": "CHG-1", "source": source})
-    for r in seen:
-        _assert_safe(r)
+    assert seen == [], f"a request was made: {[str(r.url) for r in seen]}"
 
 
 @pytest.mark.asyncio
 async def test_direct_proxy_get_cannot_reach_the_write_endpoint():
-    """Both confirmed reproduction payloads, asserted on the wire."""
+    """Every confirmed reproduction payload, asserted on the decoded view."""
     seen, handler = _capturing()
     async with _client(handler) as c:
-        await _proxy_get(c, _EVIL_CHARGER_ID, 8003, "api/v1/charging/status")
-        await _proxy_get(c, "CHG-1", 8005, _EVIL_PATH_TRAVERSAL)
-        # And the same traversal aimed at the port that actually hosts the endpoint.
-        await _proxy_get(c, "CHG-1", 8003, _EVIL_PATH_TRAVERSAL)
-    for r in seen:
-        _assert_safe(r)
+        for cid, port, path in [
+            (_EVIL_CHARGER_ID, 8003, "api/v1/charging/status"),
+            (_EVIL_CHARGER_ID_HIJACK, 8003, "api/v1/charging/status"),
+            ("CHG-1", 8005, _EVIL_PATH_TRAVERSAL),
+            ("CHG-1", 8003, _EVIL_PATH_TRAVERSAL),
+        ]:
+            out = await _proxy_get(c, cid, port, path)
+            assert "error" in out
+    assert seen == [], f"a request was made: {[str(r.url) for r in seen]}"

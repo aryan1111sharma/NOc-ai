@@ -14,10 +14,16 @@ import re
 from typing import Any, Optional, Tuple
 from urllib.parse import quote
 
-# Conservative allowlist for the device path. Every path this module builds is a fixed
-# template plus substituted values (gun_id, log source), and all of them are drawn from
-# this set: letters, digits, '-', '_', '.', '~' and the '/' separators.
-_PATH_ALLOWED = re.compile(r"^[A-Za-z0-9._~/-]+$")
+from .identifiers import validate_charger_id
+
+# Conservative allowlist for the device path: letters, digits, '-', '_', '.', '~' and the '/'
+# separators, plus ':', '@' and '+' because an on-charger log source name (charger_get_logs)
+# is a device-supplied identifier we cannot enumerate from this repo -- the catalog documents
+# it only as "<str>" -- and service/unit-style names commonly carry those. Widening here is
+# safe: the receiver percent-decodes before routing, so the only characters that can change
+# how a path is parsed or forwarded are '/', '?', '#', '\', '%' and the '..' segment, and
+# every one of those stays rejected below.
+_PATH_ALLOWED = re.compile(r"^[A-Za-z0-9._~:@+/-]+$")
 
 _MIN_PORT, _MAX_PORT = 1, 65535
 
@@ -35,6 +41,11 @@ def _validate_proxy_url(charger_id: Any, port: Any, path: Any) -> Tuple[Optional
     to high-voltage equipment. httpx does not encode ``?`` in a relative-URL string and it
     normalises dot segments, so f-string interpolation alone is not safe.
 
+    charger_id: validated (``identifiers.validate_charger_id``), then encoded. Encoding alone
+    is NOT a defence, because the receiving server percent-decodes the path before it routes:
+    a ``%2F``-laden id re-splits the route and hands the caller a charger port and on-charger
+    path of their choosing. Validation is what actually closes that; see identifiers.py.
+
     path: validated *and* encoded, deliberately both.
       * Validation (the allowlist + the dot-segment / ``?#\\`` rejections) is the primary
         control: it is fail-closed and it fails *loudly*, so a hostile or malformed path
@@ -47,16 +58,13 @@ def _validate_proxy_url(charger_id: Any, port: Any, path: Any) -> Tuple[Optional
         is RFC 3986 unreserved) — which is exactly the point: it costs nothing today and it
         means a future widening of the allowlist cannot silently reintroduce injection.
     """
-    if not isinstance(charger_id, str) or not charger_id.strip():
-        return None, "ValueError: charger_id must be a non-empty string"
-    # safe="" so '/', '?', '&' and '#' are percent-encoded and cannot escape this segment.
+    reason = validate_charger_id(charger_id)
+    if reason is not None:
+        return None, reason
+    # Backstop only -- after validation this is a no-op, because every allowed character is
+    # RFC 3986 unreserved. Encoding ALONE would not be a defence: the receiver decodes before
+    # routing, so %2F becomes '/' again and re-splits the route (see identifiers.py).
     charger_seg = quote(charger_id, safe="")
-    if charger_seg in (".", ".."):
-        # '.' and '..' are RFC 3986 *unreserved*, so quote() passes them through untouched and
-        # httpx then normalises the dot segment away -- the one input that still escapes the
-        # segment after encoding. Any other dotted id ("a/..") keeps its '/' encoded and stays
-        # one opaque segment, so only the bare dot segments need rejecting.
-        return None, f"ValueError: charger_id must not be a path segment ({charger_id!r})"
 
     if isinstance(port, bool):  # bool is an int subclass; never a real port
         return None, f"ValueError: port must be an integer (got {port!r})"

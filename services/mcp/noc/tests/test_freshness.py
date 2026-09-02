@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from noc_mcp.freshness import HISTORY, LIVE, is_error, live_or_history, stamp
+from noc_mcp.freshness import HISTORY, LIVE, extract_as_of, is_error, live_or_history, stamp
 
 
 def test_stamp_live_sets_zero_staleness():
@@ -20,7 +20,7 @@ def test_stamp_history_computes_staleness_from_as_of():
     as_of = datetime.now(timezone.utc) - timedelta(seconds=600)
     out = stamp({"alarms": []}, source=HISTORY, as_of=as_of, reason="charger offline")
     assert out["source"] == "history"
-    assert 595 <= out["stale_seconds"] <= 605
+    assert 599 <= out["stale_seconds"] <= 602
     assert out["reason"] == "charger offline"
 
 
@@ -34,6 +34,48 @@ def test_stamp_does_not_overwrite_payload_keys():
     out = stamp({"source": "device-said-live"}, source=LIVE)
     assert out["source"] == "live"          # envelope wins
     assert out["payload_source"] == "device-said-live"
+
+
+def test_stamp_naive_as_of_does_not_raise():
+    naive = datetime(2026, 9, 1, 6, 0, 0)  # no tzinfo -- what a DB driver commonly hands back
+    out = stamp({"v": 1}, source=HISTORY, as_of=naive, reason="test")
+    assert out["source"] == "history"
+    assert out["stale_seconds"] is not None
+    assert out["stale_seconds"] >= 0
+
+
+def test_stamp_future_as_of_reports_negative_staleness_and_clock_skew():
+    future = datetime.now(timezone.utc) + timedelta(seconds=300)
+    out = stamp({"v": 1}, source=HISTORY, as_of=future, reason="rtc drift")
+    assert out["stale_seconds"] < 0
+    assert out["clock_skew"] is True
+
+
+def test_stamp_normal_as_of_has_no_clock_skew():
+    past = datetime.now(timezone.utc) - timedelta(seconds=60)
+    out = stamp({"v": 1}, source=HISTORY, as_of=past, reason="ok")
+    assert out["clock_skew"] is False
+
+
+def test_stamp_double_collision_preserves_both_values():
+    out = stamp({"source": "A", "payload_source": "B"}, source=LIVE)
+    assert out["source"] == "live"                    # envelope wins
+    assert out["payload_source"] == "A"                # first collision escalates here
+    assert out["payload_payload_source"] == "B"        # pre-existing key escalates further
+
+
+def test_extract_as_of_key_priority():
+    payload = {
+        "as_of": "2026-09-01T06:00:00Z",
+        "cached_at": "2026-09-01T05:00:00Z",
+        "timestamp": "2026-09-01T04:00:00Z",
+    }
+    dt = extract_as_of(payload)
+    assert dt == datetime(2026, 9, 1, 6, 0, 0, tzinfo=timezone.utc)
+
+
+def test_extract_as_of_returns_none_on_malformed_timestamp():
+    assert extract_as_of({"as_of": "not-a-timestamp"}) is None
 
 
 def test_is_error_detects_proxy_error_shape():

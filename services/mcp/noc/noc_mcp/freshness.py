@@ -29,21 +29,41 @@ def _iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _parse(value: Any) -> Optional[datetime]:
-    """Best-effort ISO-8601 parse; returns None rather than raising on junk."""
-    if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    if not isinstance(value, str):
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
+def _as_utc(dt: Optional[datetime]) -> Optional[datetime]:
+    """Attach UTC to a naive datetime so arithmetic never raises.
+
+    DB drivers (this module's TimescaleDB backend included) commonly hand back naive
+    datetimes for untyped timestamp columns; treat those as UTC rather than blowing up.
+    """
+    if dt is None:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def extract_as_of(payload: dict) -> Optional[datetime]:
-    """Pull a timestamp out of a backend payload, or None if it carries none."""
+def _parse(value: Any) -> Optional[datetime]:
+    """Best-effort ISO-8601 parse; returns None rather than raising on junk."""
+    if isinstance(value, datetime):
+        return _as_utc(value)
+    if not isinstance(value, str):
+        return None
+    text = value
+    if text and text[-1] in ("Z", "z"):
+        text = text[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return _as_utc(dt)
+
+
+def extract_as_of(payload: Optional[dict]) -> Optional[datetime]:
+    """Pull a timestamp out of a backend payload, or None if it carries none.
+
+    Checks ``_AS_OF_KEYS`` in priority order and parses ISO-8601 strings only -- a numeric
+    epoch value (common for a key literally named ``timestamp``) is treated as absent, not
+    parsed, since ``datetime.fromisoformat`` cannot handle it and guessing units (seconds vs.
+    milliseconds) is more likely to mislead than help.
+    """
     if not isinstance(payload, dict):
         return None
     for key in _AS_OF_KEYS:
@@ -58,30 +78,48 @@ def is_error(payload: Any) -> bool:
     return isinstance(payload, dict) and "error" in payload
 
 
-def stamp(payload: dict, *, source: str, as_of: Optional[datetime] = None,
+def stamp(payload: Optional[dict], *, source: str, as_of: Optional[datetime] = None,
           reason: Optional[str] = None) -> dict:
     """Wrap ``payload`` in the freshness envelope.
 
-    Envelope keys win over payload keys; a colliding payload key is preserved under a
-    ``payload_``-prefixed name rather than being silently dropped.
+    Envelope keys win over payload keys; a colliding payload key is preserved by escalating
+    the ``payload_`` prefix until a free name is found, so no value is ever silently dropped
+    even if the payload already contains a ``payload_<key>`` entry.
+
+    ``reason`` is intentionally discarded when ``source == LIVE`` -- a live reading needs no
+    explanation for why it's live.
+
+    ``stale_seconds`` is not clamped at zero: if ``as_of`` is in the future (charger RTC drift
+    is a real failure mode in this domain), staleness goes negative and ``clock_skew`` is set
+    True, rather than a skewed clock making stale data silently look fresh.
     """
     if source == LIVE:
-        as_of_dt: Optional[datetime] = as_of or _utcnow()
+        as_of_dt: Optional[datetime] = _as_utc(as_of) or _utcnow()
         stale: Optional[int] = 0
+        skew = False
         reason = None
     else:
-        as_of_dt = as_of
-        stale = None if as_of_dt is None else max(0, int((_utcnow() - as_of_dt).total_seconds()))
+        as_of_dt = _as_utc(as_of)
+        if as_of_dt is None:
+            stale = None
+            skew = False
+        else:
+            stale = int((_utcnow() - as_of_dt).total_seconds())
+            skew = stale < 0
 
     envelope = {
         "source": source,
         "as_of": _iso(as_of_dt) if as_of_dt else None,
         "stale_seconds": stale,
         "reason": reason,
+        "clock_skew": skew,
     }
     out = dict(envelope)
     for k, v in (payload or {}).items():
-        out[f"payload_{k}" if k in envelope else k] = v
+        key = k
+        while key in out:
+            key = f"payload_{key}"
+        out[key] = v
     return out
 
 

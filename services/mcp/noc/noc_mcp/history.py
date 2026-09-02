@@ -10,6 +10,7 @@ the backend's cached copy and labelling the result.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastmcp import FastMCP
@@ -23,13 +24,23 @@ def _p(**kwargs) -> dict:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
+def _oldest(*payloads) -> Optional[datetime]:
+    """Oldest as_of across merged sub-payloads.
+
+    A composite is only as fresh as its stalest part; reporting the freshest would let an
+    older sub-payload hide behind a newer one's timestamp.
+    """
+    stamps = [ts for ts in (extract_as_of(p) for p in payloads) if ts is not None]
+    return min(stamps) if stamps else None
+
+
 async def _fetch_charger_history(client, charger_id: str, *, limit: Optional[int]) -> dict:
     base = f"/api/v1/chargers/{charger_id}"
     params = _p(limit=limit)
     sessions = await _get(client, f"{base}/history/sessions", params)
     alarms = await _get(client, f"{base}/history/alarms", params)
     merged = {"sessions": sessions, "alarms": alarms}
-    return stamp(merged, source=HISTORY, as_of=extract_as_of(sessions) or extract_as_of(alarms),
+    return stamp(merged, source=HISTORY, as_of=_oldest(sessions, alarms),
                  reason="NOC backend history (independent of charger state)")
 
 
@@ -41,7 +52,7 @@ async def _fetch_charger_telemetry(client, charger_id: str, *, resolution: Optio
     aggregated = await _get(client, f"{base}/aggregated", _p(resolution=resolution, hours=hours))
     history = await _get(client, f"{base}/history", _p(limit=limit, from_ts=from_ts, to_ts=to_ts))
     merged = {"latest": latest, "aggregated": aggregated, "history": history}
-    return stamp(merged, source=HISTORY, as_of=extract_as_of(latest),
+    return stamp(merged, source=HISTORY, as_of=_oldest(latest, aggregated, history),
                  reason="NOC backend telemetry (independent of charger state)")
 
 

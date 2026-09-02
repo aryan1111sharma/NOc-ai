@@ -109,3 +109,31 @@ async def test_catalog_points_at_the_path_based_proxy_variant():
     tool = tools[cat["example"]["tool"]]
     assert {"charger_id", "port", "path"} <= set((tool.parameters or {}).get("required") or ())
     assert set(cat["example"]["args"]) == {"charger_id", "port", "path"}
+
+
+@pytest.mark.asyncio
+async def test_the_hardcoded_fallback_proxy_tool_name_is_also_real():
+    """Discovery has a hardcoded last resort; nothing was checking IT.
+
+    ``_FALLBACK_PROXY_TOOL`` is the same kind of literal that went stale in the first place, and
+    the resolved-name test above cannot see it while discovery keeps succeeding. If the
+    fallback ever fires, it must still name a tool that exists.
+    """
+    from noc_mcp.catalog import _FALLBACK_PROXY_TOOL
+    from tests.fake_noc import build_test_server
+
+    names = {t.name for t in await build_test_server().list_tools()}
+    assert _FALLBACK_PROXY_TOOL in names, (
+        f"fallback names a non-existent tool: {_FALLBACK_PROXY_TOOL}")
+
+
+@pytest.mark.asyncio
+async def test_exactly_one_tool_matches_the_proxy_discovery_signature():
+    """Discovery returns the FIRST superset match, so a second match would make the published
+    name depend on registration order -- silently. Assert the signature stays unambiguous."""
+    from noc_mcp.catalog import _PROXY_REQUIRED_ARGS
+    from tests.fake_noc import build_test_server
+
+    matches = [t.name for t in await build_test_server().list_tools()
+               if _PROXY_REQUIRED_ARGS <= set((t.parameters or {}).get("required") or ())]
+    assert len(matches) == 1, f"proxy discovery signature is ambiguous: {matches}"

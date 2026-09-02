@@ -113,34 +113,60 @@ async def get(client, url: str, params: Optional[Mapping[str, Any]] = None, **id
     ``session_id=`` keywords and validated before any request is made. ``params`` is always
     sent (``{}`` when unset), so a query string cannot be smuggled in through a path.
 
-    A non-2xx response additionally carries ``status`` and the decoded ``body``, so a caller
-    that must distinguish a semantic 404 (e.g. ``code=NO_CACHE``) from a transport failure can
-    do so without reaching for the raw response.
+    A non-2xx response additionally carries ``status`` and, when the body is a JSON object
+    with a short string ``code``, that ``code`` -- enough for a caller to tell a *semantic*
+    404 (e.g. ``code=NO_CACHE``) from a transport failure without reaching for the raw
+    response. The body itself is deliberately NOT returned: every one of these payloads is
+    merged into a tool result and read by the model, and a backend 500 body can carry a stack
+    trace, a connection string, other tenants' rows, or an HTML page large enough to crowd out
+    the context. One bounded, structured field is what the one caller that needs it needs.
     """
     built, reason = build_url(url, **ids)
     if built is None:
         return {"error": reason, "url": url}
-    query = dict(params or {})
-    if any(str(key).strip().lower() == "method" for key in query):
-        # The NOC charger-proxy route reads ?method= to choose the verb it forwards to live
-        # hardware. No backend read this helper serves needs it; refusing is fail-closed.
-        return {"error": f"ValueError: 'method' is not a permitted query parameter ({url!r})",
-                "url": built}
     try:
+        # Inside the try, deliberately: a caller that hands over a non-mapping `params` must
+        # still get the structured error, not an exception. The never-raise contract covers
+        # bad arguments as well as bad responses.
+        query = dict(params or {})
+        if any(str(key).strip().lower() == "method" for key in query):
+            # The NOC charger-proxy route reads ?method= to choose the verb it forwards to
+            # live hardware. No backend read this helper serves needs it; refusing is
+            # fail-closed.
+            return {"error": f"ValueError: 'method' is not a permitted query parameter "
+                             f"({url!r})", "url": built}
         resp = await client.get(built, params=query)
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, dict) else {"data": data}
     except httpx.HTTPStatusError as e:
-        return {"error": f"{type(e).__name__}: {e}", "url": built,
-                "status": e.response.status_code, "body": _body(e.response)}
+        out = {"error": f"{type(e).__name__}: {e}", "url": built,
+               "status": e.response.status_code}
+        code = _error_code(e.response)
+        if code is not None:
+            out["code"] = code
+        return out
     except Exception as e:  # noqa: BLE001 - surface any failure as a clean payload
         return {"error": f"{type(e).__name__}: {e}", "url": built}
 
 
-def _body(resp: httpx.Response) -> Any:
-    """The response body as JSON, or ``None`` when it is not JSON at all."""
+# A backend error code is an identifier, not prose: anything longer is a message (or an
+# attacker-influenced string) and is dropped rather than forwarded to the model.
+_MAX_ERROR_CODE = 64
+
+
+def _error_code(resp: httpx.Response) -> Optional[str]:
+    """The ``code`` field of a JSON-object error body, if it is a short string.
+
+    Nothing else from the body crosses this boundary -- see ``get``'s docstring for why.
+    """
     try:
-        return resp.json()
+        body = resp.json()
     except Exception:  # noqa: BLE001 - a non-JSON error body is simply absent, not a failure
         return None
+    if not isinstance(body, dict):
+        return None
+    code = body.get("code")
+    if isinstance(code, str) and 0 < len(code) <= _MAX_ERROR_CODE:
+        return code
+    return None

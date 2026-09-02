@@ -255,19 +255,77 @@ async def test_get_rejects_before_any_socket_is_touched():
     assert "error" in out and out["url"] == "/api/v1/chargers/{charger_id}/history/sessions"
 
 
-@pytest.mark.asyncio
-async def test_get_surfaces_status_and_body_on_a_non_2xx_without_raising():
-    """``_fetch_cached_ocpp_config`` needs the 404 body to tell NO_CACHE from a real failure."""
+def _responding(status, **kwargs):
     def handler(request):
         if request.url.path.endswith(_LOGIN):
             return httpx.Response(200, json={"access_token": "t.t.t", "token_type": "bearer"})
-        return httpx.Response(404, json={"detail": "no cache", "code": "NO_CACHE"})
+        return httpx.Response(status, **kwargs)
+    return handler
 
-    async with _client(handler) as c:
+
+@pytest.mark.asyncio
+async def test_get_surfaces_status_and_a_short_error_code_on_a_non_2xx_without_raising():
+    """``_fetch_cached_ocpp_config`` needs the 404's code to tell NO_CACHE from a real failure."""
+    async with _client(_responding(404, json={"detail": "no cache", "code": "NO_CACHE"})) as c:
         out = await get(c, "/api/v1/chargers/{charger_id}/ocpp-config/cache", charger_id="CHG-1")
     assert out["status"] == 404
-    assert out["body"]["code"] == "NO_CACHE"
+    assert out["code"] == "NO_CACHE"
     assert "error" in out
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"detail": "db url postgres://user:hunter2@db.internal/noc"},
+    {"detail": "Traceback (most recent call last): ...", "rows": [{"other": "tenant"}]},
+    {"code": "x" * 200},
+    {"code": 500},
+    ["not", "an", "object"],
+])
+async def test_a_backend_error_body_is_never_forwarded_to_the_model(body):
+    """Only ``status`` and a short ``code`` cross the boundary -- never the body.
+
+    These payloads are merged into a tool result and read by the model, so a 500 carrying a
+    stack trace, a connection string, other tenants' rows, or a large HTML page must not end
+    up in the context. The pre-fix helper returned only ``{"error", "url"}``; widening that to
+    the whole decoded body to serve one NO_CACHE check would have been a real regression.
+    """
+    async with _client(_responding(500, json=body)) as c:
+        out = await get(c, "/api/v1/chargers", {})
+    assert "body" not in out
+    assert "code" not in out
+    assert "hunter2" not in repr(out)
+    assert "tenant" not in repr(out)
+    assert set(out) == {"error", "url", "status"}
+
+
+@pytest.mark.asyncio
+async def test_a_non_json_error_body_is_simply_absent():
+    async with _client(_responding(502, text="<html>bad gateway</html>")) as c:
+        out = await get(c, "/api/v1/chargers", {})
+    assert out["status"] == 502
+    assert "code" not in out and "body" not in out
+    assert "html" not in repr(out).lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("params", ["a=1", 5, ["a", "b"], object()])
+async def test_a_non_mapping_params_still_returns_a_structured_error(params):
+    """Never-raise covers bad ARGUMENTS, not just bad responses.
+
+    No call site passes a non-mapping today, but the contract in this module's docstring is
+    unconditional -- and it was briefly broken by hoisting ``dict(params)`` out of the try.
+    """
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await get(c, "/api/v1/chargers", params)
+    assert "error" in out
+    assert seen == [], f"a request was made: {[str(r.url) for r in seen]}"
+
+
+@pytest.mark.asyncio
+async def test_a_none_client_still_returns_a_structured_error():
+    out = await get(None, "/api/v1/chargers", {})
+    assert "error" in out and "AttributeError" in out["error"]
 
 
 @pytest.mark.asyncio

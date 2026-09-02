@@ -287,6 +287,16 @@ async def test_every_curated_url_is_unchanged(port, path):
 # session to reach, and gets the hostile-input treatment automatically. A tool added tomorrow
 # is covered the moment it is registered, with no registry to keep in sync.
 #
+# One documented limit to that claim, so it is not read as stronger than it is: a tool that
+# takes its charger id in a SEPARATE, EARLIER call is not derivable from its own schema.
+# ``charger_ssh_execute`` is the only such case today -- it accepts a ``confirmation_token``
+# and nothing else, because ``charger_ssh_prepare`` already validated the id and parked it in
+# server-side state. ``charger_ssh_prepare`` IS a derived target, but it opens a WebSocket
+# rather than an HTTP request, so the wire assertions below are vacuous for it; its own
+# rejection is covered in tests/test_ssh_exec.py, and ``_default_ws_url_builder``
+# re-validates. Derivation covers "told which charger *in this call*"; a multi-step flow
+# needs its own test, and has one.
+#
 # Two tiers, split by who builds the outgoing URL -- also a structural property, not a name:
 #
 #   * ``FunctionTool``  -- registered by this repo, so THIS repo builds the URL. A hostile
@@ -381,6 +391,25 @@ def _assert_no_verb_override(request: httpx.Request, tool_name: str) -> None:
         f"{tool_name} smuggled a verb override: {dict(request.url.params)}")
 
 
+@pytest.mark.asyncio
+async def test_a_hostile_session_id_is_exercised_with_a_VALID_charger_id():
+    """Otherwise charger_id short-circuits first and the session_id branch is never reached.
+
+    This is the end-to-end companion to the unit coverage in
+    tests/test_backend_url_hardening.py: a legal charger with a hostile session id must still
+    cost zero outbound requests.
+    """
+    seen, handler = _capturing()
+    async with Client(build_server(_client(handler))) as mcp:
+        for evil in (*_HOSTILE_IDS, "S1/../../../api/v1/admin/users", "S1?method=POST"):
+            seen.clear()
+            await mcp.call_tool("noc_session_events",
+                                {"charger_id": "CHG-1", "session_id": evil})
+            assert seen == [], (
+                f"noc_session_events sent a request for session_id={evil!r}: "
+                f"{[str(r.url) for r in seen]}")
+
+
 def test_identifier_targets_are_derived_and_cover_the_curated_tools():
     """The derivation must be non-degenerate, and must include what the old list missed."""
     names = {name for name, _repo, _ids, _args in _ID_TARGETS}
@@ -396,6 +425,22 @@ def test_identifier_targets_are_derived_and_cover_the_curated_tools():
                for n, _repo, ids, _args in _ID_TARGETS)
 
 
+# Benign stand-ins, so exactly ONE identifier is hostile per call. Setting every id arg at
+# once let ``noc_session_events`` short-circuit on charger_id and never exercise its
+# session_id branch at all.
+_BENIGN_IDS = {"charger_id": "CHG-1", "session_id": "S1"}
+
+
+def _hostile_variants(id_args, filler):
+    """One ``(hostile_arg, evil, args)`` per (identifier, payload) pair."""
+    for name in id_args:
+        for evil in _HOSTILE_IDS:
+            args = {**filler,
+                    **{other: _BENIGN_IDS[other] for other in id_args if other != name},
+                    name: evil}
+            yield name, evil, args
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name,repo_built,id_args,filler", _ID_TARGETS,
                          ids=_ID_TARGET_IDS)
@@ -403,9 +448,8 @@ async def test_no_tool_lets_a_hostile_identifier_reach_the_wire(
         tool_name, repo_built, id_args, filler):
     seen, handler = _capturing()
     async with Client(build_server(_client(handler))) as mcp:
-        for evil in _HOSTILE_IDS:
+        for hostile_arg, evil, args in _hostile_variants(id_args, filler):
             seen.clear()
-            args = {**filler, **{name: evil for name in id_args}}
             try:
                 await mcp.call_tool(tool_name, args)
             except Exception:  # noqa: BLE001 - a refusal is a pass; only the wire is judged
@@ -414,13 +458,21 @@ async def test_no_tool_lets_a_hostile_identifier_reach_the_wire(
                 _assert_no_verb_override(request, tool_name)
                 if not repo_built:
                     continue
-                if any(value == evil for value in request.url.params.values()):
-                    # Carried as an opaque query-string VALUE (a filter); cannot alter routing.
+                path = _decoded_path(request)
+                carried_as_a_filter = (
+                    any(value == evil for value in request.url.params.values())
+                    # The exemption is per VALUE, not per request: a tool that both spliced
+                    # the id into the path AND echoed it as a filter must not be waved
+                    # through, so the path is cleared first.
+                    and evil not in path
+                    and not any(part and part in path
+                                for part in (_WRITE_PATH, "/proxy/", ".."))
+                )
+                if carried_as_a_filter:
                     continue
                 pytest.fail(
-                    f"{tool_name} spliced a rejected {id_args} into the URL path "
-                    f"for {evil!r}: {_decoded_path(request)} "
-                    f"params={dict(request.url.params)}")
+                    f"{tool_name} spliced a rejected {hostile_arg} into the URL path "
+                    f"for {evil!r}: {path} params={dict(request.url.params)}")
 
 
 @pytest.mark.asyncio
@@ -433,9 +485,8 @@ async def test_a_hostile_identifier_never_reaches_an_excluded_module_or_a_write_
         pytest.skip("URL built by FastMCP's OpenAPI layer, not by this repo")
     seen, handler = _capturing()
     async with Client(build_server(_client(handler))) as mcp:
-        for evil in _HOSTILE_IDS:
+        for _hostile_arg, _evil, args in _hostile_variants(id_args, filler):
             seen.clear()
-            args = {**filler, **{name: evil for name in id_args}}
             try:
                 await mcp.call_tool(tool_name, args)
             except Exception:  # noqa: BLE001

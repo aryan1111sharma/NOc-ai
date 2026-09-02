@@ -134,17 +134,14 @@ async def _fetch_cached_ocpp_config(client, charger_id: str) -> dict:
 
     A 404 body carrying ``code=NO_CACHE`` means the backend has simply never cached this
     charger's config -- that must be reported distinctly from a transport/server failure, so the
-    response body is inspected rather than collapsed into a generic HTTP-error string.
-    ``noc_mcp.http.get`` surfaces ``status`` and the decoded ``body`` on a non-2xx precisely so
-    this stays possible without a hand-rolled ``client.get``. The hand-rolled call this replaced
-    passed no ``params=``, which is what let a query string smuggled inside ``charger_id``
-    survive as a real ``?method=`` verb override against live charger hardware.
+    ``noc_mcp.http.get`` surfaces ``status`` and the body's short ``code`` field on a non-2xx
+    precisely so this stays possible without a hand-rolled ``client.get``. The hand-rolled call
+    this replaced passed no ``params=``, which is what let a query string smuggled inside
+    ``charger_id`` survive as a real ``?method=`` verb override against live charger hardware.
     """
     out = await get(client, _OCPP_CACHE, {}, charger_id=charger_id)
-    if is_error(out) and out.get("status") == 404:
-        body = out.get("body")
-        if isinstance(body, dict) and body.get("code") == "NO_CACHE":
-            return {"error": "NO_CACHE"}
+    if is_error(out) and out.get("status") == 404 and out.get("code") == "NO_CACHE":
+        return {"error": "NO_CACHE"}
     return out
 
 

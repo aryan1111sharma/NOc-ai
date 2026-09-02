@@ -12,9 +12,22 @@
  */
 import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Database, FileText, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Database,
+  FileText,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { request } from 'librechat-data-provider';
+/* The upload queue lives in its own module so its behaviour is testable without a
+   built LibreChat image; this file keeps only the rendering. */
+import { MAX_UPLOAD_BYTES, uploadBatch, type UploadItem, type UploadStatus } from './kbUpload';
 
 type KnowledgeBase = {
   name: string;
@@ -182,6 +195,95 @@ function CreateKbDialog({ onClose }: { onClose: () => void }) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Upload queue                                                               */
+/* -------------------------------------------------------------------------- */
+
+const STATUS_LABEL: Record<UploadStatus, string> = {
+  pending: 'Queued',
+  uploading: 'Uploading…',
+  indexing: 'Indexing…',
+  success: 'Done',
+  failed: 'Failed',
+};
+
+function StatusCell({ item }: { item: UploadItem }) {
+  if (item.status === 'success') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-green-500">
+        <CheckCircle2 className="h-4 w-4" /> {STATUS_LABEL.success}
+      </span>
+    );
+  }
+  if (item.status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-red-500">
+        <AlertCircle className="h-4 w-4" /> {STATUS_LABEL.failed}
+      </span>
+    );
+  }
+  if (item.status === 'pending') {
+    return <span className="text-text-tertiary">{STATUS_LABEL.pending}</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-text-secondary">
+      <Spinner className="h-3.5 w-3.5" /> {STATUS_LABEL[item.status]}
+    </span>
+  );
+}
+
+/**
+ * Per-file progress for the batch being uploaded.
+ *
+ * Rendered as its own list rather than folded into the document table because the two
+ * answer different questions: the table is what the knowledge base HOLDS, this is what
+ * the current operation DID. A file that failed has no row in the table, and that is
+ * exactly the file the operator needs to see.
+ */
+function UploadQueue({ items, onDismiss }: { items: UploadItem[]; onDismiss: () => void }) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const done = items.filter((i) => i.status === 'success' || i.status === 'failed').length;
+  const failed = items.filter((i) => i.status === 'failed').length;
+  const finished = done === items.length;
+
+  return (
+    <div className="mb-4 overflow-hidden rounded-xl border border-border-light">
+      <div className="flex items-center justify-between gap-4 bg-surface-secondary px-4 py-2.5 text-sm text-text-secondary">
+        <span>
+          {finished
+            ? `Upload finished — ${items.length - failed} of ${items.length} indexed`
+            : `Uploading ${done + 1} of ${items.length}…`}
+        </span>
+        {finished && (
+          <button onClick={onDismiss} className="text-text-tertiary hover:text-text-primary">
+            Dismiss
+          </button>
+        )}
+      </div>
+      <ul className="divide-y divide-border-light">
+        {items.map((item) => (
+          <li key={item.name} className="flex items-start justify-between gap-4 px-4 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate text-sm text-text-primary">{item.name}</p>
+              {/* The reason a file failed is the actionable part, so it is shown inline
+                  rather than only in a collapsed banner. */}
+              {item.status === 'failed' && item.message && (
+                <p className="mt-0.5 text-xs text-red-500">{item.message}</p>
+              )}
+            </div>
+            <div className="shrink-0 text-sm">
+              <StatusCell item={item} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Detail view                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -203,52 +305,46 @@ function KbDetail({ kb, onBack }: { kb: KnowledgeBase; onBack: () => void }) {
     queryClient.invalidateQueries({ queryKey: ['kbs'] });
   };
 
-  /** Formats whose bytes do not survive being read as text. Sent base64 instead. */
-  const BINARY_EXT = ['.pdf', '.docx', '.xlsx', '.xlsm', '.xls', '.pptx', '.rtf'];
+  /* Rows for the current batch. Kept separate from `notice`/`error` because a batch is
+     not one outcome: some files can succeed while others fail, and collapsing that into
+     a single banner is what made an operator re-upload files that were already indexed. */
+  const [queue, setQueue] = useState<UploadItem[]>([]);
 
-  /* Mirrors the server ceilings in api/server/routes/knowledgeBases.js. Checked here as
-     well as there because the two failure modes differ: the server can only answer once
-     it has the body, and a body large enough to overflow LibreChat's own
-     express.json({ limit: '3mb' }) never reaches our handler at all - it dies in the body
-     parser and surfaces as a bare 500 "An unknown error occurred." Refusing the file
-     before it is encoded keeps the reason visible and saves reading a multi-MB file into
-     memory only to have it rejected. */
-  const MAX_BINARY_BYTES = 2 * 1024 * 1024;
-  const MAX_TEXT_CHARS = 1_000_000;
-
+  /**
+   * Upload the whole selection.
+   *
+   * The queue is `kbUpload.uploadBatch`, which posts each file on its own to the
+   * EXISTING single-document endpoint -- so a multi-file selection runs through the
+   * same route, the same kb_upload_<name> tool and the same ingest() pipeline that one
+   * file always did. Nothing about bulk upload is a second implementation.
+   */
   const upload = useMutation({
-    mutationFn: async (file: File) => {
-      const isBinary = BINARY_EXT.some((x) => file.name.toLowerCase().endsWith(x));
-      if (isBinary && file.size > MAX_BINARY_BYTES) {
-        throw new Error(
-          `${file.name} is ${(file.size / (1024 * 1024)).toFixed(1)} MB, over the ` +
-            `${MAX_BINARY_BYTES / (1024 * 1024)} MB limit for PDF/Office uploads.`,
+    mutationFn: (files: File[]) =>
+      uploadBatch(files, {
+        onChange: setQueue,
+        /* `request.post` takes no axios config, so the moment the body finishes
+           transferring is not observable from here. Reporting it as soon as the request
+           is issued means a row reads "Indexing" for the transfer as well -- which is
+           where the wait actually is, since kb-mcp parses, chunks, embeds and upserts
+           before answering. */
+        send: (payload, onBodySent) => {
+          const sent = api.request(`/${kb.name}/documents`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+          onBodySent();
+          return sent;
+        },
+      }),
+    onSuccess: ({ succeeded, failed }) => {
+      if (failed === 0) {
+        setNotice(`Uploaded and indexed ${succeeded} ${succeeded === 1 ? 'file' : 'files'}`);
+      } else {
+        setError(
+          `${failed} of ${succeeded + failed} files failed. ` +
+            'The rest were uploaded and indexed; see the list below.',
         );
       }
-      let body: string;
-      if (isBinary) {
-        // Chunked conversion: String.fromCharCode(...bytes) on a multi-MB array blows
-        // the argument limit and throws, so walk the buffer in slices.
-        const buf = new Uint8Array(await file.arrayBuffer());
-        let binary = '';
-        for (let i = 0; i < buf.length; i += 0x8000) {
-          binary += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)));
-        }
-        body = JSON.stringify({ filename: file.name, content_b64: btoa(binary) });
-      } else {
-        const text = await file.text();
-        if (text.length > MAX_TEXT_CHARS) {
-          throw new Error(
-            `${file.name} is ${text.length.toLocaleString()} characters, over the ` +
-              `${MAX_TEXT_CHARS.toLocaleString()} character limit for text uploads.`,
-          );
-        }
-        body = JSON.stringify({ filename: file.name, content: text });
-      }
-      return api.request(`/${kb.name}/documents`, { method: 'POST', body });
-    },
-    onSuccess: (r: any) => {
-      setNotice(`Uploaded and indexed ${r.uploaded ?? ''}`.trim());
       refresh();
     },
     onError: (e: Error) => setError(e.message),
@@ -275,12 +371,14 @@ function KbDetail({ kb, onBack }: { kb: KnowledgeBase; onBack: () => void }) {
 
   const onPick = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
+      const files = Array.from(e.target.files ?? []);
+      if (files.length > 0) {
         setError(null);
         setNotice(null);
-        upload.mutate(file);
+        setQueue([]);
+        upload.mutate(files);
       }
+      /* Reset so re-picking the same file fires `change` again. */
       e.target.value = '';
     },
     [upload],
@@ -311,8 +409,11 @@ function KbDetail({ kb, onBack }: { kb: KnowledgeBase; onBack: () => void }) {
         </div>
         <div className="flex gap-2">
           <label>
+            {/* `multiple` is the whole of bulk upload on this side: the queue below
+                handles any number of files, and one file is just a batch of one. */}
             <input
               type="file"
+              multiple
               accept=".pdf,.docx,.xlsx,.xlsm,.xls,.pptx,.rtf,.md,.markdown,.txt,.html,.htm,.csv,.tsv,.json,.xml"
               className="hidden"
               onChange={onPick}
@@ -331,6 +432,8 @@ function KbDetail({ kb, onBack }: { kb: KnowledgeBase; onBack: () => void }) {
 
       {error && <Banner kind="error">{error}</Banner>}
       {notice && !error && <Banner kind="info">{notice}</Banner>}
+
+      <UploadQueue items={queue} onDismiss={() => setQueue([])} />
 
       <input
         value={filter}
@@ -355,7 +458,9 @@ function KbDetail({ kb, onBack }: { kb: KnowledgeBase; onBack: () => void }) {
           </p>
           {!filter && (
             <p className="mt-1 text-xs text-text-tertiary">
-              Upload a PDF, Word, Excel, PowerPoint, CSV, JSON, XML, RTF, Markdown, text or HTML file to index it.
+              Upload PDF, Word, Excel, PowerPoint, CSV, JSON, XML, RTF, Markdown, text or
+              HTML files to index them. Select as many as you like — up to{' '}
+              {MAX_UPLOAD_BYTES / (1024 * 1024)} MB each.
             </p>
           )}
         </div>

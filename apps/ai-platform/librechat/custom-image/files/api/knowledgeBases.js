@@ -36,6 +36,10 @@ const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const { reinitMCPServer } = require('~/server/services/Tools/mcp');
+/** The single API-side definition of the upload ceilings. Kept in its own,
+ *  dependency-free module so it can be unit-tested outside a built image -- see
+ *  custom-image/tests/kbUploadLimits.test.js. */
+const { checkUploadSize } = require('./kbUploadLimits');
 
 const router = express.Router();
 
@@ -43,25 +47,50 @@ const router = express.Router();
 const KB_ADMIN_URL = process.env.KB_ADMIN_MCP_URL || 'http://kb-admin-mcp-server:8109/mcp';
 const KB_DEPT_URL = process.env.KB_MCP_URL || 'http://kb-mcp-server:8106/mcp';
 
-/** Upload ceilings, mirroring kb-mcp's two DIFFERENT limits (kb_mcp/manage.py).
- *
- *  kb-mcp caps text at MAX_UPLOAD_CHARS (1,000,000 characters) and binary at
- *  MAX_UPLOAD_BYTES (25 MB) - as its own comment puts it, "the meaningful limit
- *  there is decoded bytes, not characters". This file previously applied the TEXT
- *  character limit to BINARY uploads too, which capped every PDF/DOCX/XLSX at 1 MB
- *  even though the backend would have accepted 25 MB.
- *
- *  The binary ceiling is not 25 MB here because a binary upload travels base64-encoded
- *  inside a JSON body, and LibreChat parses that body with express.json({ limit: '3mb' })
- *  (api/server/index.js). Base64 inflates by 4/3, so 3 MB of JSON carries ~2.25 MB of
- *  file. 2 MB decoded leaves headroom for the JSON envelope and keeps this check - which
- *  returns a readable message - firing before the body parser's bare 413. Raising it
- *  further requires raising that express.json limit first. */
-const MAX_UPLOAD_CHARS = 1_000_000;
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
-
 /** The department-facing MCP server whose tool list changes when a KB is created. */
 const MCP_SERVER_NAME = 'kb';
+
+/**
+ * How long an MCP call may take before it is abandoned.
+ *
+ * `kb_upload_<name>` is synchronous: it writes the file, parse-checks it, and only
+ * then returns, after ingest() has chunked, embedded and upserted it. For the 100 MB
+ * documents this route now accepts, that is minutes of CPU-bound embedding -- well past
+ * undici's 5-minute default headers timeout, which would abandon a request whose work
+ * was still progressing and report a failure for a document that does end up indexed.
+ *
+ * Raising it needs a dispatcher, because the timeout is a property of the connection
+ * pool rather than of the request; `AbortSignal.timeout` can only shorten it. undici is
+ * already in the tree (it is what Node's own fetch is built on), and if a future base
+ * image drops it this falls back to the default fetch -- i.e. to today's behaviour,
+ * never to a broken route.
+ */
+const MCP_TIMEOUT_MS = Number(process.env.KB_MCP_TIMEOUT_MS || 30 * 60 * 1000);
+
+let mcpFetch;
+
+function getMcpFetch() {
+  if (mcpFetch) {
+    return mcpFetch;
+  }
+  try {
+    // eslint-disable-next-line import/no-extraneous-dependencies
+    const { Agent, fetch: undiciFetch } = require('undici');
+    const dispatcher = new Agent({
+      headersTimeout: MCP_TIMEOUT_MS,
+      bodyTimeout: MCP_TIMEOUT_MS,
+      connectTimeout: 10_000,
+    });
+    mcpFetch = (url, init) => undiciFetch(url, { ...init, dispatcher });
+  } catch (error) {
+    logger.warn(
+      '[knowledgeBases] undici unavailable; MCP calls keep the default 5-minute ceiling: %s',
+      error.message,
+    );
+    mcpFetch = (url, init) => fetch(url, init);
+  }
+  return mcpFetch;
+}
 
 /**
  * Minimal MCP streamable-http client.
@@ -79,7 +108,7 @@ async function callMcpTool(baseUrl, toolName, args = {}) {
   };
 
   const rpc = async (body, sessionId) => {
-    const res = await fetch(baseUrl, {
+    const res = await getMcpFetch()(baseUrl, {
       method: 'POST',
       headers: sessionId ? { ...headers, 'mcp-session-id': sessionId } : headers,
       body: JSON.stringify(body),
@@ -103,7 +132,7 @@ async function callMcpTool(baseUrl, toolName, args = {}) {
   const sessionId = initRes.headers.get('mcp-session-id');
   await initRes.text();
 
-  await fetch(baseUrl, {
+  await getMcpFetch()(baseUrl, {
     method: 'POST',
     headers: sessionId ? { ...headers, 'mcp-session-id': sessionId } : headers,
     body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }),
@@ -142,7 +171,7 @@ async function listMcpToolNames(baseUrl) {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
   };
-  const initRes = await fetch(baseUrl, {
+  const initRes = await getMcpFetch()(baseUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -153,8 +182,8 @@ async function listMcpToolNames(baseUrl) {
   const sessionId = initRes.headers.get('mcp-session-id');
   await initRes.text();
   const h2 = sessionId ? { ...headers, 'mcp-session-id': sessionId } : headers;
-  await fetch(baseUrl, { method: 'POST', headers: h2, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
-  const res = await fetch(baseUrl, { method: 'POST', headers: h2, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) });
+  await getMcpFetch()(baseUrl, { method: 'POST', headers: h2, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
+  const res = await getMcpFetch()(baseUrl, { method: 'POST', headers: h2, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) });
   const raw = await res.text();
   let payload = raw;
   if (raw.includes('data:')) {
@@ -365,6 +394,16 @@ router.get(
   ),
 );
 
+/**
+ * Upload ONE document. A multi-file selection in the UI becomes a sequence of these.
+ *
+ * Bulk upload deliberately did not get an endpoint of its own. Keeping one file per
+ * request keeps the size ceiling a PER-FILE ceiling (a combined body would divide it by
+ * the number of files selected), keeps each file's failure isolated to its own response,
+ * and keeps the ingestion path singular: this route delegates to `kb_upload_<name>`,
+ * which is the only thing that ever writes into a knowledge base. See
+ * client/kbUpload.ts for the queue that drives it.
+ */
 router.post(
   '/:name/documents',
   validName,
@@ -381,22 +420,11 @@ router.post(
         .json({ message: 'filename and one of content / content_b64 are required' });
     }
     // Text and binary are measured against different ceilings because kb-mcp enforces
-    // different ones (see MAX_UPLOAD_CHARS / MAX_UPLOAD_BYTES above). For base64 the
-    // decoded size is what counts: the wire form is ~33% larger, and rejecting on the
-    // encoded length would silently lower the real limit by a quarter.
-    if (hasBinary) {
-      const bytes = Math.floor((contentB64.length * 3) / 4);
-      if (bytes > MAX_UPLOAD_BYTES) {
-        return res.status(413).json({
-          message: `File too large: ${Math.round(bytes / 1024)} KB exceeds the ${
-            MAX_UPLOAD_BYTES / (1024 * 1024)
-          } MB limit for binary uploads`,
-        });
-      }
-    } else if (content.length > MAX_UPLOAD_CHARS) {
-      return res.status(413).json({
-        message: `File too large: ${content.length} characters exceeds the ${MAX_UPLOAD_CHARS} character limit for text uploads`,
-      });
+    // different ones; the module owns both, and the decoded-vs-encoded arithmetic that
+    // used to live inline here is now covered by tests.
+    const refusal = checkUploadSize(req.body);
+    if (refusal) {
+      return res.status(refusal.status).json({ message: refusal.message });
     }
     const result = await callMcpTool(KB_DEPT_URL, `kb_upload_${req.params.name}`, {
       filename,

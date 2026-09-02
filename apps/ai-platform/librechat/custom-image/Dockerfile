@@ -25,9 +25,16 @@ RUN chmod +x /apply-patches.sh && /apply-patches.sh
 
 # Install client devDeps, rebuild the SPA, then drop them again so the shipped
 # image stays close to upstream's size and surface.
+#
+# The two attach-file specs run here, in the only window where jest exists in this
+# image (after devDeps are installed, before they are pruned). They are the tests
+# that cover step 6/6's gate, so a future base bump that reverts the fix fails the
+# build instead of silently shipping 400s to Kimi again. Scoped to those two files
+# so this costs seconds, not a full client suite.
 RUN cd /app \
  && npm install --workspace=client --include=dev --no-audit --no-fund \
  && cd /app/client \
+ && npm run test:ci -- AttachFileMenu.spec DragDropModal.spec \
  && npm run build \
  && cd /app \
  && npm prune --omit=dev --no-audit --no-fund \
@@ -35,8 +42,16 @@ RUN cd /app \
  && rm -rf /patch-files /apply-patches.sh
 
 # Fail the build if the patches did not actually land in the bundle.
+#
+# The body-parser check is not redundant with apply-patches.sh's assert-once: that runs
+# before the client build, and this confirms the mount survived into the image that
+# ships. Without it a 100 MB upload would fail at LibreChat's global 3mb parser with no
+# message the Knowledge Bases UI can show -- exactly the opaque failure this update fixes.
 RUN test -f /app/api/server/routes/knowledgeBases.js || (echo "API route missing" && exit 1) \
+ && test -f /app/api/server/routes/kbUploadLimits.js || (echo "upload-limits module missing" && exit 1) \
  && grep -q "knowledge-bases" /app/api/server/index.js || (echo "route not mounted" && exit 1) \
+ && grep -q "app.use('/api/knowledge-bases', express.json({ limit: '150mb' }))" /app/api/server/index.js \
+      || (echo "KB body-parser ceiling not mounted" && exit 1) \
  && grep -rq "knowledge-bases" /app/client/dist/assets/ || (echo "client bundle missing KB page" && exit 1)
 
 USER node

@@ -39,10 +39,19 @@ log = logging.getLogger(__name__)
 #: on disk that never retrieves.
 UPLOADABLE = set(SUPPORTED)
 
-#: Text ceiling. Binary is bounded separately (below) because base64 inflates ~33% and
-#: the meaningful limit there is decoded bytes, not characters.
-MAX_UPLOAD_CHARS = 1_000_000
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+#: Text ceiling, in characters. Binary is bounded separately (below) because base64
+#: inflates ~33% and the meaningful limit there is decoded bytes, not characters.
+#: 100,000,000 characters is the same practical size as the byte ceiling for the
+#: ASCII-dominated documents in a NOC corpus, so the two agree on "100 MB" and text
+#: uploads are not capped a hundred times tighter than binary ones.
+MAX_UPLOAD_CHARS = 100_000_000
+
+#: Binary ceiling, in DECODED bytes. This is the value the whole upload path is aligned
+#: to; the client check, the API route, the express body parser and nginx are all set
+#: from it, and services/mcp/kb/tests/test_upload_limits.py fails if one of them drifts.
+#: Raising it further means raising the two transport limits (which carry the ~4/3
+#: base64 inflation) in the same change.
+MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 
 class ManageError(ValueError):
@@ -114,6 +123,13 @@ def upload_document(
     if is_binary:
         if not content_b64:
             raise ManageError(f"'{ext}' is a binary format and requires content_b64")
+        # Refuse on the ENCODED length first. Now that the ceiling is 100 MB, decoding
+        # before measuring would let a caller make this process allocate an arbitrarily
+        # large bytes object just to be told it was too big. 4 base64 characters carry
+        # at most 3 bytes, so this cannot reject a file that is actually within the
+        # limit - the exact check on the decoded length still follows.
+        if len(content_b64) > ((MAX_UPLOAD_BYTES + 2) // 3) * 4:
+            raise ManageError(f"file exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MB")
         try:
             payload = base64.b64decode(content_b64, validate=True)
         except (binascii.Error, ValueError) as e:

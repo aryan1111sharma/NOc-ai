@@ -1,5 +1,6 @@
 #!/bin/sh
-# Applies the Knowledge Bases additions to a stock LibreChat tree.
+# Applies the Knowledge Bases additions, and the custom-endpoint file-attachment
+# fix (step 7), to a stock LibreChat tree.
 #
 # Every edit is anchored on a unique, verbatim string and asserted to match
 # exactly once. A silent no-op here would produce an image that builds and boots
@@ -34,11 +35,15 @@ PY
   echo "  patched $file"
 }
 
-echo "== 1/5 API route file =="
+echo "== 1/7 API route files =="
 cp /patch-files/api/knowledgeBases.js "$APP/api/server/routes/knowledgeBases.js"
 echo "  installed api/server/routes/knowledgeBases.js"
+# knowledgeBases.js does `require('./kbUploadLimits')`, so a missing copy here is a
+# boot-time crash rather than a degraded feature.
+cp /patch-files/api/kbUploadLimits.js "$APP/api/server/routes/kbUploadLimits.js"
+echo "  installed api/server/routes/kbUploadLimits.js"
 
-echo "== 2/5 register route module =="
+echo "== 2/7 register route module =="
 patch_once "$APP/api/server/routes/index.js" \
   "const mcp = require('./mcp');" \
   "const mcp = require('./mcp');
@@ -49,16 +54,47 @@ patch_once "$APP/api/server/routes/index.js" \
   "  mcp,
   knowledgeBases,"
 
-echo "== 3/5 mount route =="
+echo "== 3/7 mount route =="
 patch_once "$APP/api/server/index.js" \
   "  app.use('/api/mcp', routes.mcp);" \
   "  app.use('/api/mcp', routes.mcp);
   app.use('/api/knowledge-bases', routes.knowledgeBases);"
 
-echo "== 4/5 client page + route =="
+echo "== 4/7 body-parser ceiling for KB uploads =="
+# A KB document upload carries the whole file base64-encoded inside a JSON body, so it
+# is bounded by express.json, not by the route. Upstream's global parser is 3mb, which
+# capped every PDF at ~2.25 MB regardless of what kb-mcp would accept.
+#
+# The larger parser is mounted for /api/knowledge-bases ONLY, and BEFORE the global one.
+# Both details matter:
+#
+#   * Path-scoped, so raising the KB ceiling to 150mb does not let every other route in
+#     LibreChat accept a 150 MB body. The global 3mb parser is left exactly as upstream
+#     ships it.
+#   * Before, because whichever parser runs first is the one that reads the stream.
+#     body-parser skips a request whose stream is already finished (lib/read.js checks
+#     onFinished.isFinished(req)), so the global parser no-ops for these requests
+#     instead of re-reading or rejecting them.
+#
+# 150mb clears the ~133.4 MB that 100 MB of file becomes on the wire; nginx.conf is set
+# above this again, and services/mcp/kb/tests/test_upload_limits.py asserts the ordering.
+patch_once "$APP/api/server/index.js" \
+  "  app.use(express.json({ limit: '3mb' }));" \
+  "  /* NOC: KB document uploads carry a base64-encoded file in the JSON body. Mounted
+     before the global parser, and scoped to this path, so no other route is loosened.
+     See apply-patches.sh step 4/7. */
+  app.use('/api/knowledge-bases', express.json({ limit: '150mb' }));
+  app.use(express.json({ limit: '3mb' }));"
+
+echo "== 5/7 client page + route =="
 mkdir -p "$APP/client/src/components/KnowledgeBases"
 cp /patch-files/client/KnowledgeBasesView.tsx \
    "$APP/client/src/components/KnowledgeBases/KnowledgeBasesView.tsx"
+# The bulk-upload queue the page delegates to. Kept as its own module so its behaviour
+# (sequential uploads, per-file status, continue-on-failure, the size gate) is testable
+# with the plain Node test runner -- see custom-image/tests/kbUpload.test.ts.
+cp /patch-files/client/kbUpload.ts \
+   "$APP/client/src/components/KnowledgeBases/kbUpload.ts"
 
 patch_once "$APP/client/src/routes/index.tsx" \
   "const loadSkillsView = () =>" \
@@ -83,7 +119,7 @@ patch_once "$APP/client/src/routes/index.tsx" \
               lazy: loadKnowledgeBasesView,
             },"
 
-echo "== 5/5 sidebar nav item =="
+echo "== 6/7 sidebar nav item =="
 patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
   "import { MessagesSquare } from 'lucide-react';" \
   "import { Database, MessagesSquare } from 'lucide-react';
@@ -119,5 +155,108 @@ patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
 
     return links;
   }, [sideNavLinks, isAdmin, navigate]);"
+
+echo "== 7/7 no native file parts for custom endpoints =="
+# A `custom` endpoint is any OpenAI-compatible provider declared in librechat.yaml
+# (here: Kimi). Upstream v0.8.7 puts EModelEndpoint.custom in documentSupportedProviders
+# (packages/data-provider/src/schemas.ts), and since PR #12117 an agent resolves its
+# endpointType from its provider -- so the NOC Engineer (Kimi) agent resolves to
+# `custom` and the attach menu offers "Upload to Provider". That path sends the
+# document as an OpenAI `{ type: 'file' }` content part, which api.kimi.com/coding/v1
+# rejects:
+#     400 the message at position N with role 'user' contains an invalid part type: file
+# The failed part is persisted to the conversation, so every later turn resends it and
+# the thread stays broken (upstream issue #13334).
+#
+# Fixing it in documentSupportedProviders would not work: the client resolves
+# librechat-data-provider to its prebuilt dist/, which `npm run build` in client/ does
+# not recompile. So the two components that read the flag are patched instead -- both,
+# because the paperclip menu and drag-and-drop must make the same decision.
+#
+# Documents on custom endpoints go through "Upload as Text" (the `context` capability,
+# built-in document_parser: PDF/DOCX/XLS/XLSX, no external service) which every model
+# accepts. Images still upload natively. Built-in providers -- openAI, anthropic,
+# google, bedrock, azureOpenAI+Responses -- are untouched.
+patch_once "$APP/client/src/components/Chat/Input/Files/AttachFileMenu.tsx" \
+  "      if (
+        isDocumentSupportedProvider(endpointType) ||
+        isDocumentSupportedProvider(currentProvider) ||
+        isAzureWithResponsesApi
+      ) {
+        items.push({" \
+  "      /* NOC: custom endpoints cannot be assumed to accept native \`file\` parts. */
+      const isCustomEndpoint =
+        endpointType === EModelEndpoint.custom || currentProvider === EModelEndpoint.custom;
+
+      if (
+        !isCustomEndpoint &&
+        (isDocumentSupportedProvider(endpointType) ||
+          isDocumentSupportedProvider(currentProvider) ||
+          isAzureWithResponsesApi)
+      ) {
+        items.push({"
+
+patch_once "$APP/client/src/components/Chat/Input/Files/DragDropModal.tsx" \
+  "    // Check if provider supports document upload
+    if (
+      isDocumentSupportedProvider(endpointType) ||
+      isDocumentSupportedProvider(currentProvider) ||
+      isAzureWithResponsesApi
+    ) {" \
+  "    /* NOC: mirrors AttachFileMenu.tsx -- dropping a PDF must not re-open the
+       provider-native path that Kimi rejects with 'invalid part type: file'. */
+    const isCustomEndpoint =
+      endpointType === EModelEndpoint.custom || currentProvider === EModelEndpoint.custom;
+
+    // Check if provider supports document upload
+    if (
+      !isCustomEndpoint &&
+      (isDocumentSupportedProvider(endpointType) ||
+        isDocumentSupportedProvider(currentProvider) ||
+        isAzureWithResponsesApi)
+    ) {"
+
+# Upstream's own specs assert the pre-fix behaviour, so they are inverted here rather
+# than left failing. Both use 'Moonshot' (Kimi) as the custom provider, which is
+# exactly the reported case.
+patch_once "$APP/client/src/components/Chat/Input/Files/__tests__/AttachFileMenu.spec.tsx" \
+  "    it('shows \"Upload to Provider\" when endpointType is custom (resolved from agent provider)', () => {
+      setupMocks({ provider: 'Moonshot' });
+      renderMenu({ endpointType: EModelEndpoint.custom });
+      openMenu();
+      expect(screen.getByText('Upload to Provider')).toBeInTheDocument();
+      expect(screen.queryByText('Upload Image')).not.toBeInTheDocument();
+    });" \
+  "    /* NOC: inverted from upstream -- see apply-patches.sh step 7/7. */
+    it('shows \"Upload Image\", not \"Upload to Provider\", when endpointType is custom', () => {
+      setupMocks({ provider: 'Moonshot' });
+      renderMenu({ endpointType: EModelEndpoint.custom });
+      openMenu();
+      expect(screen.getByText('Upload Image')).toBeInTheDocument();
+      expect(screen.queryByText('Upload to Provider')).not.toBeInTheDocument();
+    });"
+
+patch_once "$APP/client/src/components/Chat/Input/Files/__tests__/AttachFileMenu.spec.tsx" \
+  "    it('shows \"Upload to Provider\" when agents endpoint has custom endpointType from provider', () => {
+      setupMocks({ provider: 'Moonshot' });
+      renderMenu({
+        endpoint: EModelEndpoint.agents,
+        endpointType: EModelEndpoint.custom,
+      });
+      openMenu();
+      expect(screen.getByText('Upload to Provider')).toBeInTheDocument();
+    });" \
+  "    /* NOC: this is the reported bug exactly -- the NOC Engineer (Kimi) agent
+       resolves endpointType to \`custom\`. */
+    it('shows \"Upload Image\" when an agent resolves a custom endpointType from its provider', () => {
+      setupMocks({ provider: 'Moonshot' });
+      renderMenu({
+        endpoint: EModelEndpoint.agents,
+        endpointType: EModelEndpoint.custom,
+      });
+      openMenu();
+      expect(screen.getByText('Upload Image')).toBeInTheDocument();
+      expect(screen.queryByText('Upload to Provider')).not.toBeInTheDocument();
+    });"
 
 echo "PATCHES APPLIED OK"

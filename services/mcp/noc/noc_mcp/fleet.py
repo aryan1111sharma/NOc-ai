@@ -13,7 +13,7 @@ from typing import Optional
 from fastmcp import FastMCP
 
 from .freshness import HISTORY, is_error, stamp
-from .reports import _get
+from .reports import _get, _params
 
 
 async def _fetch_fleet_status(client, *, offline_only: bool, online_only: bool,
@@ -24,17 +24,23 @@ async def _fetch_fleet_status(client, *, offline_only: bool, online_only: bool,
         return {"error": "offline_only and online_only are mutually exclusive"}
 
     if as_map:
-        params = {k: v for k, v in {"customer_name": customer_name}.items() if v is not None}
+        ignored = [n for n, v in (
+            ("offline_only", offline_only), ("online_only", online_only),
+            ("search", search), ("model", model), ("limit", limit),
+        ) if v]
+        if ignored:
+            return {"error": (
+                f"as_map=True cannot apply {', '.join(ignored)}: the /chargers/map endpoint "
+                "accepts only customer_name. Re-run with as_map=False to use these filters."
+            )}
+        params = _params(customer_name=customer_name)
         out = await _get(client, "/api/v1/chargers/map", params)
     else:
-        params = {k: v for k, v in {
-            "offline_only": "true" if offline_only else None,
-            "online_only": "true" if online_only else None,
-            "search": search,
-            "customer_name": customer_name,
-            "model": model,
-            "limit": limit,
-        }.items() if v is not None}
+        params = _params(search=search, customer_name=customer_name, model=model, limit=limit)
+        params.update(_params(
+            offline_only="true" if offline_only else None,
+            online_only="true" if online_only else None,
+        ))
         out = await _get(client, "/api/v1/chargers", params)
 
     return out if is_error(out) else stamp(out, source=HISTORY)
@@ -58,7 +64,9 @@ def _register_fleet_tools(mcp: FastMCP, client) -> None:
         Start here for "what needs attention" questions. Set offline_only=True to list the
         chargers that are down right now (not just a count). Filter with search (charger id or
         model), customer_name, or model. Set as_map=True for every charger with lightweight
-        map fields instead of a paginated page.
+        map fields instead of a paginated page -- but the map endpoint accepts only
+        customer_name, so offline_only, online_only, search, model, and limit are rejected
+        (with an error, not silently ignored) when as_map=True.
 
         Reads the NOC backend, so it works regardless of any individual charger's state."""
         return await _fetch_fleet_status(

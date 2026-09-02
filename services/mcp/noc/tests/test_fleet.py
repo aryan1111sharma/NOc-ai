@@ -73,3 +73,40 @@ async def test_result_is_stamped_history():
         out = await _fetch_fleet_status(c, offline_only=False, online_only=False, search=None,
                                         customer_name=None, model=None, limit=None, as_map=False)
     assert out["source"] == "history"
+
+
+@pytest.mark.asyncio
+async def test_as_map_with_offline_only_is_rejected_without_a_request():
+    requests_seen = []
+
+    def handler(request):
+        if request.url.path.endswith(_LOGIN):
+            return _ok_login(request)
+        requests_seen.append(request.url.path)
+        return httpx.Response(200, json={"chargers": []})
+
+    async with _client(handler) as c:
+        out = await _fetch_fleet_status(c, offline_only=True, online_only=False, search=None,
+                                        customer_name=None, model=None, limit=None, as_map=True)
+    assert "error" in out
+    assert "offline_only" in out["error"]
+    assert requests_seen == []
+
+
+@pytest.mark.asyncio
+async def test_as_map_with_only_customer_name_succeeds():
+    seen = {}
+
+    def handler(request):
+        if request.url.path.endswith(_LOGIN):
+            return _ok_login(request)
+        seen["path"] = request.url.path
+        seen["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"chargers": []})
+
+    async with _client(handler) as c:
+        out = await _fetch_fleet_status(c, offline_only=False, online_only=False, search=None,
+                                        customer_name="Ador", model=None, limit=None, as_map=True)
+    assert seen["path"] == "/api/v1/chargers/map"
+    assert seen["params"]["customer_name"] == "Ador"
+    assert out["source"] == "history"

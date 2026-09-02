@@ -46,7 +46,7 @@ _CURATED_PREFIXES = (
     r"^/api/v1/chargers/map$",                        # -> noc_fleet_status
     r"^/api/v1/chargers/\{charger_id\}/history",      # -> noc_charger_history
     r"^/api/v1/chargers/\{charger_id\}/telemetry",    # -> noc_charger_telemetry
-    r"^/api/v1/chargers/\{charger_id\}/sessions",     # -> noc_session_events
+    r"^/api/v1/chargers/\{charger_id\}/sessions/\{session_id\}",   # -> noc_session_events (events sub-path only)
     r"^/api/v1/chargers/\{charger_id\}/stability$",   # -> noc_charger_stability
     r"^/api/v1/chargers/\{charger_id\}/commands$",    # -> noc_charger_stability
     r"^/api/v1/chargers/\{charger_id\}/ssh-status$",  # -> noc_charger_stability

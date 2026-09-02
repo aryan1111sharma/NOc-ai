@@ -43,6 +43,14 @@ async def test_charger_proxy_survives_pruning():
 
 
 @pytest.mark.asyncio
+async def test_active_sessions_survives_pruning():
+    """sessions/active has no curated replacement -- noc_session_events needs a session_id
+    the caller must already have, and charger_get_session_details needs the charger ONLINE.
+    Generated tool name is get_active_sessions_api_v1_chargers (verified via list_tools)."""
+    assert any("active_sessions" in n or "sessions_active" in n for n in await _names())
+
+
+@pytest.mark.asyncio
 async def test_surface_is_materially_smaller():
     total = len(await _names())
     assert total < 130, f"expected pruning to land under 130 tools, got {total}"

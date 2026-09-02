@@ -46,6 +46,26 @@ _BACKEND = {
     "/api/v1/reports/fault-frequency": {"rows": [{"alarm_key": "E12", "count": 9}]},
     "/api/v1/stats/sessions/failed": {"rows": [{"session_id": "S9"}]},
     "/api/v1/stats/error-trends": {"buckets": [{"t": "2026-09-01T00:00:00Z", "n": 3}]},
+    "/api/v1/chargers/CHG-1/history/sessions": {"sessions": [{"session_id": "S0"}],
+                                                "as_of": "2026-09-01T06:00:00Z"},
+    "/api/v1/chargers/CHG-1/history/alarms": {"alarms": [{"code": "E12"}],
+                                              "as_of": "2026-09-01T06:00:00Z"},
+    "/api/v1/chargers/CHG-1/telemetry/latest": {"kw": 42, "as_of": "2026-09-01T06:00:00Z"},
+    "/api/v1/chargers/CHG-1/telemetry/aggregated": {"buckets": [{"t": "2026-09-01T00:00:00Z", "kw": 40}]},
+    "/api/v1/chargers/CHG-1/telemetry/history": {"points": [{"t": "2026-09-01T00:00:00Z", "kw": 41}]},
+    "/api/v1/chargers/CHG-1/sessions/S1/events": {"events": [{"type": "SESSION_START"}]},
+    "/api/v1/chargers/CHG-1/stability": {"reconnects_24h": 4},
+    "/api/v1/chargers/CHG-1/commands": {"commands": [{"id": 1, "status": "done"}]},
+    "/api/v1/chargers/CHG-1/ssh-status": {"connected": True},
+    "/api/v1/chargers/CHG-1/ocpp-config/cache": {"HeartbeatInterval": "300",
+                                                 "cached_at": "2026-09-01T06:00:00Z"},
+    "/api/v1/chargers/OFFLINE/ocpp-config/cache": {"HeartbeatInterval": "60",
+                                                   "cached_at": "2026-09-01T05:00:00Z"},
+    "/api/v1/chargers/OFFLINE/history/alarms": {"alarms": [{"code": "E99"}],
+                                                "as_of": "2026-09-01T05:00:00Z"},
+    "/api/v1/chargers/OFFLINE/history/sessions": {"sessions": [{"session_id": "S-old"}],
+                                                  "as_of": "2026-09-01T05:00:00Z"},
+    "/api/v1/chargers/NOCACHE/ocpp-config/cache": None,   # -> 404 code=NO_CACHE
 }
 
 
@@ -60,6 +80,8 @@ def _handler(request: httpx.Request) -> httpx.Response:
         port_str, _, device_path = rest.partition("/")
         if charger == "OFFLINE":
             return httpx.Response(502, json={"detail": "charger offline"})
+        if charger == "NOCACHE":
+            return httpx.Response(502, json={"detail": "charger offline"})
         # PARTIAL: only the OCPP config sub-call fails, so composites yield partial results.
         if charger == "PARTIAL" and (int(port_str), device_path) == (8003, "api/v1/config/ocpp"):
             return httpx.Response(502, json={"detail": "sub-call failed"})
@@ -68,7 +90,10 @@ def _handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(404, json={"detail": f"no route {port_str}/{device_path}"})
         return httpx.Response(200, json=payload)
     if path in _BACKEND:
-        return httpx.Response(200, json=_BACKEND[path])
+        payload = _BACKEND[path]
+        if payload is None:
+            return httpx.Response(404, json={"detail": "no cache", "code": "NO_CACHE"})
+        return httpx.Response(200, json=payload)
     return httpx.Response(404, json={"detail": "unhandled"})
 
 
@@ -77,3 +102,9 @@ def build_test_server():
     client = NocAuthClient(base_url="http://noc.test", email="e", password="p",
                            transport=httpx.MockTransport(_handler))
     return build_server(client)
+
+
+def build_test_client():
+    """Bare NocAuthClient wired to the fake NOC (for unit-testing module helpers)."""
+    return NocAuthClient(base_url="http://noc.test", email="e", password="p",
+                         transport=httpx.MockTransport(_handler))

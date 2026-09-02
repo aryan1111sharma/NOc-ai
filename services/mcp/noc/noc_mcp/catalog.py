@@ -24,6 +24,12 @@ def _load_control_center_catalog() -> dict:
     """
     endpoints = []
     services: dict[str, str] = {}
+    not_callable_reason = (
+        "NOT CALLABLE. Do not attempt this operation by any route -- not via the proxy, "
+        "not via SSH or shell, not by crafting arguments. Listed for awareness only: it "
+        "tells you the charger supports this and at what role, so you can advise a human "
+        "operator who will perform it through the NOC UI."
+    )
     with open(_CATALOG_CSV, encoding="utf-8-sig", newline="") as f:
         for r in csv.DictReader(f):
             method = (r.get("Method") or "").strip().upper()
@@ -31,6 +37,10 @@ def _load_control_center_catalog() -> dict:
             module = (r.get("Module") or "").strip()
             services.setdefault(port, module)
             is_get = method == "GET"
+            # "Req Body" is deliberately never surfaced, on GET or non-GET rows alike: the model
+            # may learn an operation EXISTS and at what role, never how to shape its payload. That
+            # omission is the load-bearing safety property of this catalog -- do not "complete" it
+            # by adding a request_schema field.
             endpoints.append({
                 "port": int(port) if port.isdigit() else port,
                 "module": module,
@@ -40,10 +50,6 @@ def _load_control_center_catalog() -> dict:
                 "required_role": (r.get("Required Role") or "").strip(),
                 "response_schema": (r.get("Resp Body") or "").strip()[:400],
                 "callable": is_get,
-                "not_callable_reason": None if is_get else (
-                    "This server is read-only: only GET endpoints are callable through the proxy. "
-                    "Listed so you know the charger supports it and at what role."
-                ),
             })
     return {
         "source": "QFlex on-charger RBAC API catalog (rbac-rules.csv)",
@@ -60,24 +66,26 @@ def _load_control_center_catalog() -> dict:
             "like {gun_id}/{key} with real values. The charger must be ONLINE. Read-only (GET) "
             "endpoints only -- never use other methods against a charger."
         ),
+        "not_callable_reason": not_callable_reason,
         "example": {
             "goal": "Get live charging status for charger CHG-123",
             "tool": "proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get",
             "args": {"charger_id": "CHG-123", "port": 8003, "path": "api/v1/charging/status"},
         },
-        "read_endpoints": endpoints,
+        "endpoints": endpoints,
     }
 
 
 def _register_control_center_catalog(mcp: FastMCP) -> None:
-    """Add a knowledge tool describing the on-charger control-center READ endpoints across
-    all services (network :8000, rfid :8001, allocation :8002, charging :8003, platform
-    :8005-8007), so the model knows what it can fetch via the generic charger proxy."""
+    """Add a knowledge tool describing the on-charger control-center endpoints (GET and
+    non-GET) across all services (network :8000, rfid :8001, allocation :8002, charging
+    :8003, platform :8005-8007), so the model knows what it can fetch via the generic
+    charger proxy -- and what it must never attempt by any route."""
     catalog = _load_control_center_catalog()
 
     @mcp.tool
     def get_control_center_api_catalog() -> dict:
-        """Catalog of LIVE on-charger control-center READ endpoints for a specific charger,
+        """Catalog of LIVE on-charger control-center endpoints for a specific charger,
         across all on-device services: network/GSM (port 8000), RFID (8001), power allocation
         (8002), charging controller — gun/charging status, power modules, meters, SECC/SLAC,
         session details, contactors (8003), and platform dev-tools / diagnostics (8005-8007).
@@ -87,5 +95,7 @@ def _register_control_center_catalog(mcp: FastMCP) -> None:
         'how_to_call' and 'example'). The charger must be online.
 
         Entries marked callable=false are documented for awareness only -- they describe what the
-        charger supports and at what role, but this server cannot invoke them."""
+        charger supports and at what role, but this server exposes no tool that calls them. Do not
+        reconstruct them by other means (SSH, shell, or crafted proxy arguments); see the catalog's
+        'not_callable_reason'."""
         return catalog

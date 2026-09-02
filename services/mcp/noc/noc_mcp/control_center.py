@@ -14,7 +14,9 @@ import re
 from typing import Any, Optional, Tuple
 from urllib.parse import quote
 
+from .freshness import is_error, live_or_history
 from .identifiers import validate_charger_id
+from .reports import _get
 
 # Conservative allowlist for the device path: letters, digits, '-', '_', '.', '~' and the '/'
 # separators, plus ':', '@' and '+' because an on-charger log source name (charger_get_logs)
@@ -114,6 +116,89 @@ async def _proxy_get(client, charger_id: str, port: int, path: str) -> dict:
         return {"error": f"{type(e).__name__}: {e}", "port": port, "path": path}
 
 
+def _rejected_charger_id(charger_id: Any) -> Optional[dict]:
+    """``None`` if ``charger_id`` is safe to use, else the structured error for it.
+
+    The history-fallback endpoints below are plain backend routes (not the hardened
+    charger-proxy), so they do not go through ``_proxy_get``/``_validate_proxy_url`` and
+    must not splice an unvalidated ``charger_id`` into a URL themselves. Rejecting up front
+    -- before ``live_or_history`` ever calls the ``history()`` closure -- guarantees a
+    malicious id triggers zero outbound requests, matching ``_proxy_get``'s fail-closed
+    contract instead of silently forwarding the id once the live call fails.
+    """
+    reason = validate_charger_id(charger_id)
+    return {"error": reason} if reason is not None else None
+
+
+async def _get_ocpp_status_with_fallback(client, charger_id: str) -> dict:
+    """Live OCPP status + config; on failure, the backend's cached config."""
+    rejected = _rejected_charger_id(charger_id)
+    if rejected is not None:
+        return rejected
+
+    async def live():
+        status = await _proxy_get(client, charger_id, 8003, "api/v1/ocpp/status")
+        if is_error(status):
+            return status
+        config = await _proxy_get(client, charger_id, 8003, "api/v1/config/ocpp")
+        return {"status": status, "config": config}
+
+    async def cached():
+        return await _get(client, f"/api/v1/chargers/{charger_id}/ocpp-config/cache", {})
+
+    return await live_or_history(live, cached,
+                                 reason="charger offline; OCPP config served from NOC cache")
+
+
+async def _get_alarms_with_fallback(client, charger_id: str, gun_id) -> dict:
+    """Live alarms; on failure, the backend's alarm history."""
+    rejected = _rejected_charger_id(charger_id)
+    if rejected is not None:
+        return rejected
+
+    async def live():
+        if gun_id is not None:
+            errors = await _proxy_get(client, charger_id, 8006,
+                                      f"error-generator/errors/by-gun/{gun_id}")
+            return errors if is_error(errors) else {"errors_by_gun": errors}
+        latched = await _proxy_get(client, charger_id, 8006, "error-generator/alarms/latched")
+        if is_error(latched):
+            return latched
+        pending = await _proxy_get(client, charger_id, 8006, "error-generator/errors/pending")
+        return {"latched": latched, "pending": pending}
+
+    async def history():
+        return await _get(client, f"/api/v1/chargers/{charger_id}/history/alarms", {})
+
+    return await live_or_history(live, history,
+                                 reason="charger offline; alarms served from NOC history")
+
+
+async def _get_session_details_with_fallback(client, charger_id: str, gun_id) -> dict:
+    """Live session details; on failure, the backend's session history."""
+    rejected = _rejected_charger_id(charger_id)
+    if rejected is not None:
+        return rejected
+
+    async def live():
+        if gun_id is not None:
+            active = await _proxy_get(client, charger_id, 8003,
+                                      f"api/v1/session_details/active/{gun_id}")
+            if is_error(active):
+                return active
+            last = await _proxy_get(client, charger_id, 8003,
+                                    f"api/v1/session_details/{gun_id}")
+            return {"active": active, "last": last}
+        history = await _proxy_get(client, charger_id, 8003, "api/v1/session_details/history")
+        return history if is_error(history) else {"history": history}
+
+    async def history():
+        return await _get(client, f"/api/v1/chargers/{charger_id}/history/sessions", {})
+
+    return await live_or_history(live, history,
+                                 reason="charger offline; sessions served from NOC history")
+
+
 def _register_control_center_tools(mcp, client) -> None:
     """Register the curated Tier-1 on-charger tools onto ``mcp``."""
 
@@ -128,13 +213,10 @@ def _register_control_center_tools(mcp, client) -> None:
     @mcp.tool
     async def charger_get_session_details(charger_id: str, gun_id: Optional[int] = None) -> dict:
         """Charging-session details for a charger. With gun_id: that gun's active + last
-        session. Without: recent session history. Charger must be ONLINE. Read-only."""
-        if gun_id is not None:
-            return {
-                "active": await _proxy_get(client, charger_id, 8003, f"api/v1/session_details/active/{gun_id}"),
-                "last": await _proxy_get(client, charger_id, 8003, f"api/v1/session_details/{gun_id}"),
-            }
-        return {"history": await _proxy_get(client, charger_id, 8003, "api/v1/session_details/history")}
+        session. Without: recent session history. Charger must be ONLINE. Read-only.
+        If the charger is offline this falls back to NOC-stored history and marks the result
+        source="history" with its age."""
+        return await _get_session_details_with_fallback(client, charger_id, gun_id)
 
     @mcp.tool
     async def charger_get_meters(charger_id: str, gun_id: Optional[int] = None) -> dict:
@@ -149,11 +231,10 @@ def _register_control_center_tools(mcp, client) -> None:
     @mcp.tool
     async def charger_get_ocpp_status(charger_id: str) -> dict:
         """OCPP connection status + the charger's OCPP configuration keys. Charger must be
-        ONLINE. Read-only."""
-        return {
-            "status": await _proxy_get(client, charger_id, 8003, "api/v1/ocpp/status"),
-            "config": await _proxy_get(client, charger_id, 8003, "api/v1/config/ocpp"),
-        }
+        ONLINE. Read-only.
+        If the charger is offline this falls back to NOC-stored history and marks the result
+        source="history" with its age."""
+        return await _get_ocpp_status_with_fallback(client, charger_id)
 
     @mcp.tool
     async def charger_get_network_status(charger_id: str) -> dict:
@@ -192,14 +273,10 @@ def _register_control_center_tools(mcp, client) -> None:
     @mcp.tool
     async def charger_get_alarms(charger_id: str, gun_id: Optional[int] = None) -> dict:
         """Active faults. With gun_id: errors for that gun. Without: latched alarms + pending
-        errors across the charger. Charger must be ONLINE. Read-only."""
-        if gun_id is not None:
-            return {"errors_by_gun": await _proxy_get(
-                client, charger_id, 8006, f"error-generator/errors/by-gun/{gun_id}")}
-        return {
-            "latched": await _proxy_get(client, charger_id, 8006, "error-generator/alarms/latched"),
-            "pending": await _proxy_get(client, charger_id, 8006, "error-generator/errors/pending"),
-        }
+        errors across the charger. Charger must be ONLINE. Read-only.
+        If the charger is offline this falls back to NOC-stored history and marks the result
+        source="history" with its age."""
+        return await _get_alarms_with_fallback(client, charger_id, gun_id)
 
     @mcp.tool
     async def charger_get_temperature(charger_id: str) -> dict:

@@ -1,0 +1,6 @@
+# Shell scripts must keep LF endings. custom-image/apply-patches.sh runs INSIDE a
+# Linux container: with CRLF the kernel reads the shebang as "/bin/sh\r", which does
+# not exist, and `docker compose build api` dies with a bare "not found" (exit 127).
+# core.autocrlf=true on Windows checkouts reintroduces this on every clone, and CI
+# (Linux) never reproduces it -- so pin the endings here rather than per-machine.
+*.sh text eol=lf

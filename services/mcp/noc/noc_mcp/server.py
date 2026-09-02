@@ -28,11 +28,40 @@ from .ssh_exec import _register_ssh_tools
 
 _SPEC_PATH = Path(__file__).parent / "openapi" / "noc_openapi.json"
 
-# GET -> tool; everything else excluded (read-only guarantee).
-_ROUTE_MAPS = [
-    RouteMap(methods=["GET"], mcp_type=MCPType.TOOL),
-    RouteMap(mcp_type=MCPType.EXCLUDE),
-]
+# Modules with no NOC-operations value: user/role administration.
+_EXCLUDED_PREFIXES = (
+    r"^/api/v1/auth",
+    r"^/api/v1/admin",
+    r"^/api/v1/roles",
+    r"^/api/v1/permissions",
+    r"^/api/v1/teams",
+)
+
+# Endpoints a curated tool already owns. Leaving the generated twin in place would give the model
+# two routes to one answer with no basis to choose, which is worse for selection than either alone.
+_CURATED_PREFIXES = (
+    r"^/api/v1/reports",                              # -> noc_report
+    r"^/api/v1/stats",                                # -> noc_stats
+    r"^/api/v1/chargers$",                            # -> noc_fleet_status
+    r"^/api/v1/chargers/map$",                        # -> noc_fleet_status
+    r"^/api/v1/chargers/\{charger_id\}/history",      # -> noc_charger_history
+    r"^/api/v1/chargers/\{charger_id\}/telemetry",    # -> noc_charger_telemetry
+    r"^/api/v1/chargers/\{charger_id\}/sessions",     # -> noc_session_events
+    r"^/api/v1/chargers/\{charger_id\}/stability$",   # -> noc_charger_stability
+    r"^/api/v1/chargers/\{charger_id\}/commands$",    # -> noc_charger_stability
+    r"^/api/v1/chargers/\{charger_id\}/ssh-status$",  # -> noc_charger_stability
+    r"^/api/v1/chargers/\{charger_id\}/ocpp-config",  # -> noc_charger_ocpp_config
+)
+
+# Order matters: exclusions are evaluated before the catch-all GET -> TOOL map.
+_ROUTE_MAPS = (
+    [RouteMap(pattern=p, mcp_type=MCPType.EXCLUDE) for p in _EXCLUDED_PREFIXES]
+    + [RouteMap(pattern=p, mcp_type=MCPType.EXCLUDE) for p in _CURATED_PREFIXES]
+    + [
+        RouteMap(methods=["GET"], mcp_type=MCPType.TOOL),
+        RouteMap(mcp_type=MCPType.EXCLUDE),
+    ]
+)
 
 
 def load_spec() -> dict:

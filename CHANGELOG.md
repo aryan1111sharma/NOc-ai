@@ -5,6 +5,95 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.13.0] - 2026-09-02
+
+### Features
+
+- **kb:** Parse .docx documents into headed segments ([`8d8912f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/8d8912f6eb5b6a11ae710aee39073b6d2db2bbef))
+- **kb:** Parse .xlsx per sheet and .csv with header rows retained ([`67b75fe`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/67b75feb885aabe48ef21acfef478226a7f68f0b))
+- **kb:** Repeat header row on every chunk of tabular content ([`dab6974`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/dab697402282b703d76e0f3de7073a70ef8c4730))
+- **kb:** Caller identity and contributor permission gate ([`f06e7c9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f06e7c963d2908c08c4d89db38493c0c647ddf8f))
+- **kb:** S3 corpus access with per-user upload isolation ([`ef81a05`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ef81a0545065aa2993396e30a30b5c06702df17c))
+- **kb:** List indexed documents with chunk counts and provenance ([`110044a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/110044ab60ea3f3a5c3b50cfacc6d6b64353077c))
+- **kb:** Settings for contributed uploads and contributor roles ([`ace51ef`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ace51efe7196eebfee25a088dbdca61c34349893))
+- **kb:** Role-gated upload, remove and list for the contributed corpus ([`647782c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/647782c1e27df5358bfc469a65aeb310fe92f2d1))
+- **kb:** Register kb_upload_document, kb_remove_document and kb_list_documents ([`c1fa0ca`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c1fa0ca14fb1dc22562e3e4d3be78faeae390322))
+- **kb:** Wire the S3 writer at startup, degrading to search-only when unset ([`992f29c`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/992f29c3dee56c63efba7c75e25fc5ada2f0135e))
+- **kb:** Departmental knowledge bases with admin plane and browser uploads ([`ef2c707`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ef2c707c4e1ccaef7f70079781de882086020175))
+- **noc:** Freshness envelope with live->history fallback ([`a0f3eed`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a0f3eed0d302f3038577925e2aa08deb812140db))
+- **noc:** Catalog describes all 239 on-charger endpoints with roles ([`e931f92`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e931f921636f8a518137722397538001a4860208))
+- **noc:** Noc_report and noc_stats dispatchers over 24 endpoints ([`1fc20ca`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/1fc20caeba1daa733fbe88ce4a357b15f4022e58))
+- **noc:** Noc_fleet_status answers which chargers are down ([`3f4bd64`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3f4bd6485fc14482ad727628bd102f7c01236d4e))
+- **noc:** Per-charger history composites that survive an offline charger ([`2fbe41d`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2fbe41d9056b9e24fb4465c47b9eadb59ef814be))
+- **noc:** Prune generated tool set from 177 to 113 ([`c1f50f9`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c1f50f9438abd6759dc540b5fef147d2fdcdb69d))
+- **noc:** Live->history fallback in three existing charger tools ([`156553b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/156553bca82486e85763624817c64d53cf7b3521))
+
+### Bug Fixes
+
+- **kb:** Tag docx tables with the heading they sit under, not the last one ([`35807b7`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/35807b7027e98ed335abefc9e465148614c602ae))
+- **kb:** Keep uncalculated formulas, trim phantom columns, strip CSV BOM ([`116273e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/116273ee03d8a7fb942f3f03c81fb73dfecb1f84))
+- **kb:** Hard-split a tabular row wider than the chunk budget ([`b2582c2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b2582c28e569412a44a4ca76cdc69a7585154558))
+- **kb:** Do not leak the first workbook when the second open fails ([`fecbaba`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fecbaba4ab8fa40228331ae1cc31a7dcd1c06286))
+- **kb:** Never base64-decode the caller role ([`f12b899`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/f12b8991cd781842e3640e7a426dff9166747946))
+- **kb:** Index a document before deleting its previous version ([`9af45fc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/9af45fc2014abd9674835016466c74672e32bd1b))
+- **kb:** Reject path-like corpus names, report replacements, wrap S3 failures ([`da40cfb`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/da40cfb4de03d7e9a81bbc69fa93041eb8f791e6))
+- **kb:** Merge provenance across chunks instead of taking whichever scroll yields first ([`d219793`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d21979319fb52b946c900e74b351dced24e54ae0))
+- **kb:** Refuse a zero or negative upload cap at startup ([`25270ec`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/25270ec28b987c895104922ed1fdf8bb459d533a))
+- **kb:** Raise on an S3 failure instead of reporting a document absent ([`ac70410`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ac70410679dd2ac72f312467a8b4f8bc7e3f29c9))
+- **kb:** Stop _error_code raising from inside an exception handler ([`6beb9f1`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6beb9f1a9b6b1be585c608d5166006de11cb0835))
+- **kb:** Repair a missing corpus object instead of reporting it already indexed ([`d99ffee`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d99ffee0d24085b417f1c5e9a108ac35819b0948))
+- **kb:** Move the upload cache out of the walked corpus tree ([`b10e37b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/b10e37bacff639710acf4d019ed720216de16b5f))
+- **kb:** Index before copying so a failed upload cannot destroy the document it replaced ([`28fed8e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/28fed8e3bd6ae577cce32ec5cb2d8255563ad1ee))
+- **kb:** Degrade to search-only when the S3 client cannot be built ([`26315be`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/26315be765bf8e80b6af2e6a177ee84f627cd22e))
+- **chat:** Raise the nginx body limit so document uploads are not rejected ([`a9a9686`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a9a9686c1ad25d593ce52be290b4e674aa33075e))
+- **kb:** Repair three defects the combined suite caught after the merge ([`37b67cd`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/37b67cd33ee1351e6d34baee7cace94201524eed))
+- **kb:** Correct kb_admin_create_kb's description to match what it does ([`89f2e38`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/89f2e38d6eebb78652c1fc8c0fed3fcb08c77a64))
+- **noc:** Harden freshness envelope per code review ([`c5e92c8`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c5e92c856cd9a1f8782e2cf69818a0cdb386065a))
+- **noc:** Close charger-proxy URL injection in curated read tools ([`ee4c4b0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ee4c4b02b07f66b88187f4284f5cdaeffdfd3642))
+- **noc:** Reject a bare dot-segment charger_id ([`2b20dee`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2b20deec0133c358e0da80fac26ec57982603db0))
+- **noc:** Validate charger_id, don't just encode it ([`172bc4a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/172bc4a54087d38296d4c8dcf0b8920450672d69))
+- **noc:** Correct catalog false claims, rename read_endpoints, hoist reason string, guard req body ([`c3621bf`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c3621bfa080c3229d5d40133643dd686e8cb3bb6))
+- **noc:** Use is_error() instead of reimplementing the error check in reports.py ([`ff681e4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ff681e4abaa80d6ab94cf6f7bc0a9ea2e22e4cac))
+- **noc:** Reject as_map filters the /chargers/map endpoint can't honour ([`eaa26cc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/eaa26ccba86735c15726e7d4f8408dd2d2644acf))
+- **noc:** History composites report the oldest sub-payload's as_of; add asymmetric-failure test ([`7157a61`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7157a61e32e751edf9c46e223b54341fcd4a9e9f))
+- **noc:** Stop the sessions exclusion pattern from swallowing sessions/active ([`eb0d0f4`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/eb0d0f48047e29046a207c781ebe5628e04eb8a5))
+- **noc:** Stop fallback from asserting a false cause, and surface gun-scope widening ([`42e66b0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/42e66b0a01510103bef9f3095a360640732af1d2))
+
+### Other
+
+- **kb:** Reconcile the departmental KB registry with the S3 contributed corpus ([`cd7fba3`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/cd7fba3729d50d90b1634c45ee25cb4a32f4dc6b))
+
+### Refactoring
+
+- **kb:** Extract ingest_file and survive one unreadable document ([`159258f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/159258f0e637f28debe33ce770e2b8f3f81325a6))
+- **noc:** Move control-center catalog out of server.py ([`fcf05d2`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fcf05d21415a16479fb8d3f4950cba6521addcf8))
+
+### Documentation
+
+- **kb:** Design spec for chat-based knowledge base document upload ([`525cde5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/525cde5b13d14f16a83dd02ba7a6fd95e633c714))
+- **kb:** Add Word/Excel parsing and vector-store decisions to upload spec ([`7a5b866`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/7a5b866542f8abddc7dddaef7e118293e169e358))
+- **kb:** Implementation plan for chat-based knowledge base upload ([`3355969`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/33559690d218a03f57b5069fd82803cc85fa019b))
+- **kb:** Correct the docx parser in the plan after review findings ([`d8e189a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d8e189a1986af5913db36a796819ea517c2c6d1c))
+- **kb:** Record parser limitations found by exercising the libraries ([`859eb9b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/859eb9baaa8d3de53d274b6b7492523ef67354b2))
+- **kb:** Correct the spreadsheet parsers in the plan after review findings ([`3e09bad`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/3e09badd1d0ccbd3313749e3274aa69cb4736321))
+- **kb:** Hard-split over-wide tabular rows in the plan ([`34d4881`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/34d4881cec4449033a15208119ba154cbfe47d17))
+- **kb:** Guard the S3 pagination loop in the plan ([`565942f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/565942fab4a36bde0cb119554271c9c4f36acd5b))
+- **kb:** Index before deleting, so a failed re-ingest cannot lose a document ([`2dbb8f0`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2dbb8f03f5c19e76ff76c807bc0daf1244f4a544))
+- **kb:** Correct the identity gate in the plan after security review ([`39def6a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/39def6a4acb9449880c78e4fea9c20305af47fa7))
+- **kb:** Record how provenance can be lost and how listing resolves it ([`bedc5ad`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bedc5ad4b13855640b71b8e753860197af7bf2ba))
+- **kb:** Fix an unpassable existence-oracle test in the plan ([`6c39c9e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/6c39c9e5ea6e16464eba678144aeb7c51b59e342))
+- **kb:** Fix three writer defects in the plan found during implementation ([`fdad71f`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fdad71ff2e4695af9af4fe1ddad17201642ecade))
+- **kb:** Add the upload-cache volume and record the copy/index race ([`fa15e68`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/fa15e684cae33c8010d5e8e7e00f2230fdb5ace3))
+- **noc:** Design for curated read tools + tool-surface pruning ([`d329957`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/d329957504a55852e42a938e5a7f0a1ad435f731))
+- **noc:** Implementation plan for curated read tools + pruning ([`53ebf4e`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/53ebf4edaf0f81a6defc9492298efbd23ff1fc01))
+- **noc:** Document curated read tools and freshness envelope ([`c751adc`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/c751adc8e4aea49204eda77578ee148862ce7adc))
+
+### Testing
+
+- **kb:** Pin the header-only tabular case ([`85b929a`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/85b929aa53d437052f0256eb63de9527c5ebc5b1))
+- **kb:** Pin the provenance merge with a source whose chunks scroll unfavourably ([`e75318b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/e75318b155281964708d998347d81d3c2be38f28))
+- **noc:** Track conftest.py so the suite collects on a clean checkout ([`57030ed`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/57030ed83dd64adb4cae2ff0ddbcad01abe989a8))
+
 ## [0.12.2] - 2026-08-23
 
 ### Chores

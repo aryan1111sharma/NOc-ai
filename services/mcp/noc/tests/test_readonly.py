@@ -33,6 +33,43 @@ def test_ignores_non_proxy_tools_even_with_method():
     assert _blocked_method("dashboard_summary_api_v1_dashboard_summary_get", {"method": "POST"}) is None
 
 
+# --- charger-reaching tools without "proxy" in the name -------------------------------
+# The curated control-center tools reach a live charger through the same NOC proxy route,
+# but none of their names contains "proxy". A name-substring test therefore exempted all
+# 13 of them; coverage must follow "can this tool reach a charger", not the tool's name.
+
+CURATED = [
+    "charger_get_charging_status", "charger_get_session_details", "charger_get_meters",
+    "charger_get_ocpp_status", "charger_get_network_status", "charger_get_system_info",
+    "charger_get_allocation_state", "charger_get_pm_power", "charger_get_alarms",
+    "charger_get_temperature", "charger_list_log_sources", "charger_get_logs",
+    "charger_get_device_metrics",
+]
+
+
+@pytest.mark.parametrize("tool_name", CURATED)
+def test_blocks_non_get_method_on_curated_charger_tools(tool_name):
+    assert _blocked_method(tool_name, {"charger_id": "CHG-1", "method": "POST"}) is not None
+
+
+@pytest.mark.parametrize("tool_name", CURATED)
+def test_allows_get_method_on_curated_charger_tools(tool_name):
+    assert _blocked_method(tool_name, {"charger_id": "CHG-1", "method": "GET"}) is None
+    assert _blocked_method(tool_name, {"charger_id": "CHG-1"}) is None
+
+
+def test_blocks_a_hypothetical_14th_charger_tool():
+    # A tool added later with neither "proxy" nor "charger" in its name is still covered
+    # because it takes a charger_id -- i.e. it can reach a charger.
+    assert _blocked_method("gun_diagnostics_snapshot",
+                           {"charger_id": "CHG-1", "method": "DELETE"}) is not None
+
+
+def test_blocks_ssh_tools_with_non_get_method():
+    assert _blocked_method("charger_ssh_run_command",
+                           {"charger_id": "CHG-1", "method": "POST"}) is not None
+
+
 def _ctx(name, arguments):
     """Minimal stand-in for a MiddlewareContext[CallToolRequestParams]."""
     return SimpleNamespace(message=SimpleNamespace(name=name, arguments=arguments))
@@ -84,3 +121,26 @@ def test_build_server_registers_readonly_middleware(monkeypatch):
 
     mcp = build_server()
     assert any(isinstance(m, ReadOnlyProxyMiddleware) for m in mcp.middleware)
+
+
+@pytest.mark.asyncio
+async def test_every_tool_that_accepts_a_method_arg_is_covered():
+    """Spec-driven: no tool may expose a ``method`` argument the guard does not inspect.
+
+    This is the invariant the old ``"proxy" in tool_name`` check could not express. It is
+    checked against the tools the server actually registers, so a future spec regeneration or
+    a new hand-written tool that exposes ``method`` fails here instead of shipping exempt.
+    """
+    from fastmcp import Client
+
+    from tests.fake_noc import build_test_server
+
+    async with Client(build_test_server()) as client:
+        tools = await client.list_tools()
+
+    with_method = [t for t in tools
+                   if "method" in ((t.inputSchema or {}).get("properties") or {})]
+    assert with_method, "expected the charger-proxy tools to expose a method argument"
+    for tool in with_method:
+        assert _blocked_method(tool.name, {"method": "POST"}) is not None, (
+            f"{tool.name} exposes a 'method' argument but is not guarded")

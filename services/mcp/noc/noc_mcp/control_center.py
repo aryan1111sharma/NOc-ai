@@ -10,17 +10,87 @@ plus the generic proxy.
 
 from __future__ import annotations
 
-from typing import Optional
+import re
+from typing import Any, Optional, Tuple
+from urllib.parse import quote
+
+# Conservative allowlist for the device path. Every path this module builds is a fixed
+# template plus substituted values (gun_id, log source), and all of them are drawn from
+# this set: letters, digits, '-', '_', '.', '~' and the '/' separators.
+_PATH_ALLOWED = re.compile(r"^[A-Za-z0-9._~/-]+$")
+
+_MIN_PORT, _MAX_PORT = 1, 65535
+
+
+def _validate_proxy_url(charger_id: Any, port: Any, path: Any) -> Tuple[Optional[str], Optional[str]]:
+    """Build the charger-proxy URL, or explain why the inputs are unsafe.
+
+    Returns ``(url, None)`` on success or ``(None, reason)`` on rejection. The caller turns a
+    reason into the module's structured error payload rather than raising, so composites keep
+    degrading to partial results (never-raise contract).
+
+    Why this exists: the NOC charger-proxy route honours a ``?method=`` query parameter and
+    forwards that verb to live charger hardware. Any model-controlled string that can inject a
+    ``?`` — or climb out of its path segment with ``..`` — turns a read-only tool into a write
+    to high-voltage equipment. httpx does not encode ``?`` in a relative-URL string and it
+    normalises dot segments, so f-string interpolation alone is not safe.
+
+    path: validated *and* encoded, deliberately both.
+      * Validation (the allowlist + the dot-segment / ``?#\\`` rejections) is the primary
+        control: it is fail-closed and it fails *loudly*, so a hostile or malformed path
+        surfaces as an error instead of being silently rewritten into a weird-but-harmless URL
+        that the caller then has to reason about.
+      * Per-segment ``quote(seg, safe="")`` is the structural backstop. ``path`` legitimately
+        contains ``/`` separators, so it cannot be quoted wholesale; quoting each segment keeps
+        the template's structure while guaranteeing that no segment can ever contribute URL
+        syntax. Under the current allowlist this encoding is a no-op (every allowed character
+        is RFC 3986 unreserved) — which is exactly the point: it costs nothing today and it
+        means a future widening of the allowlist cannot silently reintroduce injection.
+    """
+    if not isinstance(charger_id, str) or not charger_id.strip():
+        return None, "ValueError: charger_id must be a non-empty string"
+    # safe="" so '/', '?', '&' and '#' are percent-encoded and cannot escape this segment.
+    charger_seg = quote(charger_id, safe="")
+
+    if isinstance(port, bool):  # bool is an int subclass; never a real port
+        return None, f"ValueError: port must be an integer (got {port!r})"
+    try:
+        port_num = int(port)
+    except (TypeError, ValueError):
+        return None, f"ValueError: port must be an integer (got {port!r})"
+    if not _MIN_PORT <= port_num <= _MAX_PORT:
+        return None, f"ValueError: port out of range 1-65535 (got {port!r})"
+
+    if not isinstance(path, str) or not path.strip():
+        return None, "ValueError: path must be a non-empty string"
+    for bad in ("?", "#", "\\"):
+        if bad in path:
+            return None, f"ValueError: path must not contain {bad!r}"
+    if not _PATH_ALLOWED.match(path):
+        return None, "ValueError: path contains characters outside [A-Za-z0-9._~/-]"
+    segments = path.split("/")
+    for seg in segments:
+        if seg in ("", ".", ".."):
+            # '' also rejects a leading/trailing slash: callers pass paths without either.
+            return None, f"ValueError: path segment {seg!r} is not allowed"
+
+    device_path = "/".join(quote(seg, safe="") for seg in segments)
+    return f"/api/v1/chargers/{charger_seg}/proxy/{port_num}/{device_path}", None
 
 
 async def _proxy_get(client, charger_id: str, port: int, path: str) -> dict:
     """GET one on-charger endpoint through the NOC proxy; return device JSON.
 
-    On any failure (offline charger, non-2xx, transport error, non-JSON) returns a structured
-    ``{"error", "port", "path"}`` instead of raising, so composites degrade to partial results.
-    Non-dict JSON (e.g. a top-level list) is wrapped as ``{"data": <value>}``.
+    ``charger_id``, ``port`` and ``path`` are validated and encoded here — this is the single
+    choke point through which every curated tool reaches a charger (see ``_validate_proxy_url``).
+
+    On any failure (rejected input, offline charger, non-2xx, transport error, non-JSON) returns
+    a structured ``{"error", "port", "path"}`` instead of raising, so composites degrade to
+    partial results. Non-dict JSON (e.g. a top-level list) is wrapped as ``{"data": <value>}``.
     """
-    url = f"/api/v1/chargers/{charger_id}/proxy/{port}/{path}"
+    url, reason = _validate_proxy_url(charger_id, port, path)
+    if url is None:
+        return {"error": reason, "port": port, "path": path}
     try:
         resp = await client.get(url)
         resp.raise_for_status()

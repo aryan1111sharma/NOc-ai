@@ -5,6 +5,16 @@ This file is generated from [Conventional Commits](https://www.conventionalcommi
 by [git-cliff](https://git-cliff.org) — do not edit by hand.
 
 
+## [0.13.1] - 2026-09-02
+
+### Bug Fixes
+
+- **noc:** Validate identifiers on the backend history routes, and centralise the GET ([`ea4343b`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/ea4343b2cf0c14f600ba4e2e048f0b76429ddb73))
+- **noc:** Anchor the identifier and URL allowlists with \Z, not $ ([`2e3e883`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/2e3e883d198a89d8ebaa144e2c33d40c03490742))
+- **noc:** Http.get refuses a 'method' query parameter outright ([`bbcb397`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/bbcb397b10115d669d398a24133838b255f879bc))
+- **noc:** Stop leaking backend error bodies to the model; close review gaps ([`a01b9f5`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/a01b9f585991e41fdd4f1a37811855857526c38d))
+- **build:** Track .gitattributes so shell scripts keep LF endings ([`65fa259`](https://github.com/Quench-EV-Charger/noc-mcp-agent/commit/65fa25988efae39b4c276f7e79b5802f2603112d))
+
 ## [0.13.0] - 2026-09-02
 
 ### Features

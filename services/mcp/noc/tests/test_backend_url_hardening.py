@@ -232,6 +232,20 @@ async def test_get_always_sends_params_even_when_none_were_asked_for():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("key", ["method", "METHOD", " Method "])
+async def test_get_refuses_a_method_query_parameter_outright(key):
+    """``method`` is the one parameter that turns a backend read into charger actuation.
+
+    No call site passes it; refusing makes that a control rather than a convention.
+    """
+    seen, handler = _capturing()
+    async with _client(handler) as c:
+        out = await get(c, "/api/v1/chargers", {key: "POST"})
+    assert seen == [], f"a request was made: {[str(r.url) for r in seen]}"
+    assert "error" in out and "method" in out["error"]
+
+
+@pytest.mark.asyncio
 async def test_get_rejects_before_any_socket_is_touched():
     seen, handler = _capturing()
     async with _client(handler) as c:

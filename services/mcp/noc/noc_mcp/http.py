@@ -13,8 +13,13 @@ luck: their ``params={...}`` happened to overwrite the injected query string.
 
 The three properties below exist so that failure mode is unrepresentable, not merely absent:
 
-1. **``params`` is always sent.** It defaults to ``{}`` and is passed to httpx on every call,
-   so a query string smuggled into a path can never survive as real query parameters.
+1. **``params`` is always sent, and may never carry ``method``.** It defaults to ``{}`` and is
+   passed to httpx on every call, so a query string smuggled into a path cannot survive as real
+   query parameters; and the one parameter that turns a read into an actuation is refused
+   outright. No call site passes it -- every caller builds params from a fixed set of filter
+   names -- so this costs nothing and makes the invariant explicit instead of conventional.
+   (The charger proxy's own ``?method=`` handling stays where it belongs, behind
+   ``control_center._proxy_get``, which never sends query parameters at all.)
 2. **Model-controlled path components are validated, by name.** A caller does not interpolate
    an identifier; it hands over a *template* plus typed identifier keywords
    (``charger_id=``/``session_id=``), which are validated with ``noc_mcp.identifiers`` -- the
@@ -115,8 +120,14 @@ async def get(client, url: str, params: Optional[Mapping[str, Any]] = None, **id
     built, reason = build_url(url, **ids)
     if built is None:
         return {"error": reason, "url": url}
+    query = dict(params or {})
+    if any(str(key).strip().lower() == "method" for key in query):
+        # The NOC charger-proxy route reads ?method= to choose the verb it forwards to live
+        # hardware. No backend read this helper serves needs it; refusing is fail-closed.
+        return {"error": f"ValueError: 'method' is not a permitted query parameter ({url!r})",
+                "url": built}
     try:
-        resp = await client.get(built, params=dict(params or {}))
+        resp = await client.get(built, params=query)
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, dict) else {"data": data}

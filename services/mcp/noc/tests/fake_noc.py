@@ -40,6 +40,14 @@ _DEVICE = {
     (8005, "api/v1/devtools/metrics"): {"cpu": {"pct": 12}, "memory": {"pct": 40}, "disk": {"pct": 55}},
 }
 
+# Canned NOC backend (non-proxy) responses keyed by path.
+_BACKEND = {
+    "/api/v1/reports/session-failures": {"rows": [{"charger_id": "CHG-1", "reason": "PowerLoss"}]},
+    "/api/v1/reports/fault-frequency": {"rows": [{"alarm_key": "E12", "count": 9}]},
+    "/api/v1/stats/sessions/failed": {"rows": [{"session_id": "S9"}]},
+    "/api/v1/stats/error-trends": {"buckets": [{"t": "2026-09-01T00:00:00Z", "n": 3}]},
+}
+
 
 def _handler(request: httpx.Request) -> httpx.Response:
     path = request.url.path
@@ -59,6 +67,8 @@ def _handler(request: httpx.Request) -> httpx.Response:
         if payload is None:
             return httpx.Response(404, json={"detail": f"no route {port_str}/{device_path}"})
         return httpx.Response(200, json=payload)
+    if path in _BACKEND:
+        return httpx.Response(200, json=_BACKEND[path])
     return httpx.Response(404, json={"detail": "unhandled"})
 
 

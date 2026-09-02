@@ -147,11 +147,17 @@ async def _get_ocpp_status_with_fallback(client, charger_id: str) -> dict:
         return await _get(client, f"/api/v1/chargers/{charger_id}/ocpp-config/cache", {})
 
     return await live_or_history(live, cached,
-                                 reason="charger offline; OCPP config served from NOC cache")
+                                 reason="live read failed; OCPP config served from NOC cache")
 
 
-async def _get_alarms_with_fallback(client, charger_id: str, gun_id) -> dict:
-    """Live alarms; on failure, the backend's alarm history."""
+async def _get_alarms_with_fallback(client, charger_id: str, gun_id: Optional[int]) -> dict:
+    """Live alarms; on failure, the backend's alarm history.
+
+    ``/history/alarms`` has no gun filter server-side, so a gun-scoped request that falls back
+    widens to charger-wide history -- that widening is called out in ``reason`` rather than
+    left silent, since attributing another gun's fault to the requested one is a real
+    misdiagnosis risk on a multi-gun charger.
+    """
     rejected = _rejected_charger_id(charger_id)
     if rejected is not None:
         return rejected
@@ -170,12 +176,19 @@ async def _get_alarms_with_fallback(client, charger_id: str, gun_id) -> dict:
     async def history():
         return await _get(client, f"/api/v1/chargers/{charger_id}/history/alarms", {})
 
-    return await live_or_history(live, history,
-                                 reason="charger offline; alarms served from NOC history")
+    reason = "live read failed; alarms served from NOC history"
+    if gun_id is not None:
+        reason += f" (charger-wide, not filtered to gun {gun_id})"
+    return await live_or_history(live, history, reason=reason)
 
 
-async def _get_session_details_with_fallback(client, charger_id: str, gun_id) -> dict:
-    """Live session details; on failure, the backend's session history."""
+async def _get_session_details_with_fallback(client, charger_id: str, gun_id: Optional[int]) -> dict:
+    """Live session details; on failure, the backend's session history.
+
+    ``/history/sessions`` has no gun filter server-side, so a gun-scoped request that falls
+    back widens to charger-wide history -- see ``_get_alarms_with_fallback`` for why that
+    widening is surfaced in ``reason`` instead of left silent.
+    """
     rejected = _rejected_charger_id(charger_id)
     if rejected is not None:
         return rejected
@@ -195,8 +208,10 @@ async def _get_session_details_with_fallback(client, charger_id: str, gun_id) ->
     async def history():
         return await _get(client, f"/api/v1/chargers/{charger_id}/history/sessions", {})
 
-    return await live_or_history(live, history,
-                                 reason="charger offline; sessions served from NOC history")
+    reason = "live read failed; sessions served from NOC history"
+    if gun_id is not None:
+        reason += f" (charger-wide, not filtered to gun {gun_id})"
+    return await live_or_history(live, history, reason=reason)
 
 
 def _register_control_center_tools(mcp, client) -> None:

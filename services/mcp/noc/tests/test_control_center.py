@@ -119,6 +119,7 @@ async def test_composite_degrades_to_partial_on_sub_call_failure():
     # config carries a structured error — the whole tool does not fail.
     async with Client(build_test_server()) as c:
         res = (await c.call_tool("charger_get_ocpp_status", {"charger_id": "PARTIAL"})).data
+    assert res["source"] == "live"
     assert res["status"] == {"connected": True, "url": "wss://ocpp"}
     assert "error" in res["config"] and res["config"]["path"] == "api/v1/config/ocpp"
 
@@ -187,6 +188,7 @@ async def test_ocpp_status_falls_back_for_offline_charger():
         out = await _get_ocpp_status_with_fallback(c, "OFFLINE")
     assert out["source"] == "history"
     assert out["HeartbeatInterval"] == "60"
+    assert out["reason"] == "live read failed; OCPP config served from NOC cache"
 
 
 @pytest.mark.asyncio
@@ -195,6 +197,7 @@ async def test_alarms_fall_back_to_history_for_offline_charger():
         out = await _get_alarms_with_fallback(c, "OFFLINE", None)
     assert out["source"] == "history"
     assert out["alarms"][0]["code"] == "E99"
+    assert out["reason"] == "live read failed; alarms served from NOC history"
 
 
 @pytest.mark.asyncio
@@ -206,8 +209,32 @@ async def test_alarms_live_path_unchanged():
 
 
 @pytest.mark.asyncio
+async def test_alarms_fall_back_for_gun_scoped_query_widens_to_charger_wide():
+    # /history/alarms has no gun filter server-side, so a gun-scoped fallback widens to
+    # charger-wide history -- the caveat must be explicit in `reason`, not silent.
+    async with build_test_client() as c:
+        out = await _get_alarms_with_fallback(c, "OFFLINE", 1)
+    assert out["source"] == "history"
+    assert out["alarms"][0]["code"] == "E99"
+    assert out["reason"] == (
+        "live read failed; alarms served from NOC history (charger-wide, not filtered to gun 1)")
+
+
+@pytest.mark.asyncio
 async def test_session_details_fall_back_for_offline_charger():
     async with build_test_client() as c:
         out = await _get_session_details_with_fallback(c, "OFFLINE", None)
     assert out["source"] == "history"
     assert out["sessions"][0]["session_id"] == "S-old"
+    assert out["reason"] == "live read failed; sessions served from NOC history"
+
+
+@pytest.mark.asyncio
+async def test_session_details_fall_back_for_gun_scoped_query_widens_to_charger_wide():
+    # /history/sessions has no gun filter server-side either -- same caveat as alarms.
+    async with build_test_client() as c:
+        out = await _get_session_details_with_fallback(c, "OFFLINE", 1)
+    assert out["source"] == "history"
+    assert out["sessions"][0]["session_id"] == "S-old"
+    assert out["reason"] == (
+        "live read failed; sessions served from NOC history (charger-wide, not filtered to gun 1)")

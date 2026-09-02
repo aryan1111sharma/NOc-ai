@@ -16,11 +16,13 @@ import re
 import secrets
 import time
 from typing import Optional
+from urllib.parse import quote
 
 from websockets.asyncio.client import connect as _ws_connect
 from websockets.exceptions import WebSocketException
 
 from .config import settings
+from .identifiers import validate_charger_id
 
 # token -> {charger_id, command, username, password, created_at}
 _PENDING: dict[str, dict] = {}
@@ -184,9 +186,20 @@ def _configure_audit_logger() -> None:
 
 
 def _default_ws_url_builder(charger_id: str) -> str:
+    """Build the charger's WebSocket PTY URL.
+
+    Fail-closed backstop: an unvalidated charger_id spliced in here could steer the PTY to a
+    different charger than the one the human approved in charger_ssh_prepare (the preview
+    shows the id, the URL is built from it) -- a confused deputy on live hardware. prepare
+    already rejects such ids, so this raise is unreachable in normal flow and stays a raise
+    rather than a silent rewrite.
+    """
+    reason = validate_charger_id(charger_id)
+    if reason is not None:
+        raise ValueError(reason)
     base = settings.noc_base_url.rstrip("/")
     ws = base.replace("https://", "wss://").replace("http://", "ws://")
-    return f"{ws}/ws/ssh-terminal/{charger_id}"
+    return f"{ws}/ws/ssh-terminal/{quote(charger_id, safe='')}"
 
 
 def _register_ssh_tools(mcp, client, ws_url_builder=None) -> None:
@@ -202,6 +215,11 @@ def _register_ssh_tools(mcp, client, ws_url_builder=None) -> None:
         it returns a one-time confirmation_token and a preview. You MUST show the user the
         command + charger and get their explicit approval, then call charger_ssh_execute with
         the token. This runs on real hardware; treat it as such."""
+        # Reject before minting: the token is what a human approves, and the approval preview
+        # echoes charger_id, so a crafted id must never reach that preview.
+        reason = validate_charger_id(charger_id)
+        if reason is not None:
+            return {"error": reason}
         token = _mint_pending({
             "charger_id": charger_id, "command": command,
             "username": ssh_username, "password": ssh_password,

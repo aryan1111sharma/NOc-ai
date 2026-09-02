@@ -63,9 +63,12 @@ python scripts/generate_openapi.py /path/to/noc-server/noc_backend
 
 Beyond the NOC API tools, the server adds one knowledge tool, **`get_control_center_api_catalog`**,
 built from `noc_mcp/catalog/rbac-rules.csv` (the RBAC-authoritative on-charger API list). It
-returns the **124 GET (read) endpoints** across the on-device services — network/GSM (:8000),
-RFID (:8001), power allocation (:8002), charging controller (:8003), and platform dev-tools /
-diagnostics (:8005-8007) — with each endpoint's port, path, required role, and response schema.
+returns **all 239 endpoints** across the on-device services — network/GSM (:8000), RFID (:8001),
+power allocation (:8002), charging controller (:8003), and platform dev-tools / diagnostics
+(:8005-8007) — with each endpoint's port, path, required role, and response schema. Only the
+**124 GET endpoints** are marked `callable: true`; the remaining non-GET entries carry
+`callable: false` and a `not_callable_reason` — listed for awareness (so the model can tell an
+operator what a charger supports) but never callable by any route.
 
 The model calls this to discover what live per-charger data exists, then fetches a specific
 endpoint through the **generic charger proxy** tool
@@ -102,6 +105,72 @@ The long tail (~110 other on-charger GET endpoints) stays reachable via
 `get_control_center_api_catalog` + the GET-locked generic proxy. The `logs`/`metrics` tools need
 an admin-level service account; others are customer/operator level.
 
+## Curated NOC-backend tools
+
+The 13 Tier-1 tools above all read a live charger through the proxy — they need it online. These
+8 tools instead read the NOC backend's own database, so they answer whether or not the charger is
+online:
+
+| Tool | Reads |
+|---|---|
+| `noc_report(report, ...)` | 13 fleet reports: session failures, fault frequency, MTTR, energy, warranty, ticket resolution |
+| `noc_stats(metric, ...)` | 11 fleet statistics: alarm stats, error trends, session stats |
+| `noc_fleet_status(...)` | Which chargers are online/offline right now, with filters |
+| `noc_charger_history(charger_id)` | Recent sessions + alarm history for one charger |
+| `noc_charger_telemetry(charger_id)` | Latest snapshot, time-bucketed aggregates, raw history |
+| `noc_session_events(charger_id, session_id)` | Session lifecycle events (why a session failed) |
+| `noc_charger_stability(charger_id)` | Reconnect frequency, command history, SSH status |
+| `noc_charger_ocpp_config(charger_id)` | OCPP keys, live with cached fallback |
+
+`noc_report` and `noc_stats` are dispatchers: rather than exposing the backend's 24 reports/stats
+endpoints as 24 separate tools (which would swamp tool selection), each takes a `report`/`metric`
+enum documented in the tool's own description.
+
+### Freshness envelope
+
+Every curated read tool stamps its response so archived data is never mistaken for current state
+(`noc_mcp/freshness.py`):
+
+```json
+{"source": "live" | "history", "as_of": "...", "stale_seconds": 0,
+ "reason": null, "clock_skew": false}
+```
+
+`stale_seconds` may be negative when the source's clock is ahead of the server, with
+`clock_skew: true` — charger RTC drift is real, and silently clamping it would make stale data
+look fresh.
+
+`charger_get_ocpp_status`, `charger_get_alarms` and `charger_get_session_details` (all Tier-1)
+fall back to NOC-stored history when the live read fails, marked `source: "history"`. For a
+gun-scoped query the fallback is charger-wide and says so in `reason`, since the history
+endpoints accept no gun filter. `noc_charger_ocpp_config` does the same the other way round: it
+prefers the live device and only falls back to the backend's cached copy when the charger is
+offline.
+
+### Read-only guarantee
+
+Only GET operations are exposed. `ReadOnlyProxyMiddleware` (`noc_mcp/readonly.py`) rejects any
+non-GET `method` argument on a tool that can reach a live charger, and `charger_id`/`path` are
+validated fail-closed before being interpolated into the proxy URL (`validate_charger_id` in
+`noc_mcp/identifiers.py`; an allowlist for `path` in `noc_mcp/control_center.py`) — the NOC
+backend percent-decodes the path before routing, so an unvalidated id or path could otherwise
+hijack the port and device path. `noc_mcp/identifiers.py` is shared with `ssh_exec.py`, which
+splices `charger_id` into a WebSocket URL the same way, and with `validate_session_id` for the
+one route that takes a session id.
+
+There are exactly **two** ways out to the network, and every tool uses one of them:
+
+| choke point | reaches | validates |
+| --- | --- | --- |
+| `control_center._proxy_get` | the charger proxy (live device) | `_validate_proxy_url`: charger id + port + device path |
+| `http.get` (`noc_mcp/http.py`) | plain NOC backend routes | identifier keywords (`charger_id=` / `session_id=`), then the assembled URL |
+
+`http.get` always sends `params` (`{}` when unset) and re-validates the URL it assembled
+whatever it was handed, so a query string smuggled inside an identifier cannot survive as real
+query parameters — which matters because the backend's charger-proxy route reads `?method=` to
+choose the HTTP verb it forwards to live hardware. Feature modules do not call `client.get`
+themselves; `tests/test_backend_url_hardening.py` asserts that.
+
 ## SSH command execution (the one non-read-only capability)
 
 Two tools run arbitrary shell commands on a **live** charger over its WebSocket PTY, behind a
@@ -121,6 +190,10 @@ denylist). The WebSocket auth uses the server's NOC token, which must have `tool
 
 ## Notes / follow-ups
 
-- All **153** GET operations are exposed (+1 catalog tool = 154). Auto-generated tool names are
-  verbose (`dashboard_summary_api_v1_dashboard_summary_get`); a naming-cleanup pass (`mcp_names` /
-  `mcp_component_fn`) is recommended to improve LLM tool-selection.
+- The server exposes **114 tools**: 8 curated NOC-backend tools, 13 curated Tier-1 on-charger
+  tools, 2 SSH-exec tools, 1 catalog tool, 3 proxy/status tools, and 87 remaining
+  auto-generated GET operations. User-admin endpoints and every endpoint a curated tool now
+  owns are excluded from generation to keep the surface findable. Auto-generated tool names are
+  still verbose (`dashboard_summary_api_v1_dashboard_summary_get`); a naming-cleanup pass
+  (`mcp_names` / `mcp_component_fn`) is recommended to improve LLM tool-selection for the
+  remaining 87.

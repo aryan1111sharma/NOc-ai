@@ -4,7 +4,12 @@ import httpx
 import pytest
 
 from noc_mcp.auth import NocAuthClient
-from noc_mcp.control_center import _proxy_get
+from noc_mcp.control_center import (
+    _proxy_get,
+    _get_alarms_with_fallback,
+    _get_ocpp_status_with_fallback,
+    _get_session_details_with_fallback,
+)
 
 _LOGIN = "/api/v1/auth/login"
 
@@ -57,7 +62,7 @@ async def test_proxy_get_returns_error_on_offline():
 
 
 from fastmcp import Client
-from tests.fake_noc import build_test_server
+from tests.fake_noc import build_test_client, build_test_server
 
 
 @pytest.mark.asyncio
@@ -99,8 +104,9 @@ async def test_composites_merge_under_fixed_keys():
         sysinfo = (await c.call_tool("charger_get_system_info", {"charger_id": "CHG-1"})).data
         pm = (await c.call_tool("charger_get_pm_power", {"charger_id": "CHG-1"})).data
         temp = (await c.call_tool("charger_get_temperature", {"charger_id": "CHG-1"})).data
-    assert ocpp == {"status": {"connected": True, "url": "wss://ocpp"},
-                    "config": {"HeartbeatInterval": "300"}}
+    assert ocpp["source"] == "live"
+    assert ocpp["status"] == {"connected": True, "url": "wss://ocpp"}
+    assert ocpp["config"] == {"HeartbeatInterval": "300"}
     assert set(net) == {"overall", "gsm"} and net["gsm"] == {"rssi": -71, "operator": "Jio"}
     assert set(sysinfo) == {"hardware", "software", "rtc"}
     assert pm == {"pm_count": {"pm_count": 4}, "power": {"modules": [{"id": 1, "kw": 15}]}}
@@ -113,6 +119,7 @@ async def test_composite_degrades_to_partial_on_sub_call_failure():
     # config carries a structured error — the whole tool does not fail.
     async with Client(build_test_server()) as c:
         res = (await c.call_tool("charger_get_ocpp_status", {"charger_id": "PARTIAL"})).data
+    assert res["source"] == "live"
     assert res["status"] == {"connected": True, "url": "wss://ocpp"}
     assert "error" in res["config"] and res["config"]["path"] == "api/v1/config/ocpp"
 
@@ -123,8 +130,11 @@ async def test_session_details_gun_vs_history():
         gun = (await c.call_tool(
             "charger_get_session_details", {"charger_id": "CHG-1", "gun_id": 1})).data
         hist = (await c.call_tool("charger_get_session_details", {"charger_id": "CHG-1"})).data
-    assert set(gun) == {"active", "last"} and gun["active"] == {"session_id": "S1", "energy_kwh": 3.2}
-    assert set(hist) == {"history"}
+    assert gun["source"] == "live"
+    assert gun["active"] == {"session_id": "S1", "energy_kwh": 3.2}
+    assert gun["last"] == {"session_id": "S0", "stop_reason": "EVDisconnected"}
+    assert hist["source"] == "live"
+    assert hist["history"] == {"sessions": [{"session_id": "S0"}]}
 
 
 @pytest.mark.asyncio
@@ -143,8 +153,11 @@ async def test_alarms_fleet_vs_gun():
         fleet = (await c.call_tool("charger_get_alarms", {"charger_id": "CHG-1"})).data
         gun = (await c.call_tool(
             "charger_get_alarms", {"charger_id": "CHG-1", "gun_id": 1})).data
-    assert set(fleet) == {"latched", "pending"}
-    assert set(gun) == {"errors_by_gun"}
+    assert fleet["source"] == "live"
+    assert fleet["latched"] == {"latched": [{"vendor_error_code": "E12", "gun_id": 1}]}
+    assert fleet["pending"] == {"pending": []}
+    assert gun["source"] == "live"
+    assert gun["errors_by_gun"] == {"errors": [{"code": "E12"}]}
 
 
 @pytest.mark.asyncio
@@ -159,3 +172,69 @@ async def test_logs_pair_and_metrics():
     assert logs == {"data": ["line1", "line2"]}
     assert set(metrics) == {"cpu", "memory", "disk"}
     assert alloc == {"state": {"guns": 2, "allocated_kw": 60}}
+
+
+@pytest.mark.asyncio
+async def test_ocpp_status_live_is_stamped_live():
+    async with build_test_client() as c:
+        out = await _get_ocpp_status_with_fallback(c, "CHG-1")
+    assert out["source"] == "live"
+    assert out["status"]["connected"] is True
+
+
+@pytest.mark.asyncio
+async def test_ocpp_status_falls_back_for_offline_charger():
+    async with build_test_client() as c:
+        out = await _get_ocpp_status_with_fallback(c, "OFFLINE")
+    assert out["source"] == "history"
+    assert out["HeartbeatInterval"] == "60"
+    assert out["reason"] == "live read failed; OCPP config served from NOC cache"
+
+
+@pytest.mark.asyncio
+async def test_alarms_fall_back_to_history_for_offline_charger():
+    async with build_test_client() as c:
+        out = await _get_alarms_with_fallback(c, "OFFLINE", None)
+    assert out["source"] == "history"
+    assert out["alarms"][0]["code"] == "E99"
+    assert out["reason"] == "live read failed; alarms served from NOC history"
+
+
+@pytest.mark.asyncio
+async def test_alarms_live_path_unchanged():
+    async with build_test_client() as c:
+        out = await _get_alarms_with_fallback(c, "CHG-1", None)
+    assert out["source"] == "live"
+    assert out["latched"]["latched"][0]["vendor_error_code"] == "E12"
+
+
+@pytest.mark.asyncio
+async def test_alarms_fall_back_for_gun_scoped_query_widens_to_charger_wide():
+    # /history/alarms has no gun filter server-side, so a gun-scoped fallback widens to
+    # charger-wide history -- the caveat must be explicit in `reason`, not silent.
+    async with build_test_client() as c:
+        out = await _get_alarms_with_fallback(c, "OFFLINE", 1)
+    assert out["source"] == "history"
+    assert out["alarms"][0]["code"] == "E99"
+    assert out["reason"] == (
+        "live read failed; alarms served from NOC history (charger-wide, not filtered to gun 1)")
+
+
+@pytest.mark.asyncio
+async def test_session_details_fall_back_for_offline_charger():
+    async with build_test_client() as c:
+        out = await _get_session_details_with_fallback(c, "OFFLINE", None)
+    assert out["source"] == "history"
+    assert out["sessions"][0]["session_id"] == "S-old"
+    assert out["reason"] == "live read failed; sessions served from NOC history"
+
+
+@pytest.mark.asyncio
+async def test_session_details_fall_back_for_gun_scoped_query_widens_to_charger_wide():
+    # /history/sessions has no gun filter server-side either -- same caveat as alarms.
+    async with build_test_client() as c:
+        out = await _get_session_details_with_fallback(c, "OFFLINE", 1)
+    assert out["source"] == "history"
+    assert out["sessions"][0]["session_id"] == "S-old"
+    assert out["reason"] == (
+        "live read failed; sessions served from NOC history (charger-wide, not filtered to gun 1)")

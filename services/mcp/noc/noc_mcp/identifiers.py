@@ -1,7 +1,8 @@
 """Validation for NOC identifiers that get interpolated into URLs.
 
-Shared by ``control_center`` (HTTP charger proxy) and ``ssh_exec`` (WebSocket PTY), which
-both splice a caller-supplied ``charger_id`` into a URL path.
+Shared by ``control_center`` (HTTP charger proxy), ``history`` (backend history routes, via
+``noc_mcp.http``) and ``ssh_exec`` (WebSocket PTY) -- every place that splices a
+caller-supplied identifier into a URL path.
 
 Why validation and not just encoding
 ------------------------------------
@@ -30,19 +31,48 @@ from typing import Any, Optional
 # which changes how a decoding receiver parses the URL.
 _CHARGER_ID_ALLOWED = re.compile(r"^[A-Za-z0-9._-]+$")
 
+# Session ids carry the *same* hazard as charger ids -- ``/chargers/{charger_id}/sessions/
+# {session_id}/events`` splices them into the same decoded-then-routed path -- so they get the
+# same character class, and for reasons the bundled spec states rather than by assumption:
+#
+#   * the spec declares ``session_id`` as ``{"type": "string"}`` (not an integer), and
+#   * that endpoint's own description names the two concrete shapes the backend must accept:
+#     "Numeric session_id -> query TimescaleDB genone_full_state by session_id field" and
+#     chargers that "use UUID session IDs".
+#
+# Digits cover the numeric fallback, hex + '-' cover a UUID, and alphanumerics + '-'/'_' cover
+# the short prefixed ids this repo's fixtures use (``S1``, ``S-old``). '.' is admitted for the
+# same reason it is on charger ids: it is RFC 3986 *unreserved*, so it cannot change how a
+# decoding receiver parses the path -- and the dot-segment check below still rejects '.'/'..'.
+_SESSION_ID_ALLOWED = re.compile(r"^[A-Za-z0-9._-]+$")
 
-def validate_charger_id(charger_id: Any) -> Optional[str]:
-    """Return an error reason if ``charger_id`` is unsafe to interpolate, else ``None``.
 
-    Returns a reason rather than raising: both call sites answer with a structured error
+def _validate(value: Any, *, kind: str, allowed: re.Pattern) -> Optional[str]:
+    """Shared body for the identifier validators: one rule set, two names.
+
+    Returns a reason rather than raising: every call site answers with a structured error
     payload instead of propagating exceptions.
     """
-    if not isinstance(charger_id, str) or not charger_id.strip():
-        return "ValueError: charger_id must be a non-empty string"
-    if not _CHARGER_ID_ALLOWED.match(charger_id):
-        return f"ValueError: charger_id has an illegal character ({charger_id!r})"
-    if charger_id in (".", ".."):
+    if not isinstance(value, str) or not value.strip():
+        return f"ValueError: {kind} must be a non-empty string"
+    if not allowed.match(value):
+        return f"ValueError: {kind} has an illegal character ({value!r})"
+    if value in (".", ".."):
         # Matches the allowlist but is a dot segment: a decoding receiver would normalise it
         # away and shift every following segment.
-        return f"ValueError: charger_id must not be a path segment ({charger_id!r})"
+        return f"ValueError: {kind} must not be a path segment ({value!r})"
     return None
+
+
+def validate_charger_id(charger_id: Any) -> Optional[str]:
+    """Return an error reason if ``charger_id`` is unsafe to interpolate, else ``None``."""
+    return _validate(charger_id, kind="charger_id", allowed=_CHARGER_ID_ALLOWED)
+
+
+def validate_session_id(session_id: Any) -> Optional[str]:
+    """Return an error reason if ``session_id`` is unsafe to interpolate, else ``None``.
+
+    Same contract and same rules as ``validate_charger_id`` -- see ``_SESSION_ID_ALLOWED``
+    for what the bundled OpenAPI spec says a session id can actually be.
+    """
+    return _validate(session_id, kind="session_id", allowed=_SESSION_ID_ALLOWED)

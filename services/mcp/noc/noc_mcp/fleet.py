@@ -13,7 +13,8 @@ from typing import Optional
 from fastmcp import FastMCP
 
 from .freshness import HISTORY, is_error, stamp
-from .reports import _get, _params
+from .http import get
+from .reports import _params
 
 
 async def _fetch_fleet_status(client, *, offline_only: bool, online_only: bool,
@@ -34,14 +35,14 @@ async def _fetch_fleet_status(client, *, offline_only: bool, online_only: bool,
                 "accepts only customer_name. Re-run with as_map=False to use these filters."
             )}
         params = _params(customer_name=customer_name)
-        out = await _get(client, "/api/v1/chargers/map", params)
+        out = await get(client, "/api/v1/chargers/map", params)
     else:
         params = _params(search=search, customer_name=customer_name, model=model, limit=limit)
         params.update(_params(
             offline_only="true" if offline_only else None,
             online_only="true" if online_only else None,
         ))
-        out = await _get(client, "/api/v1/chargers", params)
+        out = await get(client, "/api/v1/chargers", params)
 
     return out if is_error(out) else stamp(out, source=HISTORY)
 

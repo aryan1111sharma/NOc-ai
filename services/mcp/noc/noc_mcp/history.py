@@ -6,22 +6,67 @@ moment a charger goes dark is exactly when a NOC engineer needs its recent histo
 
 ``noc_charger_ocpp_config`` is the one tool here that prefers the live device, falling back to
 the backend's cached copy and labelling the result.
+
+Identifier safety
+-----------------
+Every fetcher here splices a caller-supplied ``charger_id`` (and ``_fetch_session_events`` a
+``session_id``) into a NOC backend path. These are plain backend routes, not the hardened
+charger proxy, so they do NOT go through ``_validate_proxy_url``. Two controls cover them, and
+both are required:
+
+* each fetcher rejects an illegal identifier up front via ``_rejected_identifiers`` -- before
+  any sub-call and, for ``_fetch_charger_ocpp_config``, before ``live_or_history`` can run --
+  so a hostile id costs zero outbound requests, matching ``_proxy_get``'s fail-closed contract
+  (see ``control_center._rejected_charger_id`` for the same reasoning); and
+* every request goes out through ``noc_mcp.http.get``, which re-validates the identifiers it
+  is given, re-validates the assembled URL, and always sends ``params``.
+
+The second control is what makes the failure structural rather than a habit: a fetcher that
+forgot the first check still could not emit an injected URL.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from fastmcp import FastMCP
 
 from .control_center import _proxy_get
 from .freshness import HISTORY, extract_as_of, is_error, live_or_history, stamp
-from .reports import _get
+from .http import get
+from .identifiers import validate_charger_id, validate_session_id
+
+_CHARGER = "/api/v1/chargers/{charger_id}"
+_SESSION_EVENTS = "/api/v1/chargers/{charger_id}/sessions/{session_id}/events"
+_OCPP_CACHE = "/api/v1/chargers/{charger_id}/ocpp-config/cache"
+
+# Distinguishes "no session_id to check" from a caller who really passed ``None``, which must
+# be rejected rather than skipped.
+_UNSET = object()
 
 
 def _p(**kwargs) -> dict:
     return {k: v for k, v in kwargs.items() if v is not None}
+
+
+def _rejected_identifiers(charger_id: Any, session_id: Any = _UNSET) -> Optional[dict]:
+    """``None`` if the identifiers are safe to use, else the structured error for the first bad one.
+
+    Fail-closed and evaluated *before* any outbound request, exactly like
+    ``control_center._rejected_charger_id``: a rejected id must cost zero requests, not one
+    request that happens to fail. Placement matters as much as the check -- in
+    ``_fetch_charger_ocpp_config`` the live leg's own rejection is an ``is_error``, which
+    ``live_or_history`` reads as "device unreachable" and answers by calling the *cached* leg.
+    Validating only inside the closures would therefore let the fallback fire the hostile URL.
+
+    Reuses ``identifiers``' validators rather than restating their rules; there is exactly one
+    definition of a legal charger id and one of a legal session id in this service.
+    """
+    reason = validate_charger_id(charger_id)
+    if reason is None and session_id is not _UNSET:
+        reason = validate_session_id(session_id)
+    return {"error": reason} if reason is not None else None
 
 
 def _oldest(*payloads) -> Optional[datetime]:
@@ -35,10 +80,12 @@ def _oldest(*payloads) -> Optional[datetime]:
 
 
 async def _fetch_charger_history(client, charger_id: str, *, limit: Optional[int]) -> dict:
-    base = f"/api/v1/chargers/{charger_id}"
+    rejected = _rejected_identifiers(charger_id)
+    if rejected is not None:
+        return rejected
     params = _p(limit=limit)
-    sessions = await _get(client, f"{base}/history/sessions", params)
-    alarms = await _get(client, f"{base}/history/alarms", params)
+    sessions = await get(client, f"{_CHARGER}/history/sessions", params, charger_id=charger_id)
+    alarms = await get(client, f"{_CHARGER}/history/alarms", params, charger_id=charger_id)
     merged = {"sessions": sessions, "alarms": alarms}
     return stamp(merged, source=HISTORY, as_of=_oldest(sessions, alarms),
                  reason="NOC backend history (independent of charger state)")
@@ -47,25 +94,36 @@ async def _fetch_charger_history(client, charger_id: str, *, limit: Optional[int
 async def _fetch_charger_telemetry(client, charger_id: str, *, resolution: Optional[str],
                                    hours: Optional[int], from_ts: Optional[str],
                                    to_ts: Optional[str], limit: Optional[int]) -> dict:
-    base = f"/api/v1/chargers/{charger_id}/telemetry"
-    latest = await _get(client, f"{base}/latest", {})
-    aggregated = await _get(client, f"{base}/aggregated", _p(resolution=resolution, hours=hours))
-    history = await _get(client, f"{base}/history", _p(limit=limit, from_ts=from_ts, to_ts=to_ts))
+    rejected = _rejected_identifiers(charger_id)
+    if rejected is not None:
+        return rejected
+    base = f"{_CHARGER}/telemetry"
+    latest = await get(client, f"{base}/latest", {}, charger_id=charger_id)
+    aggregated = await get(client, f"{base}/aggregated",
+                           _p(resolution=resolution, hours=hours), charger_id=charger_id)
+    history = await get(client, f"{base}/history",
+                        _p(limit=limit, from_ts=from_ts, to_ts=to_ts), charger_id=charger_id)
     merged = {"latest": latest, "aggregated": aggregated, "history": history}
     return stamp(merged, source=HISTORY, as_of=_oldest(latest, aggregated, history),
                  reason="NOC backend telemetry (independent of charger state)")
 
 
 async def _fetch_session_events(client, charger_id: str, session_id: str) -> dict:
-    out = await _get(client, f"/api/v1/chargers/{charger_id}/sessions/{session_id}/events", {})
+    rejected = _rejected_identifiers(charger_id, session_id)
+    if rejected is not None:
+        return rejected
+    out = await get(client, _SESSION_EVENTS, {},
+                    charger_id=charger_id, session_id=session_id)
     return out if is_error(out) else stamp(out, source=HISTORY, as_of=extract_as_of(out))
 
 
 async def _fetch_charger_stability(client, charger_id: str) -> dict:
-    base = f"/api/v1/chargers/{charger_id}"
-    stability = await _get(client, f"{base}/stability", {})
-    commands = await _get(client, f"{base}/commands", {})
-    ssh = await _get(client, f"{base}/ssh-status", {})
+    rejected = _rejected_identifiers(charger_id)
+    if rejected is not None:
+        return rejected
+    stability = await get(client, f"{_CHARGER}/stability", {}, charger_id=charger_id)
+    commands = await get(client, f"{_CHARGER}/commands", {}, charger_id=charger_id)
+    ssh = await get(client, f"{_CHARGER}/ssh-status", {}, charger_id=charger_id)
     merged = {"stability": stability, "commands": commands, "ssh": ssh}
     return stamp(merged, source=HISTORY, as_of=extract_as_of(stability),
                  reason="NOC backend connection history")
@@ -76,21 +134,18 @@ async def _fetch_cached_ocpp_config(client, charger_id: str) -> dict:
 
     A 404 body carrying ``code=NO_CACHE`` means the backend has simply never cached this
     charger's config -- that must be reported distinctly from a transport/server failure, so the
-    body is inspected before ``raise_for_status`` would otherwise collapse it into a generic
-    HTTP-error string.
+    response body is inspected rather than collapsed into a generic HTTP-error string.
+    ``noc_mcp.http.get`` surfaces ``status`` and the decoded ``body`` on a non-2xx precisely so
+    this stays possible without a hand-rolled ``client.get``. The hand-rolled call this replaced
+    passed no ``params=``, which is what let a query string smuggled inside ``charger_id``
+    survive as a real ``?method=`` verb override against live charger hardware.
     """
-    url = f"/api/v1/chargers/{charger_id}/ocpp-config/cache"
-    try:
-        resp = await client.get(url)
-        if resp.status_code == 404:
-            body = resp.json()
-            if isinstance(body, dict) and body.get("code") == "NO_CACHE":
-                return {"error": "NO_CACHE"}
-        resp.raise_for_status()
-        data = resp.json()
-        return data if isinstance(data, dict) else {"data": data}
-    except Exception as e:  # noqa: BLE001 - surface any failure as a clean error payload
-        return {"error": f"{type(e).__name__}: {e}", "url": url}
+    out = await get(client, _OCPP_CACHE, {}, charger_id=charger_id)
+    if is_error(out) and out.get("status") == 404:
+        body = out.get("body")
+        if isinstance(body, dict) and body.get("code") == "NO_CACHE":
+            return {"error": "NO_CACHE"}
+    return out
 
 
 async def _fetch_charger_ocpp_config(client, charger_id: str) -> dict:
@@ -98,7 +153,14 @@ async def _fetch_charger_ocpp_config(client, charger_id: str) -> dict:
 
     A 404 with code=NO_CACHE means the backend has never cached this charger's config. That is a
     normal empty result, not a failure, so it is reported as such rather than as an error.
+
+    The id is rejected here, before ``live_or_history`` -- see ``_rejected_identifiers`` for why
+    checking inside the closures would be worse than useless.
     """
+    rejected = _rejected_identifiers(charger_id)
+    if rejected is not None:
+        return rejected
+
     async def live():
         return await _proxy_get(client, charger_id, 8003, "api/v1/config/ocpp")
 

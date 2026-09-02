@@ -8,7 +8,14 @@ from fastmcp.exceptions import ToolError
 from noc_mcp.readonly import ReadOnlyProxyMiddleware, _blocked_method
 
 # A representative exposed proxy tool name (path-based GET variant).
-PROXY = "proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get"
+#
+# This is the name FastMCP actually registers, verified against list_tools() by
+# test_the_proxy_tool_name_used_here_is_real below. The literal that used to sit here --
+# "..._api_v1_chargers__charger_id__proxy__port___path__get" -- named no tool at all: FastMCP
+# truncates generated names, and nothing checked. _blocked_method only substring-matches
+# "proxy", so the fiction went unnoticed here while the same dead string in noc_mcp/catalog.py
+# was telling the model to call a tool that does not exist.
+PROXY = "proxy_api_call_path_based_api_v1_chargers"
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "DELETE", "post", "Delete", "", "   ", 123])
@@ -68,6 +75,15 @@ def test_blocks_a_hypothetical_14th_charger_tool():
 def test_blocks_ssh_tools_with_non_get_method():
     assert _blocked_method("charger_ssh_run_command",
                            {"charger_id": "CHG-1", "method": "POST"}) is not None
+
+
+@pytest.mark.asyncio
+async def test_the_proxy_tool_name_used_here_is_real():
+    """The PROXY constant above must name a tool the server actually registers."""
+    from tests.fake_noc import build_test_server
+
+    names = {t.name for t in await build_test_server().list_tools()}
+    assert PROXY in names, f"{PROXY} is not registered; nearest: {sorted(n for n in names if 'proxy' in n)}"
 
 
 def _ctx(name, arguments):

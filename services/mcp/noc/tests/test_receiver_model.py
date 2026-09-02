@@ -185,3 +185,57 @@ async def test_log_source_cannot_re_split_the_route_at_the_receiver():
             await mcp.call_tool("charger_get_logs",
                                 {"charger_id": "CHG-1", "source": source})
     assert parsed == [], f"backend resolved a hijacked route: {parsed}"
+
+
+# --------------------------------------------------------------------------------------
+# KNOWN, PRE-EXISTING GAP -- documented here so it cannot be lost
+# --------------------------------------------------------------------------------------
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="PRE-EXISTING and OUT OF SCOPE for the history hardening: the FastMCP-generated "
+           "OpenAPI tools build their own URLs and percent-encode charger_id rather than "
+           "validating it, so a decoding receiver still re-splits the route. GET-only (no "
+           "verb override: the smuggled '?' stays inside the path, so 'method' never becomes "
+           "a real query parameter), and present before this branch. Closing it means "
+           "validating identifiers for the ~18 generated tools too -- a deliberate decision "
+           "for a human, not a silent side effect of this fix. When it is closed this test "
+           "XPASSes and fails, which is the point.")
+@pytest.mark.asyncio
+async def test_generated_openapi_tools_should_reject_a_hostile_charger_id():
+    """The generated path-based charger-proxy tool should be as fail-closed as the curated ones.
+
+    Today it is not::
+
+        proxy_api_call_path_based_api_v1_chargers(charger_id=_EVIL_HIJACK, port=8003,
+                                                  path="api/v1/charging/status")
+        SERVER PARSED charger_id = 'CHG-1'
+        SERVER PARSED port       = '8005'   <-- caller-chosen
+        SERVER PARSED path       = 'api/v1/devtools/logs/x/proxy/8003/api/v1/charging/status'
+    """
+    parsed, transport = _receiver()
+    async with Client(build_server(_client(transport))) as mcp:
+        await mcp.call_tool("proxy_api_call_path_based_api_v1_chargers",
+                            {"charger_id": _EVIL_HIJACK, "port": 8003,
+                             "path": "api/v1/charging/status"})
+    assert parsed == [], f"backend resolved a hijacked route: {parsed}"
+
+
+@pytest.mark.asyncio
+async def test_the_generated_gap_is_at_least_read_only():
+    """Whatever else it allows, the generated tool must not smuggle a verb override.
+
+    This is the invariant that separates the pre-existing GET-SSRF above from the regression
+    this branch fixed: a '?' carried inside charger_id reaches the wire percent-encoded, so it
+    stays part of the path and never becomes the ``method`` query parameter the NOC backend
+    forwards as an HTTP verb to live hardware.
+    """
+    parsed, transport = _receiver()
+    async with Client(build_server(_client(transport))) as mcp:
+        await mcp.call_tool("proxy_api_call_path_based_api_v1_chargers",
+                            {"charger_id": _EVIL_CONTACTOR, "port": 8003,
+                             "path": "api/v1/charging/status"})
+    for entry in parsed:
+        assert entry["method"] == "GET"
+        assert "method" not in entry["query_params"], (
+            f"verb override reached the receiver: {entry['query_params']}")

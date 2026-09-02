@@ -155,7 +155,21 @@ validated fail-closed before being interpolated into the proxy URL (`validate_ch
 `noc_mcp/identifiers.py`; an allowlist for `path` in `noc_mcp/control_center.py`) — the NOC
 backend percent-decodes the path before routing, so an unvalidated id or path could otherwise
 hijack the port and device path. `noc_mcp/identifiers.py` is shared with `ssh_exec.py`, which
-splices `charger_id` into a WebSocket URL the same way.
+splices `charger_id` into a WebSocket URL the same way, and with `validate_session_id` for the
+one route that takes a session id.
+
+There are exactly **two** ways out to the network, and every tool uses one of them:
+
+| choke point | reaches | validates |
+| --- | --- | --- |
+| `control_center._proxy_get` | the charger proxy (live device) | `_validate_proxy_url`: charger id + port + device path |
+| `http.get` (`noc_mcp/http.py`) | plain NOC backend routes | identifier keywords (`charger_id=` / `session_id=`), then the assembled URL |
+
+`http.get` always sends `params` (`{}` when unset) and re-validates the URL it assembled
+whatever it was handed, so a query string smuggled inside an identifier cannot survive as real
+query parameters — which matters because the backend's charger-proxy route reads `?method=` to
+choose the HTTP verb it forwards to live hardware. Feature modules do not call `client.get`
+themselves; `tests/test_backend_url_hardening.py` asserts that.
 
 ## SSH command execution (the one non-read-only capability)
 

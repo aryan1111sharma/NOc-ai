@@ -16,6 +16,7 @@ from typing import Optional
 from fastmcp import FastMCP
 
 from .freshness import HISTORY, is_error, stamp
+from .http import get
 
 # report name -> one-line description, surfaced in the tool schema.
 REPORTS = {
@@ -55,21 +56,10 @@ def _params(**kwargs) -> dict:
     return {k: v for k, v in kwargs.items() if v is not None}
 
 
-async def _get(client, url: str, params: dict) -> dict:
-    """GET a backend URL, returning a structured error rather than raising."""
-    try:
-        resp = await client.get(url, params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        return data if isinstance(data, dict) else {"data": data}
-    except Exception as e:  # noqa: BLE001 - surface any failure as a clean payload
-        return {"error": f"{type(e).__name__}: {e}", "url": url}
-
-
 async def _fetch_report(client, report: str, **filters) -> dict:
     if report not in REPORTS:
         return {"error": f"unknown report {report!r}", "valid_reports": sorted(REPORTS)}
-    out = await _get(client, f"/api/v1/reports/{report}", _params(**filters))
+    out = await get(client, f"/api/v1/reports/{report}", _params(**filters))
     return out if is_error(out) else stamp(out, source=HISTORY)
 
 
@@ -77,7 +67,7 @@ async def _fetch_stats(client, metric: str, **filters) -> dict:
     if metric not in STATS:
         return {"error": f"unknown metric {metric!r}", "valid_metrics": sorted(STATS)}
     suffix = f"/{metric}" if metric else ""
-    out = await _get(client, f"/api/v1/stats{suffix}", _params(**filters))
+    out = await get(client, f"/api/v1/stats{suffix}", _params(**filters))
     return out if is_error(out) else stamp(out, source=HISTORY)
 
 

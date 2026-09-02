@@ -15,8 +15,8 @@ from typing import Any, Optional, Tuple
 from urllib.parse import quote
 
 from .freshness import is_error, live_or_history
+from .http import get
 from .identifiers import validate_charger_id
-from .reports import _get
 
 # Conservative allowlist for the device path: letters, digits, '-', '_', '.', '~' and the '/'
 # separators, plus ':', '@' and '+' because an on-charger log source name (charger_get_logs)
@@ -144,7 +144,8 @@ async def _get_ocpp_status_with_fallback(client, charger_id: str) -> dict:
         return {"status": status, "config": config}
 
     async def cached():
-        return await _get(client, f"/api/v1/chargers/{charger_id}/ocpp-config/cache", {})
+        return await get(client, "/api/v1/chargers/{charger_id}/ocpp-config/cache",
+                         charger_id=charger_id)
 
     return await live_or_history(live, cached,
                                  reason="live read failed; OCPP config served from NOC cache")
@@ -174,7 +175,8 @@ async def _get_alarms_with_fallback(client, charger_id: str, gun_id: Optional[in
         return {"latched": latched, "pending": pending}
 
     async def history():
-        return await _get(client, f"/api/v1/chargers/{charger_id}/history/alarms", {})
+        return await get(client, "/api/v1/chargers/{charger_id}/history/alarms",
+                         charger_id=charger_id)
 
     reason = "live read failed; alarms served from NOC history"
     if gun_id is not None:
@@ -206,7 +208,8 @@ async def _get_session_details_with_fallback(client, charger_id: str, gun_id: Op
         return history if is_error(history) else {"history": history}
 
     async def history():
-        return await _get(client, f"/api/v1/chargers/{charger_id}/history/sessions", {})
+        return await get(client, "/api/v1/chargers/{charger_id}/history/sessions",
+                         charger_id=charger_id)
 
     reason = "live read failed; sessions served from NOC history"
     if gun_id is not None:

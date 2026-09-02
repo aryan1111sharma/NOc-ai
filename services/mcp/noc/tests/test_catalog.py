@@ -1,5 +1,7 @@
 """Tests for the on-charger API catalog (noc_mcp.catalog)."""
 
+import pytest
+
 from noc_mcp.catalog import _load_control_center_catalog
 
 
@@ -55,3 +57,55 @@ def test_request_schema_is_never_exposed():
     cat = _load_control_center_catalog()
     for e in cat["endpoints"]:
         assert not any("request" in k.lower() or "req_body" in k.lower() for k in e)
+
+
+# --------------------------------------------------------------------------------------
+# the tool the catalog tells the model to call must exist
+# --------------------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_catalog_names_a_proxy_tool_that_actually_exists():
+    """The catalog's instructions are only as good as the tool name in them.
+
+    The shipped catalog hardcoded
+    ``proxy_api_call_path_based_api_v1_chargers__charger_id__proxy__port___path__get`` in both
+    ``how_to_call`` and ``example``. FastMCP truncates generated tool names, so no such tool was
+    ever registered -- the catalog documented the 239-endpoint long tail and then handed the
+    model a call it could not make. The name is now discovered from the registered tools; this
+    test is what stops it rotting again.
+    """
+    from fastmcp import Client
+
+    from tests.fake_noc import build_test_server
+
+    server = build_test_server()
+    names = {t.name for t in await server.list_tools()}
+
+    async with Client(server) as client:
+        cat = (await client.call_tool("get_control_center_api_catalog")).structured_content
+
+    referenced = {cat["example"]["tool"]}
+    referenced |= {n for n in names if f"'{n}'" in cat["how_to_call"]}
+    assert cat["example"]["tool"] in names, (
+        f"catalog example names {cat['example']['tool']!r}, which is not a registered tool")
+    assert any(f"'{n}'" in cat["how_to_call"] for n in names), (
+        f"how_to_call names no registered tool: {cat['how_to_call']}")
+    assert len(referenced) == 1, f"catalog points at more than one tool: {referenced}"
+
+
+@pytest.mark.asyncio
+async def test_catalog_points_at_the_path_based_proxy_variant():
+    """Not just *a* proxy tool: the one whose arguments match what how_to_call describes
+    (charger_id + port + path, all required)."""
+    from fastmcp import Client
+
+    from tests.fake_noc import build_test_server
+
+    server = build_test_server()
+    tools = {t.name: t for t in await server.list_tools()}
+    async with Client(server) as client:
+        cat = (await client.call_tool("get_control_center_api_catalog")).structured_content
+
+    tool = tools[cat["example"]["tool"]]
+    assert {"charger_id", "port", "path"} <= set((tool.parameters or {}).get("required") or ())
+    assert set(cat["example"]["args"]) == {"charger_id", "port", "path"}

@@ -16,7 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        server: [services/mcp/noc, services/mcp/cms, services/mcp/jira, services/mcp/ecog-sd, services/mcp/platform]
+        # services/mcp/kb carries the KB upload, ingestion and isolation tests, plus the
+        # cross-layer upload-limit assertions in tests/test_upload_limits.py — which read
+        # nginx.conf and apply-patches.sh, so they need the full checkout this job has.
+        server: [services/mcp/noc, services/mcp/cms, services/mcp/jira, services/mcp/ecog-sd, services/mcp/platform, services/mcp/kb]
     name: pytest (${{ matrix.server }})
     steps:
       - name: Checkout
@@ -39,3 +42,24 @@ jobs:
         # `noc_mcp` / `cms_mcp` package imports without an editable install — matches the
         # invocation the READMEs document.
         run: python -m pytest -v
+
+  # The Knowledge Bases upload queue and the API-side size gate. Both are plain modules
+  # with no dependencies, so they run on the Node test runner directly — no jest and no
+  # built LibreChat image, which is what makes them runnable in CI at all.
+  node:
+    runs-on: ubuntu-latest
+    name: node --test (librechat KB upload)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          # 22+ strips TypeScript types without a build step, which is how the .ts queue
+          # module is testable here.
+          node-version: "24"
+
+      - name: Run tests
+        working-directory: apps/ai-platform/librechat/custom-image
+        run: node --test "tests/**/*.test.*"

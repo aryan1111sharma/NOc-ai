@@ -99,19 +99,6 @@ services:
       - MCP_PORT=8100
     restart: unless-stopped
 
-  # Read-only MCP server for the OLD CMS/NOC (quenchcms.com, legacy ASP.NET MVC).
-  cms-mcp-server:
-    build: ../../../services/mcp/cms
-    container_name: cms-mcp-server
-    environment:
-      - CMS_BASE_URL=${CMS_BASE_URL}
-      - CMS_USER=${CMS_USER}
-      - CMS_PASS=${CMS_PASS}
-      - MCP_TRANSPORT=http
-      - MCP_HOST=0.0.0.0
-      - MCP_PORT=8101
-    restart: unless-stopped
-
   qdrant:
     image: qdrant/qdrant:latest
     container_name: qdrant

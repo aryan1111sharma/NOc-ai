@@ -2,7 +2,7 @@
 
 **Status:** approved design, pre-implementation
 **Date:** 2026-09-07
-**Scope:** Stage-1 AWS deployment of the 13-service chat stack, delivered as
+**Scope:** Stage-1 AWS deployment of the 14-service chat stack, delivered as
 validated Terraform. **No infrastructure is provisioned by this spec.**
 
 ---
@@ -51,7 +51,7 @@ Internet
    │  public subnets, ap-south-1a / 1b
    ▼
 [ EC2 t3.large ]  private subnet 1a · no public IP · SG: only ALB reaches :80
-   │  docker compose, 13 services, base compose file UNCHANGED
+   │  docker compose, 14 services, base compose file UNCHANGED
    │  Docker data-root → /data/docker on encrypted EBS gp3
    ├──► SSM Session Manager   (shell access; no SSH, no port 22, no key pairs)
    └──► NAT GW ──► z.ai · Jira · EcoG SD · CMS · NOC backend
@@ -73,7 +73,7 @@ That decision is reversed for stage 1, for three reasons:
 3. **The compose file carries load-bearing detail.** The pinned project name
    `chat` (changing it silently orphans every account and chat history), the
    bind-mounted `departments.json`, and the `SERVER_HOST` default that prevents a
-   startup crash loop. A 13-service translation to Helm is exactly where those
+   startup crash loop. A 14-service translation to Helm is exactly where those
    get dropped.
 
 **Revisit EKS when** any of: a platform team takes ownership; user count passes

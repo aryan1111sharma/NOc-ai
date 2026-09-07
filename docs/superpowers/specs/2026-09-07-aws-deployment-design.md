@@ -52,7 +52,8 @@ Internet
    ▼
 [ EC2 t3.large ]  private subnet 1a · no public IP · SG: only ALB reaches :80
    │  docker compose, 14 services, base compose file UNCHANGED
-   │  Docker data-root → /data/docker on encrypted EBS gp3
+   │  deploy tree at /data/app · Docker data-root at /data/docker
+   │  both on the encrypted EBS gp3 volume — nothing stateful on root
    ├──► SSM Session Manager   (shell access; no SSH, no port 22, no key pairs)
    └──► NAT GW ──► z.ai · Jira · EcoG SD · CMS · NOC backend
 ```
@@ -220,28 +221,91 @@ document against the previous tag.
 `mem_limit` and the `awslogs` log driver. **The base `docker-compose.yml` is not
 modified**, so the local workflow and its load-bearing comments survive intact.
 
-## 10. State, backup, recovery
+## 10. State, growth, backup, recovery
 
-Docker `data-root` is set to `/data/docker` on the encrypted EBS gp3 volume, so
-all 8 named volumes keep their exact current names. Combined with the pinned
-project name `chat`, this guarantees no volume-orphaning path.
+### 10.1 What grows
+
+Nine state stores. Five have no ceiling, one is unverified, three are bounded.
+
+| Store | Holds | Bounded |
+|---|---|---|
+| `mongo-data` | conversations, messages, users, file metadata | **No** |
+| `meili-data` | search index over conversations; tracks Mongo | **No** |
+| `knowledge/` | KB documents uploaded from chat (bind mount, §10.2) | **No** |
+| `qdrant-data` | BGE vectors, ~3 KB/chunk; tracks the corpus | **No** |
+| `librechat-images` | user uploads and generated images | **No** |
+| `librechat-logs` | application logs | Unverified — action item |
+| `docgen-files` | generated documents; capped at 200, oldest evicted (verified in `docgen_mcp/server.py:58-60`) | Yes |
+| `kb-model-cache` | BGE embedding model, ~450 MB, downloaded once | Yes |
+| `ecog-sd-cookies` | session cookies, kilobytes | Yes |
+
+The dominant growth driver is **`mongo-data`**, and the reason is specific to
+this stack: LibreChat stores full message content, and our messages carry *tool
+results* — charger telemetry payloads, ticket dumps, fleet queries — which are
+far larger than ordinary chat text. Meilisearch then indexes all of it again. So
+the two largest consumers scale with tool-call volume, not user count.
+
+### 10.2 Everything stateful on the data volume
+
+Docker `data-root` is set to `/data/docker`, so all 8 named volumes keep their
+exact current names. Combined with the pinned project name `chat`, this
+guarantees no volume-orphaning path.
+
+**`knowledge/` is a bind mount, not a Docker volume** (`../../../knowledge`,
+writable so the KB tools can upload from chat), so `data-root` does not capture
+it — it resolves to wherever the deploy tree sits. Left on the root volume this
+fails twice: KB uploads fill an 8 GB root disk and take the instance down, and
+the corpus is absent from the daily snapshot, so replacing the instance loses it.
+
+The second failure is the serious one. `knowledge/.gitignore` deliberately
+excludes the corpus ("may be large or proprietary"), so those documents exist in
+no git history and no other backup. Currently 25 MB across 74 files, 24 MB of it
+`dept-noc/`.
+
+Therefore **nothing stateful sits on the root volume**:
+
+```
+/data/                          <- EBS gp3, encrypted, snapshotted daily
+├── docker/                     <- data-root: all 8 named volumes
+└── app/                        <- deploy tree (compose + bind mounts)
+    ├── knowledge/              <- KB corpus, nightly S3 sync
+    └── roles/departments.json  <- created by deploy script before compose starts
+```
+
+`departments.json` must exist before the stack starts: if it is missing, Docker
+creates a *directory* at that path rather than failing, and every `kb_admin_*`
+call breaks with no obvious cause.
 
 The data volume is separate from root, making the instance disposable —
 replaceable, resizable and re-imageable without touching data.
 
-Two backup layers, because they fail differently:
+### 10.3 Backup
+
+Two layers, because they fail differently:
 
 | Layer | Contents | Cadence | Rationale |
 |---|---|---|---|
 | EBS snapshot via DLM | whole volume | daily, 14-day retention | fast whole-box recovery |
-| `mongodump` + Qdrant snapshot to S3 | logical | nightly | a snapshot of a *running* mongod is only crash-consistent; a logical dump also allows single-collection restore |
+| `mongodump` + Qdrant snapshot + `knowledge/` sync to S3 | logical | nightly | a snapshot of a *running* mongod is only crash-consistent; a logical dump also allows single-collection restore |
 
 Meilisearch is deliberately excluded — a rebuildable index, not a source of
-truth. The S3 backup bucket has versioning, public access blocked, Glacier IR
+truth. `knowledge/` is deliberately **included** for the opposite reason: it is
+not rebuildable from anything.
+
+The S3 backup bucket has versioning, public access blocked, Glacier IR
 transition at 30 days, expiry at 180.
 
 Meets the stated **RPO 24 h / RTO 1 business day**. A documented restore drill
 contributes to **P2-5**.
+
+### 10.4 Sizing
+
+100 GB gp3 is comfortable for a 25-user pilot — realistically single-digit GB in
+year one. Two properties make that safe rather than lucky: gp3 resizes online, so
+100 GB is a starting point rather than a commitment; and the disk alarm at 80%
+(§11) converts "we ran out of disk" into "we grew the volume last month". The
+wildcard is the corpus: a few GB of departmental manuals implies several GB of
+Qdrant vectors on top.
 
 ## 11. Observability
 
@@ -303,8 +367,11 @@ This phase is complete when:
    base `docker-compose.yml` is byte-identical to its pre-change state.
 4. The GitHub Actions build workflow passes YAML lint and has no hard-coded AWS
    credentials.
-5. No AWS resource has been created; no `terraform apply` has been run.
-6. `terraform plan` is **explicitly deferred** — it requires credentials, and
+5. The `user_data` places the deploy tree at `/data/app` and Docker's
+   `data-root` at `/data/docker`, and creates `roles/departments.json` before
+   compose starts. No stateful path resolves to the root volume.
+6. No AWS resource has been created; no `terraform apply` has been run.
+7. `terraform plan` is **explicitly deferred** — it requires credentials, and
    `aws sts get-caller-identity` currently fails on the operator's machine.
 
 ## 15. Prerequisites before anything is applied

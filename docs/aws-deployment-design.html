@@ -251,6 +251,18 @@
   .ask .q { font-weight: 600; font-size: .94rem; line-height: 1.4; }
   .ask .d { font-size: .85rem; color: var(--steel); line-height: 1.5; }
 
+  pre.tree {
+    margin: 0; font-family: var(--mono); font-size: .82rem; line-height: 1.7;
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    padding: 1.05rem 1.2rem; overflow-x: auto; color: var(--ink);
+  }
+  pre.tree .c { color: var(--steel); }
+  pre.tree .a { color: var(--accent); }
+
+  td .grow { font-family: var(--mono); font-size: .78rem; white-space: nowrap; }
+  td .grow.no  { color: var(--gate); font-weight: 600; }
+  td .grow.yes { color: var(--live); font-weight: 600; }
+
   ul.tight { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .35rem; }
   ul.tight li { font-size: .89rem; color: var(--steel); line-height: 1.55; }
   ul.tight li strong { color: var(--ink); }
@@ -289,6 +301,7 @@
       <span><b>Host</b> manthan.manthanquench.online</span>
       <span><b>Spec</b> docs/superpowers/specs/2026-09-07-aws-deployment-design.md</span>
       <span><b>Status</b> awaiting review</span>
+      <span><b>Rev</b> 2 — storage &amp; growth added</span>
     </div>
   </header>
 
@@ -489,10 +502,12 @@
           <path class="d-line" d="M 520 344 L 720 344 L 720 264" marker-end="url(#ah)"></path>
 
           <!-- ebs -->
-          <rect class="d-box" x="560" y="392" width="260" height="62" rx="3"></rect>
-          <text class="d-t" x="690" y="416" text-anchor="middle">EBS gp3 · encrypted</text>
-          <text class="d-s" x="690" y="432" text-anchor="middle">separate volume · daily DLM snapshot</text>
-          <path class="d-line" d="M 520 423 L 556 423" marker-end="url(#ah)"></path>
+          <rect class="d-box-acc" x="560" y="378" width="260" height="84" rx="3"></rect>
+          <text class="d-t" x="690" y="398" text-anchor="middle">EBS gp3 · encrypted</text>
+          <text class="d-s" x="690" y="415" text-anchor="middle">/data/docker — 8 named volumes</text>
+          <text class="d-s" x="690" y="430" text-anchor="middle">/data/app — knowledge/ + config</text>
+          <text class="d-acc" x="690" y="450" text-anchor="middle">ALL state here · nothing on root</text>
+          <path class="d-line" d="M 520 420 L 556 420" marker-end="url(#ah)"></path>
         </svg>
       </div>
       <p class="caption">
@@ -502,6 +517,125 @@
         Meilisearch data.
       </p>
     </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ STORAGE ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Storage</p>
+      <h2>What grows, and where it lives</h2>
+      <p class="prose">
+        Five of the nine state stores have no ceiling, and a sixth is unverified. The one people
+        underestimate is
+        MongoDB, and it is specific to this stack: LibreChat stores full message content, and our
+        messages carry <em>tool results</em> — charger telemetry payloads, ticket dumps, fleet
+        queries. Meilisearch then indexes all of it again. So the two largest consumers both scale
+        with tool-call volume, not with user count.
+      </p>
+    </div>
+
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Store</th>
+            <th scope="col">Holds</th>
+            <th scope="col">Bounded</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>mongo-data</code></td>
+            <td>conversations, messages, users, file metadata<span class="sub">largest growth driver — tool results are far bigger than chat text</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>meili-data</code></td>
+            <td>search index over those conversations<span class="sub">tracks Mongo</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>knowledge/</code></td>
+            <td>KB documents uploaded from chat<span class="sub">bind mount, not a Docker volume — see below</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>qdrant-data</code></td>
+            <td>BGE vectors for those documents<span class="sub">~3 KB per chunk; tracks the corpus, not chat</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>librechat-images</code></td>
+            <td>user uploads and generated images</td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>librechat-logs</code></td>
+            <td>application logs<span class="sub">rotation not yet verified — action item</span></td>
+            <td><span class="grow no">Unconfirmed</span></td>
+          </tr>
+          <tr>
+            <td><code>docgen-files</code></td>
+            <td>generated .xlsx / .docx<span class="sub">capped at 200, oldest evicted — verified in docgen_mcp/server.py</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><code>kb-model-cache</code></td>
+            <td>the BGE embedding model<span class="sub">~450 MB, downloaded once</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><code>ecog-sd-cookies</code></td>
+            <td>session cookies<span class="sub">kilobytes</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="t">Correction · the knowledge corpus exists in exactly one place</span>
+      <p class="d">
+        <code>knowledge/</code> is a <strong>bind mount, not a Docker volume</strong>, so setting
+        Docker's <code>data-root</code> to the EBS volume does not capture it — it lands wherever
+        the deploy tree sits. Left on the root volume that gives two failures: KB uploads fill an
+        8 GB root disk and take the box down, and the corpus is absent from the daily snapshot, so
+        replacing the instance loses it. That second one bites hardest because
+        <code>knowledge/.gitignore</code> deliberately excludes the corpus as “large or
+        proprietary” — those documents are in no git history and no other backup. Today: 25 MB
+        across 74 files, 24 MB of it <code>dept-noc/</code>.
+      </p>
+    </div>
+
+    <p class="prose">
+      The fix is that <strong>nothing stateful sits on the root volume</strong>. Both bind mounts
+      move onto the snapshotted EBS volume, and the corpus joins the nightly S3 sync alongside the
+      database dumps — it needs the offsite copy more than they do, since they at least rebuild
+      from their own dumps.
+    </p>
+
+    <pre class="tree">/data/                          <span class="c">← EBS gp3, encrypted, snapshotted daily</span>
+├── docker/                     <span class="c">← data-root: all 8 named volumes</span>
+└── app/                        <span class="c">← deploy tree (compose + bind mounts)</span>
+    ├── knowledge/              <span class="a">← KB corpus · nightly S3 sync</span>
+    └── roles/departments.json  <span class="a">← created by deploy script before compose starts</span></pre>
+
+    <p class="caption">
+      That last line matters more than it looks: if <code>departments.json</code> is missing,
+      Docker creates a <em>directory</em> at that path instead of failing, and every
+      <code>kb_admin_*</code> call breaks with no obvious cause. On a fresh instance the file must
+      exist before the stack starts.
+    </p>
+
+    <p class="prose">
+      <strong>Sizing.</strong> 100 GB gp3 is comfortable for a 25-user pilot — realistically
+      single-digit GB in year one. Two things make that safe rather than lucky: gp3 resizes online,
+      so 100 GB is a starting point rather than a commitment, and the disk alarm at 80% turns
+      “we ran out of disk” into “we grew the volume last month”. The wildcard is the corpus — if a
+      department loads a few GB of manuals, Qdrant's vectors grow alongside it.
+    </p>
   </section>
 
   <hr class="rule">
@@ -646,10 +780,12 @@
           <span class="t">Two layers, because they fail differently</span>
           <span class="d">
             Daily DLM snapshots of the whole volume for fast recovery, plus a nightly
-            <code>mongodump</code> and Qdrant snapshot to S3. The second layer earns its place: a
-            snapshot of a <em>running</em> mongod is only crash-consistent, and a logical dump
-            also allows restoring one collection instead of the entire machine. Meilisearch is
-            deliberately excluded — a rebuildable index, not a source of truth.
+            <code>mongodump</code>, Qdrant snapshot <strong>and <code>knowledge/</code> sync</strong>
+            to S3. The second layer earns its place: a snapshot of a <em>running</em> mongod is
+            only crash-consistent, and a logical dump also allows restoring one collection instead
+            of the entire machine. Meilisearch is deliberately excluded — a rebuildable index, not
+            a source of truth. The corpus is included precisely because it <em>isn't</em>
+            rebuildable: it is in no git history.
           </span>
         </span>
         <span class="pill live">Meets RPO/RTO</span>
@@ -834,7 +970,7 @@
   <footer>
     <span>Ador Manthan.AI · noc-mcp-agent</span>
     <span>Stage-1 AWS deployment design</span>
-    <span>v0.13.1 · 7 Sep 2026</span>
+    <span>v0.13.1 · 7 Sep 2026 · rev 2</span>
     <span>Status: awaiting review</span>
   </footer>
 

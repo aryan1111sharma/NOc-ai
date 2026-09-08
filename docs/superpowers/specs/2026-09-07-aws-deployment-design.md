@@ -84,10 +84,13 @@ reusable, so that becomes a migration rather than a rewrite.
 
 ### 3.2 Why not ECS Fargate
 
+Estimated ~$200–260/mo, between Option A and EKS.
+
 The three stateful services (MongoDB, Qdrant, Meilisearch) are the blocker.
-Fargate's storage story is EFS, and MongoDB on EFS is a known-bad pairing. Making
-it work means pushing Mongo to Atlas or DocumentDB — more cost, more AWS lock-in,
-and the least portable of the three options.
+Fargate's only persistent storage is EFS, and MongoDB over NFS is a known-bad
+pairing — the file-locking semantics databases assume do not hold. Making it work
+means pushing Mongo to Atlas or DocumentDB, which is precisely the added cost and
+lock-in the option would be chosen to avoid. The least portable of the three.
 
 ---
 
@@ -316,27 +319,72 @@ ALB 5xx rate, ALB target response time, and estimated charges.
 
 ## 12. Terraform layout
 
+### 12.1 Modules
+
 ```
 infra/
   bootstrap/          S3 state bucket + DynamoDB lock  (run once, local state)
   modules/
-    network/          VPC, 4 subnets across 2 AZs, IGW, NAT, routes
+    network/          VPC, 4 subnets across 2 AZs, IGW, NAT, routes, SGs
     edge/             ACM, ALB, target group, listeners, WAF
     dns/              Route 53 zone + records
     compute/          EC2, EBS data volume, IAM instance profile, user_data
     secrets/          KMS CMK + SSM parameters (placeholders only)
     registry/         8 ECR repos + lifecycle policies
+    cicd/             GitHub OIDC provider, CI role, SSM Run Command document
     backup/           DLM policy, S3 backup bucket
     observability/    log groups, alarms, SNS topic
   envs/prod/          main.tf, variables.tf, backend.tf, outputs.tf
 ```
 
-Outside `infra/`:
+> The `cicd/` module is easy to miss. §9 requires GitHub Actions to authenticate
+> by OIDC and deploys to run through an SSM Run Command document — but neither
+> the IAM OIDC provider, the CI role, nor the SSM document belongs to any other
+> module. Without it the build pipeline has no way to authenticate and the deploy
+> path does not exist.
+
+### 12.2 Files outside `infra/`
 
 - `apps/ai-platform/librechat/docker-compose.aws.yml` — the override
 - `.github/workflows/build-images.yml` — OIDC to ECR
 - `scripts/render-env-from-ssm.sh` — boot-time `.env` renderer
+- `scripts/backup-to-s3.sh` — nightly `mongodump` + Qdrant snapshot + `knowledge/` sync (§10.3)
 - `RUNBOOK.md` — AWS deploy, rollback and restore procedures
+
+### 12.3 AWS resource inventory
+
+Everything Terraform creates, so the module list above can be checked against a
+complete set. Twenty-one services; six carry meaningful cost.
+
+| Service | Purpose | Module | Billed |
+|---|---|---|---|
+| EC2 | one `t3.large` running all 14 containers | `compute` | $62/mo |
+| EBS gp3 | `/data` — databases, corpus, deploy tree; encrypted | `compute` | ~$10/mo |
+| EBS snapshots | daily, 14-day retention | `backup` | ~$5/mo |
+| DLM | schedules those snapshots | `backup` | free |
+| S3 | backup bucket + Terraform state | `backup`, `bootstrap` | small |
+| DynamoDB | Terraform state lock | `bootstrap` | ~$0 |
+| VPC | 4 subnets across 2 AZs | `network` | free |
+| Internet Gateway | public subnet egress | `network` | free |
+| NAT Gateway | egress for the private instance | `network` | $35/mo |
+| Security Groups | only the ALB may reach the instance | `network` | free |
+| ALB | TLS termination, the only public ingress | `edge` | $20/mo |
+| Route 53 | hosted zone + ALB alias record | `dns` | $0.50/mo |
+| ACM | TLS certificate, auto-renewing | `edge` | **free** |
+| WAF | managed rules + login rate limit | `edge` | $12/mo |
+| KMS | one CMK — encrypts EBS *and* the secrets | `secrets` | ~$1/mo |
+| SSM Parameter Store | ~20 SecureString secrets | `secrets` | free |
+| SSM Session Manager | shell access — replaces SSH | `compute` | free |
+| SSM Run Command | executes deploys | `cicd` | free |
+| IAM | instance profile, CI role, OIDC provider | `compute`, `cicd` | free |
+| ECR | 8 image repositories | `registry` | ~$1/mo |
+| CloudWatch | logs (30 d), alarms, agent metrics | `observability` | ~$3/mo |
+| SNS | delivers alarms to email | `observability` | negligible |
+
+Two notes for whoever applies this. **ACM is free**, so there is no cost argument
+for running without valid TLS. **NAT at $35/mo is the most questionable line** —
+it exists solely to keep the instance off a public IP (§4); it is the first thing
+to revisit if the number must come down, at the price of the brief §6 constraint.
 
 ## 13. Cost
 
@@ -376,7 +424,22 @@ This phase is complete when:
 
 ## 15. Prerequisites before anything is applied
 
-Not blockers for writing the IaC, but blockers for go-live:
+Not blockers for writing the IaC, but blockers for go-live. Each needs a named
+owner — three are decisions rather than tasks, and decisions without an owner
+come back "approved in principle" and undecided in fact:
+
+| # | Gate | Owner | Type |
+|---|---|---|---|
+| 0 | Accept reversing DEP-1 for stage 1 (§3.1) | Engineering lead | Decision |
+| 1 | Working AWS credentials | Operator | Task |
+| 2 | Move off the GLM Coding Plan (P0-7) | Procurement | Decision — longest lead time |
+| 3 | D1 — data residency ruling | Security / compliance | Decision |
+| 4 | Nameserver delegation | Operator | Task |
+| 5 | The ~25 user accounts | Operator | Task |
+| 6 | Approve ~$152/mo | Budget holder | Decision |
+
+Detail on gates 1–5. Gates 0 and 6 are sign-offs on this document itself: the
+architecture decision in §3.1 and the cost in §13.
 
 1. **Working AWS credentials** — `aws sts get-caller-identity` currently fails.
 2. **P0-7 — the LLM endpoint.** The configured z.ai GLM Coding Plan endpoint

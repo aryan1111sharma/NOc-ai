@@ -1,6 +1,7 @@
 #!/bin/sh
-# Applies the Knowledge Bases additions, and the custom-endpoint file-attachment
-# fix (step 7), to a stock LibreChat tree.
+# Applies the Knowledge Bases additions, the custom-endpoint file-attachment
+# fix (step 7), and the agent-header provider-suffix fix (step 8), to a stock
+# LibreChat tree.
 #
 # Every edit is anchored on a unique, verbatim string and asserted to match
 # exactly once. A silent no-op here would produce an image that builds and boots
@@ -258,5 +259,32 @@ patch_once "$APP/client/src/components/Chat/Input/Files/__tests__/AttachFileMenu
       expect(screen.getByText('Upload Image')).toBeInTheDocument();
       expect(screen.queryByText('Upload to Provider')).not.toBeInTheDocument();
     });"
+
+echo "== 8/8 hide provider suffix in agent chat header =="
+# Agents are sometimes named "<Agent Name> (Provider)" to distinguish variants
+# that differ only in which model serves them, e.g. agent_kimi26NOCEngineerV1's
+# stored name "NOC Engineer (Kimi)" (agents/agents.json). getDisplayValue feeds
+# the chat header's model-selector button directly from that stored name, so it
+# rendered the provider suffix verbatim. Stripped for display only, in the one
+# function that renders it there -- the stored agent.name is untouched.
+cp /patch-files/client/displayAgentName.ts \
+   "$APP/client/src/components/Chat/Menus/Endpoints/displayAgentName.ts"
+
+patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
+  "import { getSpecAgentAvatarURL } from '~/utils';" \
+  "import { getSpecAgentAvatarURL } from '~/utils';
+import { displayAgentName } from './displayAgentName';"
+
+patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
+  "      return endpoint.agentNames[selectedValues.model];
+    } else if (isAgentsEndpoint(endpoint.value) && agentsMap) {
+      const agent = agentsMap[selectedValues.model];
+      return agent?.name || selectedValues.model;
+    }" \
+  "      return displayAgentName(endpoint.agentNames[selectedValues.model]);
+    } else if (isAgentsEndpoint(endpoint.value) && agentsMap) {
+      const agent = agentsMap[selectedValues.model];
+      return displayAgentName(agent?.name || selectedValues.model);
+    }"
 
 echo "PATCHES APPLIED OK"

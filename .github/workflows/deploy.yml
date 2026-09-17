@@ -15,3 +15,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: /opt/manthan/scripts/ci-deploy-staging.sh
+          # A cold Docker build cache (first run, or after a prune) can take well over
+          # the ssh-action default 10m command_timeout, which kills the SSH session and
+          # reports "failure" even though the deploy script keeps running and succeeds
+          # on the server. 30m covers a full cold rebuild of every service.
+          command_timeout: 30m

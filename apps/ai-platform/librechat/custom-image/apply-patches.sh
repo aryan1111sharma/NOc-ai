@@ -271,8 +271,8 @@ cp /patch-files/client/displayAgentName.ts \
    "$APP/client/src/components/Chat/Menus/Endpoints/displayAgentName.ts"
 
 patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
-  "import { getSpecAgentAvatarURL } from '~/utils';" \
-  "import { getSpecAgentAvatarURL } from '~/utils';
+  "import { Endpoint, SelectedValues } from '~/common';" \
+  "import { Endpoint, SelectedValues } from '~/common';
 import { displayAgentName } from './displayAgentName';"
 
 patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \

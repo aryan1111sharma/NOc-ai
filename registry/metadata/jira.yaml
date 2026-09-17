@@ -1,0 +1,43 @@
+schema_version: 1
+mcp_server: jira
+tools:
+- tool_name: jira_search
+  domain: Issue Tracking
+  description: Search Ecog Jira issues with a JQL query
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: jira_get_issue
+  domain: Issue Tracking
+  description: Full detail of one Ecog Jira issue by key
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: jira_get_comments
+  domain: Issue Tracking
+  description: Comments on an Ecog Jira issue
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: jira_get_issue_transitions
+  domain: Issue Tracking
+  description: Current status plus available workflow transitions (reads options only, never transitions)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: jira_project_meta
+  domain: Issue Tracking
+  description: 'Reference metadata for an Ecog Jira project: statuses, issue types, priorities'
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

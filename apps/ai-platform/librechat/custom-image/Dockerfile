@@ -52,6 +52,10 @@ RUN test -f /app/api/server/routes/knowledgeBases.js || (echo "API route missing
  && grep -q "knowledge-bases" /app/api/server/index.js || (echo "route not mounted" && exit 1) \
  && grep -q "app.use('/api/knowledge-bases', express.json({ limit: '150mb' }))" /app/api/server/index.js \
       || (echo "KB body-parser ceiling not mounted" && exit 1) \
- && grep -rq "knowledge-bases" /app/client/dist/assets/ || (echo "client bundle missing KB page" && exit 1)
+ && grep -rq "knowledge-bases" /app/client/dist/assets/ || (echo "client bundle missing KB page" && exit 1) \
+ && test -f /app/api/server/routes/llmRouting.js || (echo "LLM Routing API route missing" && exit 1) \
+ && grep -q "app.use('/api/llm-routing', routes.llmRouting)" /app/api/server/index.js \
+      || (echo "LLM Routing route not mounted" && exit 1) \
+ && grep -rq "llm-routing" /app/client/dist/assets/ || (echo "client bundle missing LLM Routing page" && exit 1)
 
 USER node

@@ -1,0 +1,10 @@
+# Mirrors services/tool-filter-proxy/requirements.txt: same ASGI stack, same
+# reason (>=0.46 for the lifespan-only Starlette API).
+starlette>=0.46
+uvicorn>=0.30
+httpx>=0.28
+pydantic-settings>=2.0
+
+# Parses librechat.yaml for llm_router.catalog.Catalog -- the same format
+# LibreChat itself reads its config from.
+PyYAML>=6.0

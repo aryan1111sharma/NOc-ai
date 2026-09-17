@@ -271,8 +271,8 @@ cp /patch-files/client/displayAgentName.ts \
    "$APP/client/src/components/Chat/Menus/Endpoints/displayAgentName.ts"
 
 patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
-  "import { getSpecAgentAvatarURL } from '~/utils';" \
-  "import { getSpecAgentAvatarURL } from '~/utils';
+  "import { Endpoint, SelectedValues } from '~/common';" \
+  "import { Endpoint, SelectedValues } from '~/common';
 import { displayAgentName } from './displayAgentName';"
 
 patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
@@ -285,6 +285,86 @@ patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
     } else if (isAgentsEndpoint(endpoint.value) && agentsMap) {
       const agent = agentsMap[selectedValues.model];
       return displayAgentName(agent?.name || selectedValues.model);
+    }"
+
+echo "== 9/9 LLM Routing admin page =="
+# Thin authenticated facade over the standalone llm-router service
+# (services/llm-router) -- same shape as the Knowledge Bases wiring above, but
+# this route owns no state itself (see files/api/llmRouting.js's header).
+cp /patch-files/api/llmRouting.js "$APP/api/server/routes/llmRouting.js"
+echo "  installed api/server/routes/llmRouting.js"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "const knowledgeBases = require('./knowledgeBases');" \
+  "const knowledgeBases = require('./knowledgeBases');
+const llmRouting = require('./llmRouting');"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "  knowledgeBases," \
+  "  knowledgeBases,
+  llmRouting,"
+
+patch_once "$APP/api/server/index.js" \
+  "  app.use('/api/knowledge-bases', routes.knowledgeBases);" \
+  "  app.use('/api/knowledge-bases', routes.knowledgeBases);
+  app.use('/api/llm-routing', routes.llmRouting);"
+
+mkdir -p "$APP/client/src/components/LlmRouting"
+cp /patch-files/client/LlmRoutingView.tsx \
+   "$APP/client/src/components/LlmRouting/LlmRoutingView.tsx"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "const loadSkillsView = () =>" \
+  "const loadLlmRoutingView = () =>
+  import('~/components/LlmRouting/LlmRoutingView').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadSkillsView = () =>"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "            {
+              path: 'knowledge-bases',
+              lazy: loadKnowledgeBasesView,
+            }," \
+  "            {
+              path: 'knowledge-bases',
+              lazy: loadKnowledgeBasesView,
+            },
+            {
+              path: 'llm-routing',
+              lazy: loadLlmRoutingView,
+            },"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "import { Database, MessagesSquare } from 'lucide-react';" \
+  "import { Database, MessagesSquare, Network } from 'lucide-react';"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "      links.push({
+        title: 'com_ui_knowledge_bases' as NavLink['title'],
+        label: 'Knowledge Bases',
+        icon: Database,
+        id: 'knowledge-bases',
+        onClick: () => navigate('/knowledge-bases'),
+      });
+    }" \
+  "      links.push({
+        title: 'com_ui_knowledge_bases' as NavLink['title'],
+        label: 'Knowledge Bases',
+        icon: Database,
+        id: 'knowledge-bases',
+        onClick: () => navigate('/knowledge-bases'),
+      });
+      /* Same access:admin + manage:mcpservers gate as Knowledge Bases -- see
+         files/api/llmRouting.js. Hiding the entry is convenience only. */
+      links.push({
+        title: 'com_ui_llm_routing' as NavLink['title'],
+        label: 'LLM Routing',
+        icon: Network,
+        id: 'llm-routing',
+        onClick: () => navigate('/llm-routing'),
+      });
     }"
 
 echo "PATCHES APPLIED OK"

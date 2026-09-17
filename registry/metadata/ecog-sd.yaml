@@ -1,0 +1,44 @@
+schema_version: 1
+mcp_server: ecog-sd
+tools:
+- tool_name: sd_list_requests
+  domain: Service Desk
+  description: List Ecog Service Desk customer requests, filterable by status/ownership
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: sd_get_request
+  domain: Service Desk
+  description: Full detail of one Service Desk request
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: sd_get_request_comments
+  domain: Service Desk
+  description: Comments on a Service Desk request
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: sd_list_servicedesks
+  domain: Service Desk
+  description: List available service desks
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: sd_set_session_cookie
+  domain: Service Desk
+  description: Set the local auth session cookie (validated via a live probe before acceptance); touches
+    no ticket data
+  capability: CONTROL
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

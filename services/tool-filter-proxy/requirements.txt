@@ -1,0 +1,8 @@
+# >=0.46 for the lifespan-only Starlette API (on_startup/on_shutdown were removed).
+starlette>=0.46
+uvicorn>=0.30
+httpx>=0.28
+pydantic-settings>=2.0
+# Needed by the vendored tool_registry package (metadata/config loading + validation).
+PyYAML>=6.0
+jsonschema>=4.0

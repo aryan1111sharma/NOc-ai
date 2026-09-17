@@ -1,0 +1,27 @@
+schema_version: 1
+mcp_server: docgen
+tools:
+- tool_name: create_excel
+  domain: Document Generation
+  description: Generate a downloadable .xlsx file from tabular data
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: create_word
+  domain: Document Generation
+  description: Generate a downloadable .docx file from report data
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: create_pdf
+  domain: Document Generation
+  description: Generate a downloadable .pdf file from report data
+  capability: WRITE
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

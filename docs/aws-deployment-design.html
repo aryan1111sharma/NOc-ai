@@ -1,0 +1,977 @@
+<meta charset="utf-8">
+<title>Manthan.AI on AWS</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --ground:    #FBFCFD;
+    --panel:     #FFFFFF;
+    --panel-alt: #F2F5F7;
+    --ink:       #0F1418;
+    --steel:     #56626D;
+    --hairline:  #DBE2E8;
+    --accent:    #005E7A;
+    --accent-soft: #E1EFF3;
+    --live:      #0C7561;
+    --live-soft: #E0F0EC;
+    --gate:      #A8541A;
+    --gate-soft: #F8EDE3;
+    --shadow:    0 1px 2px rgba(15,20,24,.05), 0 10px 28px -16px rgba(15,20,24,.16);
+
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, sans-serif;
+
+    --measure: 66ch;
+    --s--1: clamp(.76rem, .74rem + .1vw, .82rem);
+    --s-0:  clamp(1rem, .97rem + .15vw, 1.07rem);
+    --s-1:  clamp(1.18rem, 1.11rem + .32vw, 1.38rem);
+    --s-2:  clamp(1.45rem, 1.3rem + .7vw, 1.95rem);
+    --s-3:  clamp(1.9rem, 1.55rem + 1.6vw, 2.9rem);
+    --s-4:  clamp(2.4rem, 1.8rem + 2.8vw, 4rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#0D1216; --panel:#151B21; --panel-alt:#1B232A; --ink:#E2E8EE;
+      --steel:#8996A3; --hairline:#28313A; --accent:#3FA8C4; --accent-soft:#10303B;
+      --live:#3BAF95; --live-soft:#10302A; --gate:#D08A4E; --gate-soft:#332315;
+      --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 28px -16px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#0D1216; --panel:#151B21; --panel-alt:#1B232A; --ink:#E2E8EE;
+    --steel:#8996A3; --hairline:#28313A; --accent:#3FA8C4; --accent-soft:#10303B;
+    --live:#3BAF95; --live-soft:#10302A; --gate:#D08A4E; --gate-soft:#332315;
+    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 10px 28px -16px rgba(0,0,0,.7);
+  }
+
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: var(--s-0); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px; margin: 0 auto; padding: clamp(2rem, 1rem + 4vw, 4.5rem) clamp(1.1rem, .6rem + 2.4vw, 2.6rem) 5rem;
+    display: flex; flex-direction: column; gap: clamp(2.6rem, 1.6rem + 3vw, 4.2rem);
+  }
+
+  h1,h2,h3,h4 { margin: 0; font-weight: 600; line-height: 1.16; text-wrap: balance; }
+  h1 { font-size: var(--s-4); letter-spacing: -.028em; }
+  h2 { font-size: var(--s-2); letter-spacing: -.018em; }
+  h3 { font-size: var(--s-1); letter-spacing: -.01em; }
+  h4 { font-size: 1rem; letter-spacing: -.004em; }
+  p  { margin: 0; }
+  strong { font-weight: 620; }
+  code {
+    font-family: var(--mono); font-size: .87em;
+    background: var(--panel-alt); padding: .1em .34em; border-radius: 2px;
+  }
+  a { color: var(--accent); }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: var(--s--1); letter-spacing: .13em;
+    text-transform: uppercase; color: var(--accent); margin: 0;
+  }
+  .prose { max-width: var(--measure); display: flex; flex-direction: column; gap: 1rem; }
+  .rule { height:1px; background: var(--hairline); border:0; margin:0; }
+
+  /* ---------------- header ---------------- */
+  header { display: flex; flex-direction: column; gap: 1.3rem; }
+  .thesis { font-size: var(--s-1); color: var(--steel); max-width: 62ch; line-height: 1.5; }
+  .meta {
+    font-family: var(--mono); font-size: var(--s--1); color: var(--steel);
+    display: flex; flex-wrap: wrap; gap: .4rem 1.4rem;
+  }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  /* ---------------- stat band ---------------- */
+  .stats {
+    display: grid; gap: 1px; background: var(--hairline);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+    grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  }
+  .stat { background: var(--panel); padding: 1.25rem 1.15rem; display: flex; flex-direction: column; gap: .3rem; }
+  .stat .n {
+    font-size: var(--s-3); font-weight: 600; letter-spacing: -.03em;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat .l {
+    font-family: var(--mono); font-size: .71rem; letter-spacing: .09em;
+    text-transform: uppercase; color: var(--steel);
+  }
+  .stat.is-live .n { color: var(--live); }
+  .stat.is-gate .n { color: var(--gate); }
+
+  /* ---------------- sections ---------------- */
+  section { display: flex; flex-direction: column; gap: 1.7rem; }
+  .sec-head { display: flex; flex-direction: column; gap: .55rem; max-width: var(--measure); }
+
+  /* ---------------- verdict ---------------- */
+  .verdict {
+    background: var(--panel); border: 1px solid var(--accent);
+    border-radius: 3px; overflow: hidden; box-shadow: var(--shadow);
+  }
+  .verdict-top {
+    background: var(--accent-soft); padding: 1.15rem 1.4rem;
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+  .verdict-top .k {
+    font-family: var(--mono); font-size: .69rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .verdict-top .v { font-size: var(--s-1); font-weight: 600; letter-spacing: -.012em; }
+  .reasons { display: grid; gap: 1px; background: var(--hairline); }
+  .reason {
+    background: var(--panel); padding: 1.15rem 1.4rem;
+    display: grid; grid-template-columns: 1.6rem 1fr; gap: .3rem .9rem; align-items: start;
+  }
+  .reason .num {
+    font-family: var(--mono); font-size: .82rem; font-weight: 600;
+    color: var(--accent); font-variant-numeric: tabular-nums; padding-top: .12rem;
+  }
+  .reason .t { font-weight: 600; font-size: .97rem; }
+  .reason .d { grid-column: 2; font-size: .89rem; color: var(--steel); line-height: 1.55; }
+
+  /* ---------------- options ---------------- */
+  .opts { display: grid; gap: .85rem; grid-template-columns: repeat(auto-fit, minmax(258px, 1fr)); }
+  .opt {
+    border-radius: 3px; padding: 1.05rem 1.15rem 1.2rem;
+    display: flex; flex-direction: column; gap: .55rem;
+    background: var(--panel); border: 1px solid var(--hairline);
+  }
+  .opt.chosen { border-color: var(--live); box-shadow: var(--shadow); }
+  .opt.out { background: transparent; border-style: dashed; }
+  .opt .tag {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .opt.chosen .tag { color: var(--live); }
+  .opt.out .tag { color: var(--steel); }
+  .opt .name { font-weight: 600; font-size: 1rem; }
+  .opt .cost {
+    font-family: var(--mono); font-size: .8rem; color: var(--accent); font-variant-numeric: tabular-nums;
+  }
+  .opt .d { font-size: .86rem; color: var(--steel); line-height: 1.5; }
+  .opt.out .d { opacity: .82; }
+
+  /* ---------------- diagram ---------------- */
+  .figure { display: flex; flex-direction: column; gap: .7rem; }
+  .scroll {
+    overflow-x: auto; border: 1px solid var(--hairline); border-radius: 3px;
+    background: var(--panel); padding: 1.3rem 1.1rem;
+  }
+  .scroll svg { display: block; min-width: 720px; width: 100%; height: auto; }
+  .caption { font-size: .84rem; color: var(--steel); max-width: var(--measure); line-height: 1.5; }
+
+  .d-band     { fill: var(--panel-alt); stroke: var(--hairline); stroke-width: 1; }
+  .d-vpc      { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 4; opacity: .75; }
+  .d-box      { fill: var(--panel); stroke: var(--hairline); stroke-width: 1.2; }
+  .d-box-acc  { fill: var(--panel); stroke: var(--accent); stroke-width: 1.5; }
+  .d-ext      { fill: var(--ground); stroke: var(--hairline); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .d-t        { fill: var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 600; }
+  .d-s        { fill: var(--steel); font-family: var(--mono); font-size: 10.5px; }
+  .d-lab      { fill: var(--steel); font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; }
+  .d-acc      { fill: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; }
+  .d-line     { stroke: var(--steel); stroke-width: 1.4; fill: none; }
+
+  /* ---------------- spec rows ---------------- */
+  .rows {
+    display: grid; gap: 1px; background: var(--hairline);
+    border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden;
+  }
+  .row {
+    background: var(--panel); padding: 1.1rem 1.25rem;
+    display: grid; grid-template-columns: 118px 1fr auto; gap: .45rem 1.15rem; align-items: start;
+  }
+  .row .id {
+    font-family: var(--mono); font-size: .74rem; font-weight: 600; color: var(--accent);
+    letter-spacing: .07em; text-transform: uppercase; padding-top: .22rem;
+  }
+  .row .body { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+  .row .t { font-weight: 600; font-size: .96rem; }
+  .row .d { font-size: .88rem; color: var(--steel); line-height: 1.55; }
+  .pill {
+    font-family: var(--mono); font-size: .63rem; letter-spacing: .09em; text-transform: uppercase;
+    padding: .26rem .55rem; border-radius: 2px; white-space: nowrap; font-weight: 600; align-self: start;
+  }
+  .pill.live { background: var(--live-soft); color: var(--live); }
+  .pill.gate { background: var(--gate-soft); color: var(--gate); }
+  .pill.flat { background: var(--panel-alt); color: var(--steel); }
+
+  /* ---------------- callout ---------------- */
+  .callout {
+    border-radius: 3px; padding: 1.1rem 1.3rem;
+    display: flex; flex-direction: column; gap: .45rem;
+    background: var(--gate-soft);
+    border: 1px solid color-mix(in srgb, var(--gate) 34%, transparent);
+  }
+  .callout .t {
+    font-family: var(--mono); font-size: .69rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--gate);
+  }
+  .callout .d { font-size: .92rem; line-height: 1.6; max-width: var(--measure); }
+
+  /* ---------------- tables ---------------- */
+  .tscroll { overflow-x: auto; border: 1px solid var(--hairline); border-radius: 3px; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; background: var(--panel); }
+  th, td { text-align: left; padding: .68rem .95rem; border-bottom: 1px solid var(--hairline); vertical-align: top; }
+  thead th {
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--steel); font-weight: 600; background: var(--panel-alt); white-space: nowrap;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.total td { font-weight: 660; background: var(--panel-alt); }
+  td .sub { display: block; color: var(--steel); font-size: .82rem; line-height: 1.45; margin-top: .16rem; }
+
+  /* ---------------- gates ---------------- */
+  .gates { display: grid; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 3px; overflow: hidden; }
+  .gate-row {
+    background: var(--panel); padding: 1.05rem 1.25rem;
+    display: grid; grid-template-columns: 2rem 1fr auto; gap: .35rem .95rem; align-items: start;
+  }
+  .gate-row .num {
+    font-family: var(--mono); font-size: .8rem; font-weight: 600; color: var(--gate);
+    font-variant-numeric: tabular-nums; padding-top: .15rem;
+  }
+  .gate-row .t { font-weight: 600; font-size: .95rem; }
+  .gate-row .d { grid-column: 2; font-size: .87rem; color: var(--steel); line-height: 1.55; }
+
+  /* ---------------- asks ---------------- */
+  .asks { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .ask {
+    background: var(--panel); border: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+    border-radius: 3px; padding: .95rem 1.1rem 1.05rem; display: flex; flex-direction: column; gap: .35rem;
+  }
+  .ask .who {
+    font-family: var(--mono); font-size: .66rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .ask .q { font-weight: 600; font-size: .94rem; line-height: 1.4; }
+  .ask .d { font-size: .85rem; color: var(--steel); line-height: 1.5; }
+
+  pre.tree {
+    margin: 0; font-family: var(--mono); font-size: .82rem; line-height: 1.7;
+    background: var(--panel); border: 1px solid var(--hairline); border-radius: 3px;
+    padding: 1.05rem 1.2rem; overflow-x: auto; color: var(--ink);
+  }
+  pre.tree .c { color: var(--steel); }
+  pre.tree .a { color: var(--accent); }
+
+  td .grow { font-family: var(--mono); font-size: .78rem; white-space: nowrap; }
+  td .grow.no  { color: var(--gate); font-weight: 600; }
+  td .grow.yes { color: var(--live); font-weight: 600; }
+
+  ul.tight { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: .35rem; }
+  ul.tight li { font-size: .89rem; color: var(--steel); line-height: 1.55; }
+  ul.tight li strong { color: var(--ink); }
+
+  footer {
+    border-top: 1px solid var(--hairline); padding-top: 1.4rem;
+    font-family: var(--mono); font-size: var(--s--1); color: var(--steel);
+    display: flex; flex-wrap: wrap; gap: .4rem 1.4rem;
+  }
+
+  @media (max-width: 620px) {
+    .row { grid-template-columns: 1fr; }
+    .row .id { padding-top: 0; }
+    .row .pill { justify-self: start; }
+    .reason, .gate-row { grid-template-columns: 1.4rem 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Design for review · Stage 1</p>
+    <h1>Manthan.AI on AWS</h1>
+    <p class="thesis">
+      Moving the NOC assistant off a laptop and onto AWS — as a single Terraform-managed
+      EC2 instance running the compose stack we already run, rather than the EKS cluster
+      the estimation brief assumed.
+    </p>
+    <div class="meta">
+      <span><b>Date</b> 7 Sep 2026</span>
+      <span><b>Region</b> ap-south-1</span>
+      <span><b>Host</b> manthan.manthanquench.online</span>
+      <span><b>Spec</b> docs/superpowers/specs/2026-09-07-aws-deployment-design.md</span>
+      <span><b>Status</b> awaiting review</span>
+      <span><b>Rev</b> 2 — storage &amp; growth added</span>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <span class="n">~$152</span>
+      <span class="l">Est. USD / month</span>
+    </div>
+    <div class="stat">
+      <span class="n">14</span>
+      <span class="l">Services, one instance</span>
+    </div>
+    <div class="stat is-live">
+      <span class="n">6 of 7</span>
+      <span class="l">P0 blockers closed</span>
+    </div>
+    <div class="stat is-gate">
+      <span class="n">P0-7</span>
+      <span class="l">The one infra can't fix</span>
+    </div>
+  </div>
+
+  <!-- ============ THE DECISION ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">The decision</p>
+      <h2>One EC2 instance, not a Kubernetes cluster</h2>
+      <p class="prose">
+        This reverses <strong>DEP-1</strong> in <code>PRODUCTION-READINESS.md</code>, which
+        specifies “Kubernetes, not ECS/App Runner”. The reversal applies to stage 1 only, and
+        it needs a sign-off from whoever owns that decision.
+      </p>
+    </div>
+
+    <div class="verdict">
+      <div class="verdict-top">
+        <span class="k">Recommended</span>
+        <span class="v">Single <code>t3.large</code> running the existing <code>docker-compose.yml</code>, unchanged</span>
+      </div>
+      <div class="reasons">
+        <div class="reason">
+          <span class="num">01</span>
+          <span class="t">Portability points the other way</span>
+          <span class="d">
+            DEP-1 chose Kubernetes to satisfy <strong>D3</strong> (no cloud lock-in). But a compose
+            file runs on any VPS, any cloud, a laptop, or k3s. Helm is the heavier portability
+            story, not the lighter one — so D3 is satisfied more cheaply by staying where we are.
+          </span>
+        </div>
+        <div class="reason">
+          <span class="num">02</span>
+          <span class="t">There is no scaling problem yet</span>
+          <span class="d">
+            The estimation brief itself states concurrency is low — roughly five concurrent chats
+            at Tier A — and that latency sits in the LLM API, not our compute. It also sets
+            <strong>RPO 24 h / RTO 1 business day</strong> against a 99.5% business-hours target.
+            A single instance with nightly snapshots already meets that. Multi-AZ HA would buy
+            availability the requirements do not ask for.
+          </span>
+        </div>
+        <div class="reason">
+          <span class="num">03</span>
+          <span class="t">The compose file carries load-bearing detail</span>
+          <span class="d">
+            The pinned project name <code>chat</code> — whose own comment warns that changing it
+            silently orphans every user account and chat history — plus the bind-mounted
+            <code>departments.json</code> and the <code>SERVER_HOST</code> default that prevents a
+            startup crash loop. Translating fourteen services into Helm charts is exactly where
+            details like those get dropped.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <p class="prose">
+      <strong>Revisit EKS when</strong> any one of these becomes true: a platform team takes
+      ownership, user count passes ~150, or DEP-15 (registering new MCP servers without a stack
+      redeploy) becomes a firm requirement. The VPC, ECR, secrets and state layout below are all
+      reusable, so that later move is a migration rather than a rewrite.
+    </p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ OPTIONS ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Options considered</p>
+      <h2>Three ways to host fourteen containers</h2>
+    </div>
+
+    <div class="opts">
+      <div class="opt chosen">
+        <span class="tag">Chosen</span>
+        <span class="name">A · EC2 + compose</span>
+        <span class="cost">~$152 / mo</span>
+        <span class="d">
+          One instance, the stack we already run, Terraform-managed. We know how to operate it
+          today. Costs: single AZ, roughly two minutes of downtime on redeploy, vertical scaling
+          only.
+        </span>
+      </div>
+      <div class="opt out">
+        <span class="tag">Rejected</span>
+        <span class="name">B · ECS Fargate</span>
+        <span class="cost">~$200–260 / mo</span>
+        <span class="d">
+          The three stateful services are the blocker. Fargate's storage story is EFS, and
+          MongoDB on EFS is a known-bad pairing — making it work means pushing Mongo to Atlas or
+          DocumentDB. More cost, more lock-in, and the least portable of the three.
+        </span>
+      </div>
+      <div class="opt out">
+        <span class="tag">Deferred</span>
+        <span class="name">C · EKS, per the brief</span>
+        <span class="cost">~$300–450 / mo</span>
+        <span class="d">
+          Genuinely the right destination at Tier B, and the only option that serves DEP-15
+          elegantly. But it hands a solo operator with no Kubernetes background a cluster needing
+          version upgrades roughly every four months, plus IRSA, CSI drivers and fourteen
+          services of Helm charts.
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Architecture</p>
+      <h2>What gets built</h2>
+    </div>
+
+    <div class="figure">
+      <div class="scroll">
+        <svg viewBox="0 0 880 500" role="img" aria-label="Network topology: users reach Route 53, then an Application Load Balancer in public subnets, which forwards to a single EC2 instance in a private subnet. The instance reaches external APIs through a NAT gateway and stores data on an encrypted EBS volume.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--steel)"></path>
+            </marker>
+          </defs>
+
+          <!-- users -->
+          <rect class="d-box" x="352" y="14" width="176" height="38" rx="3"></rect>
+          <text class="d-t" x="440" y="32" text-anchor="middle">NOC users</text>
+          <text class="d-s" x="440" y="45" text-anchor="middle">~25 · pre-provisioned</text>
+
+          <!-- route 53 -->
+          <path class="d-line" d="M 440 52 L 440 72" marker-end="url(#ah)"></path>
+          <rect class="d-box" x="310" y="74" width="260" height="46" rx="3"></rect>
+          <text class="d-t" x="440" y="94" text-anchor="middle">Route 53 + ACM</text>
+          <text class="d-s" x="440" y="108" text-anchor="middle">manthan.manthanquench.online</text>
+
+          <!-- external apis -->
+          <rect class="d-ext" x="596" y="74" width="260" height="46" rx="3"></rect>
+          <text class="d-t" x="726" y="93" text-anchor="middle">External APIs</text>
+          <text class="d-s" x="726" y="107" text-anchor="middle">z.ai · Jira · EcoG SD · CMS · NOC</text>
+
+          <!-- vpc -->
+          <path class="d-line" d="M 440 120 L 440 194" marker-end="url(#ah)"></path>
+          <rect class="d-vpc" x="24" y="136" width="832" height="352" rx="4"></rect>
+          <text class="d-acc" x="38" y="154">VPC · ap-south-1</text>
+
+          <!-- public band -->
+          <rect class="d-band" x="44" y="166" width="792" height="110" rx="3"></rect>
+          <text class="d-lab" x="58" y="184">PUBLIC SUBNETS · 1a / 1b</text>
+
+          <rect class="d-box-acc" x="300" y="196" width="280" height="64" rx="3"></rect>
+          <text class="d-t" x="440" y="220" text-anchor="middle">Application Load Balancer</text>
+          <text class="d-s" x="440" y="236" text-anchor="middle">TLS 1.2+ · WAF · rate limit</text>
+          <text class="d-s" x="440" y="250" text-anchor="middle">the only public ingress</text>
+
+          <rect class="d-box" x="620" y="196" width="200" height="64" rx="3"></rect>
+          <text class="d-t" x="720" y="222" text-anchor="middle">NAT Gateway</text>
+          <text class="d-s" x="720" y="238" text-anchor="middle">egress only</text>
+
+          <!-- nat to external -->
+          <path class="d-line" d="M 720 196 L 720 122" marker-end="url(#ah)"></path>
+
+          <!-- private band -->
+          <rect class="d-band" x="44" y="296" width="792" height="178" rx="3"></rect>
+          <text class="d-lab" x="58" y="314">PRIVATE SUBNET · 1a</text>
+
+          <path class="d-line" d="M 440 260 L 440 322" marker-end="url(#ah)"></path>
+
+          <rect class="d-box-acc" x="60" y="324" width="460" height="140" rx="3"></rect>
+          <text class="d-t" x="80" y="348">EC2 t3.large · no public IP</text>
+          <text class="d-s" x="80" y="364">docker compose · 14 services · data-root /data/docker</text>
+          <text class="d-s" x="80" y="386">nginx · librechat · mongodb · meilisearch · qdrant</text>
+          <text class="d-s" x="80" y="401">noc · kb · kb-admin · jira · chargezone</text>
+          <text class="d-s" x="80" y="416">ecog-sd · docgen · platform · admin-panel</text>
+          <text class="d-acc" x="80" y="440">SSM Session Manager only — no SSH, no port 22</text>
+          <text class="d-s" x="80" y="455">4 GB swap · mem_limit on non-critical containers</text>
+
+          <!-- ec2 to nat -->
+          <path class="d-line" d="M 520 344 L 720 344 L 720 264" marker-end="url(#ah)"></path>
+
+          <!-- ebs -->
+          <rect class="d-box-acc" x="560" y="378" width="260" height="84" rx="3"></rect>
+          <text class="d-t" x="690" y="398" text-anchor="middle">EBS gp3 · encrypted</text>
+          <text class="d-s" x="690" y="415" text-anchor="middle">/data/docker — 8 named volumes</text>
+          <text class="d-s" x="690" y="430" text-anchor="middle">/data/app — knowledge/ + config</text>
+          <text class="d-acc" x="690" y="450" text-anchor="middle">ALL state here · nothing on root</text>
+          <path class="d-line" d="M 520 420 L 556 420" marker-end="url(#ah)"></path>
+        </svg>
+      </div>
+      <p class="caption">
+        The instance has no public IP and accepts traffic only from the load balancer's security
+        group. Keeping the data volume separate from the root volume makes the instance
+        disposable — it can be replaced, resized or re-imaged without touching MongoDB, Qdrant or
+        Meilisearch data.
+      </p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ STORAGE ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Storage</p>
+      <h2>What grows, and where it lives</h2>
+      <p class="prose">
+        Five of the nine state stores have no ceiling, and a sixth is unverified. The one people
+        underestimate is
+        MongoDB, and it is specific to this stack: LibreChat stores full message content, and our
+        messages carry <em>tool results</em> — charger telemetry payloads, ticket dumps, fleet
+        queries. Meilisearch then indexes all of it again. So the two largest consumers both scale
+        with tool-call volume, not with user count.
+      </p>
+    </div>
+
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Store</th>
+            <th scope="col">Holds</th>
+            <th scope="col">Bounded</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>mongo-data</code></td>
+            <td>conversations, messages, users, file metadata<span class="sub">largest growth driver — tool results are far bigger than chat text</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>meili-data</code></td>
+            <td>search index over those conversations<span class="sub">tracks Mongo</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>knowledge/</code></td>
+            <td>KB documents uploaded from chat<span class="sub">bind mount, not a Docker volume — see below</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>qdrant-data</code></td>
+            <td>BGE vectors for those documents<span class="sub">~3 KB per chunk; tracks the corpus, not chat</span></td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>librechat-images</code></td>
+            <td>user uploads and generated images</td>
+            <td><span class="grow no">No</span></td>
+          </tr>
+          <tr>
+            <td><code>librechat-logs</code></td>
+            <td>application logs<span class="sub">rotation not yet verified — action item</span></td>
+            <td><span class="grow no">Unconfirmed</span></td>
+          </tr>
+          <tr>
+            <td><code>docgen-files</code></td>
+            <td>generated .xlsx / .docx<span class="sub">capped at 200, oldest evicted — verified in docgen_mcp/server.py</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><code>kb-model-cache</code></td>
+            <td>the BGE embedding model<span class="sub">~450 MB, downloaded once</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+          <tr>
+            <td><code>ecog-sd-cookies</code></td>
+            <td>session cookies<span class="sub">kilobytes</span></td>
+            <td><span class="grow yes">Yes</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <span class="t">Correction · the knowledge corpus exists in exactly one place</span>
+      <p class="d">
+        <code>knowledge/</code> is a <strong>bind mount, not a Docker volume</strong>, so setting
+        Docker's <code>data-root</code> to the EBS volume does not capture it — it lands wherever
+        the deploy tree sits. Left on the root volume that gives two failures: KB uploads fill an
+        8 GB root disk and take the box down, and the corpus is absent from the daily snapshot, so
+        replacing the instance loses it. That second one bites hardest because
+        <code>knowledge/.gitignore</code> deliberately excludes the corpus as “large or
+        proprietary” — those documents are in no git history and no other backup. Today: 25 MB
+        across 74 files, 24 MB of it <code>dept-noc/</code>.
+      </p>
+    </div>
+
+    <p class="prose">
+      The fix is that <strong>nothing stateful sits on the root volume</strong>. Both bind mounts
+      move onto the snapshotted EBS volume, and the corpus joins the nightly S3 sync alongside the
+      database dumps — it needs the offsite copy more than they do, since they at least rebuild
+      from their own dumps.
+    </p>
+
+    <pre class="tree">/data/                          <span class="c">← EBS gp3, encrypted, snapshotted daily</span>
+├── docker/                     <span class="c">← data-root: all 8 named volumes</span>
+└── app/                        <span class="c">← deploy tree (compose + bind mounts)</span>
+    ├── knowledge/              <span class="a">← KB corpus · nightly S3 sync</span>
+    └── roles/departments.json  <span class="a">← created by deploy script before compose starts</span></pre>
+
+    <p class="caption">
+      That last line matters more than it looks: if <code>departments.json</code> is missing,
+      Docker creates a <em>directory</em> at that path instead of failing, and every
+      <code>kb_admin_*</code> call breaks with no obvious cause. On a fresh instance the file must
+      exist before the stack starts.
+    </p>
+
+    <p class="prose">
+      <strong>Sizing.</strong> 100 GB gp3 is comfortable for a 25-user pilot — realistically
+      single-digit GB in year one. Two things make that safe rather than lucky: gp3 resizes online,
+      so 100 GB is a starting point rather than a commitment, and the disk alarm at 80% turns
+      “we ran out of disk” into “we grew the volume last month”. The wildcard is the corpus — if a
+      department loads a few GB of manuals, Qdrant's vectors grow alongside it.
+    </p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ THE BLOCKER ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Read this first</p>
+      <h2>What deploying to AWS does not fix</h2>
+    </div>
+
+    <div class="callout">
+      <span class="t">P0-7 · blocks any multi-user launch</span>
+      <p class="d">
+        The configured z.ai GLM endpoint is a <strong>Coding Plan</strong>, whose terms prohibit
+        multi-user access and cap concurrency at roughly one in-flight request. Moving the stack
+        to AWS does not change that — it makes a single-user-licensed endpoint the bottleneck for
+        every user we onboard. This is a procurement action, not an infrastructure one, and it
+        should run in parallel with the build rather than after it.
+      </p>
+    </div>
+
+    <div class="callout">
+      <span class="t">P0-2 · promoted to launch blocker</span>
+      <p class="d">
+        Because we chose public internet access, today's <code>ALLOW_REGISTRATION=true</code>
+        would let anyone on the internet create an account and query live charger telemetry,
+        tickets and customer data. Behind a VPN allowlist this was a follow-up item; on the open
+        internet it is a launch blocker, and it is designed in rather than deferred.
+      </p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ HOW ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">How it's built</p>
+      <h2>Design decisions worth arguing with</h2>
+      <p class="prose">
+        Each row names the production-readiness item it closes. Pills mark whether the design
+        settles the item or leaves it open.
+      </p>
+    </div>
+
+    <div class="rows">
+
+      <div class="row">
+        <span class="id">Network</span>
+        <span class="body">
+          <span class="t">Private instance behind a NAT gateway</span>
+          <span class="d">
+            Four subnets across two AZs — the load balancer requires two regardless, so the spare
+            pair costs nothing and removes re-plumbing later. The instance sits private with no
+            public IP, satisfying the brief's rule that all non-web services stay private. Access
+            is SSM Session Manager only: no port 22, no key pairs, every session logged.
+          </span>
+        </span>
+        <span class="pill live">Closes P0-3</span>
+      </div>
+
+      <div class="row">
+        <span class="id">DNS &amp; TLS</span>
+        <span class="body">
+          <span class="t">Delegate the zone to Route 53</span>
+          <span class="d">
+            One nameserver change at the registrar, then Terraform owns the zone for about
+            $0.50/mo. This matters more than it sounds: with the zone in Route 53, ACM validates
+            and renews the certificate indefinitely with no human action. Leaving DNS at the
+            registrar means hand-adding a validation record — the classic step nobody remembers
+            when re-validation is eventually needed.
+          </span>
+        </span>
+        <span class="pill live">Closes P0-1</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Identity</span>
+        <span class="body">
+          <span class="t">Registration closed, ~25 admin-provisioned accounts</span>
+          <span class="d">
+            Three layers: <code>ALLOW_REGISTRATION=false</code>, admin-created accounts, and a WAF
+            rate limit on the login endpoint. Accepted trade-offs — passwords live in MongoDB,
+            offboarding is manual, and there is no MFA, which makes that rate limit the only
+            brute-force control we have. Revisit SSO before a second department joins.
+          </span>
+        </span>
+        <span class="pill live">Closes P0-2</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Secrets</span>
+        <span class="body">
+          <span class="t">SSM Parameter Store — and Terraform never holds the values</span>
+          <span class="d">
+            Roughly twenty SecureString parameters under <code>/manthan/prod/*</code>, encrypted
+            with a dedicated KMS key. Not Secrets Manager: that costs about $8/mo for rotation we
+            do not need. Each parameter is created with a placeholder and
+            <code>ignore_changes</code>, then populated out-of-band — because if Terraform owned
+            the values they would sit in plaintext in the state file, which is just
+            <code>.env</code> with extra steps. At boot they render to a tmpfs path, so secrets
+            never touch disk or enter an image layer.
+          </span>
+        </span>
+        <span class="pill live">Closes P0-5, P0-6</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Images</span>
+        <span class="body">
+          <span class="t">Eight ECR repositories, built in CI via OIDC</span>
+          <span class="d">
+            Eight distinct images, not fourteen: <code>services/mcp/kb</code> is built once and
+            run twice with different commands, and the admin panel is an upstream image, not
+            ours. Five third-party images get pinned to digests — <code>mongo:7</code> and
+            <code>meilisearch:v1.12</code> are already tagged, so the real work is the three
+            floating <code>:latest</code> tags. No long-lived AWS keys in GitHub.
+          </span>
+        </span>
+        <span class="pill live">Closes P1-5</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Deploy</span>
+        <span class="body">
+          <span class="t">SSM Run Command, triggered from CI</span>
+          <span class="d">
+            <code>docker compose pull &amp;&amp; up -d</code> executed on the instance via an SSM
+            document. No inbound connection, no SSH, no runner inside the VPC. Rollback is
+            re-running it against the previous tag. A <code>docker-compose.aws.yml</code> override
+            swaps builds for image references — <strong>the base compose file is not
+            modified</strong>, so the local workflow survives intact.
+          </span>
+        </span>
+        <span class="pill flat">New</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Backup</span>
+        <span class="body">
+          <span class="t">Two layers, because they fail differently</span>
+          <span class="d">
+            Daily DLM snapshots of the whole volume for fast recovery, plus a nightly
+            <code>mongodump</code>, Qdrant snapshot <strong>and <code>knowledge/</code> sync</strong>
+            to S3. The second layer earns its place: a snapshot of a <em>running</em> mongod is
+            only crash-consistent, and a logical dump also allows restoring one collection instead
+            of the entire machine. Meilisearch is deliberately excluded — a rebuildable index, not
+            a source of truth. The corpus is included precisely because it <em>isn't</em>
+            rebuildable: it is in no git history.
+          </span>
+        </span>
+        <span class="pill live">Meets RPO/RTO</span>
+      </div>
+
+      <div class="row">
+        <span class="id">Sizing</span>
+        <span class="body">
+          <span class="t">t3.large is a deliberate bet, and it is tight</span>
+          <span class="d">
+            Estimated resident footprint: Mongo ~1.5 GB, Qdrant ~1.5 GB, Meilisearch ~1 GB,
+            LibreChat ~1.5 GB, the KB server's ONNX embedding model ~1.5 GB, headless Playwright
+            ~0.75 GB, plus six Python MCP servers at ~200 MB — roughly
+            <strong>9–10 GB against 8 GB available</strong>. The failure mode is ugly: the OOM
+            killer takes the largest process, usually Mongo, and it presents as unexplained random
+            breakage. Mitigated by 4 GB swap, container memory limits, a memory alarm at 85%, and
+            an instance type that is one variable away from doubling.
+          </span>
+        </span>
+        <span class="pill gate">Known risk</span>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ COST ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Cost</p>
+      <h2>About $152 a month</h2>
+      <p class="prose">
+        On-demand, <code>ap-south-1</code>, no Savings Plan. Excludes LLM API usage, which is
+        per-token operating expense and sits outside this estimate.
+      </p>
+    </div>
+
+    <div class="tscroll">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Line item</th>
+            <th scope="col" class="num">USD / mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>EC2 <code>t3.large</code><span class="sub">2 vCPU / 8 GB · unlimited credit mode</span></td><td class="num">62</td></tr>
+          <tr><td>NAT gateway<span class="sub">keeps the instance private</span></td><td class="num">35</td></tr>
+          <tr><td>Application Load Balancer<span class="sub">TLS termination, the only public ingress</span></td><td class="num">20</td></tr>
+          <tr><td>WAF<span class="sub">managed rules + login rate limit</span></td><td class="num">12</td></tr>
+          <tr><td>EBS 100 GB gp3 + snapshots</td><td class="num">15</td></tr>
+          <tr><td>CloudWatch, ECR, Route 53, S3</td><td class="num">8</td></tr>
+          <tr class="total"><td>Total</td><td class="num">~152</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="caption">
+      For comparison, the EKS design in the internal ballpark runs $300–450/mo. A one-year
+      Savings Plan on the instance would bring this to roughly $135. Two levers exist if the
+      number needs to come down further: dropping NAT for a locked-down public subnet saves $35
+      but formally breaks the brief's “no public IPs” rule, and dropping WAF saves $12 at the
+      cost of our only brute-force control.
+    </p>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ GATES ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Before anything is applied</p>
+      <h2>Five gates</h2>
+      <p class="prose">
+        None of these block <em>writing</em> the Terraform. All of them block go-live. Three are
+        decisions rather than tasks, which is why this document exists.
+      </p>
+    </div>
+
+    <div class="gates">
+      <div class="gate-row">
+        <span class="num">1</span>
+        <span class="t">Working AWS credentials</span>
+        <span class="pill gate">Blocked</span>
+        <span class="d">
+          <code>aws sts get-caller-identity</code> currently fails on the operator's machine, so
+          <code>terraform plan</code> cannot run. Acceptance for this phase is therefore
+          <em>validate and lint clean</em>, with a real plan deferred.
+        </span>
+      </div>
+      <div class="gate-row">
+        <span class="num">2</span>
+        <span class="t">Move off the GLM Coding Plan (P0-7)</span>
+        <span class="pill gate">Procurement</span>
+        <span class="d">
+          A pay-as-you-go or approved provider tier whose terms permit multi-user access and whose
+          concurrency clears projected peak. Start now; it has the longest lead time of anything
+          here.
+        </span>
+      </div>
+      <div class="gate-row">
+        <span class="num">3</span>
+        <span class="t">D1 — data residency ruling</span>
+        <span class="pill gate">Decision</span>
+        <span class="d">
+          Prompts and tool results — charger telemetry, tickets, customer data — are sent to
+          Zhipu (z.ai, China-based) for inference. Internal use may accept this; a public-facing
+          deployment warrants an explicit ruling on the record.
+        </span>
+      </div>
+      <div class="gate-row">
+        <span class="num">4</span>
+        <span class="t">Nameserver delegation</span>
+        <span class="pill flat">Task</span>
+        <span class="d">
+          Point <code>manthanquench.online</code> at the Route 53 hosted zone. One change at the
+          registrar; needed before ACM can issue.
+        </span>
+      </div>
+      <div class="gate-row">
+        <span class="num">5</span>
+        <span class="t">The user list</span>
+        <span class="pill flat">Task</span>
+        <span class="d">
+          Roughly 25 accounts to pre-provision, since self-registration is closed.
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ SCOPE ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">Scope</p>
+      <h2>Deliberately not in this phase</h2>
+    </div>
+    <ul class="tight" style="max-width: var(--measure);">
+      <li><strong>D2 — shared service-account identity.</strong> Every chat user still reads the entire fleet through one <code>NOC_EMAIL</code> token. Restricting tools does not restrict data. Unchanged by this deployment; tracked as AC-6.</li>
+      <li><strong>DEP-15 — runtime MCP registration</strong> without a stack redeploy. Not achievable on single-instance compose; revisit with EKS.</li>
+      <li><strong>A staging environment.</strong> The laptop remains staging for stage 1.</li>
+      <li><strong>Multi-AZ or multi-region HA.</strong> Out of scope by design — see reason 02.</li>
+      <li><strong>The deliverable is validated Terraform only.</strong> Nothing is applied and no AWS resource is created in this phase.</li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <!-- ============ ASKS ============ -->
+  <section>
+    <div class="sec-head">
+      <p class="eyebrow">What we need from you</p>
+      <h2>Four decisions</h2>
+    </div>
+
+    <div class="asks">
+      <div class="ask">
+        <span class="who">Engineering lead</span>
+        <span class="q">Do you accept reversing DEP-1 for stage 1?</span>
+        <span class="d">EC2 + compose now, EKS when one of the three named triggers fires.</span>
+      </div>
+      <div class="ask">
+        <span class="who">Procurement</span>
+        <span class="q">Who owns moving off the GLM Coding Plan?</span>
+        <span class="d">Longest lead time of anything here, and it gates the value of the whole deployment.</span>
+      </div>
+      <div class="ask">
+        <span class="who">Security / compliance</span>
+        <span class="q">Is inference at z.ai acceptable for this data?</span>
+        <span class="d">The D1 ruling. Needed on the record before a public-facing launch.</span>
+      </div>
+      <div class="ask">
+        <span class="who">Budget holder</span>
+        <span class="q">Is ~$152/mo approved for the pilot?</span>
+        <span class="d">Against $300–450/mo for the EKS alternative, excluding LLM usage.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Ador Manthan.AI · noc-mcp-agent</span>
+    <span>Stage-1 AWS deployment design</span>
+    <span>v0.13.1 · 7 Sep 2026 · rev 2</span>
+    <span>Status: awaiting review</span>
+  </footer>
+
+</div>

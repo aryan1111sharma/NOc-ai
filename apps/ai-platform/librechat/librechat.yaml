@@ -21,7 +21,7 @@ modelSpecs:
   enforce: false
   list:
     - name: "noc-engineer-kimi"
-      label: "NOC Engineer (Kimi)"
+      label: "NOC Engineer"
       default: true
       description: "NOC engineer assistant on Kimi (kimi-for-coding). Default."
       preset:

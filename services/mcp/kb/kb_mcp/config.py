@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     embed_dim: int = 768                         # MUST match embed_model
     chunk_max_chars: int = 1800                  # ~450 tokens
     chunk_overlap_chars: int = 200
-    default_top_k: int = 5
+    # With hybrid dense+BM25 re-ranking (store.py), 4 matched top_k=5's
+    # recall/MRR on the evaluated KB corpus at ~21% fewer tokens sent to the
+    # LLM. Re-check against a given corpus's own eval set before retuning.
+    default_top_k: int = 4
     # Relevance floor for kb_search. Below this a hit is noise, and returning noise
     # defeats the "not in the knowledge base" contract in the tool docstring.
     # Calibrated on the Phase-1 corpus: on-topic hits scored 0.58-0.83, off-topic 0.41-0.42.

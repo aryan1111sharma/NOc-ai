@@ -50,9 +50,15 @@ well-phrased question away from being quoted to whoever holds the tool.
 
 ## Tools
 
-One per profile: `kb_search_<profile>(query, top_k=5, min_score=None)` — returns up to
+One per profile: `kb_search_<profile>(query, top_k=4, min_score=None)` — returns up to
 `top_k` chunks, each with `source` (path relative to the corpus root), `location`, `text`,
 and a relevance `score`. Read-only.
+
+Internally, each collection is queried with a larger dense pool than `top_k`, then
+re-ranked by fusing dense (cosine) rank with lexical (BM25) rank over that pool before
+truncating to `top_k` — this recovers exact terms/IDs/error codes that rank low on
+embedding similarity alone. `score` on a returned chunk is always the original dense
+cosine score, never a fused score, so `min_score` filtering is unaffected by re-ranking.
 
 **An empty list means the knowledge base does not cover the query**, and agents are
 instructed to say so rather than confabulate. Nothing else may produce an empty list — a
@@ -100,7 +106,7 @@ field name uppercased (`collection` → `COLLECTION`).
 `QDRANT_URL`, `COLLECTION` (default `ev_kb`, the shared collection),
 `EMBED_MODEL` (`BAAI/bge-base-en-v1.5`, 768-dim), `EMBED_DIM`,
 `KNOWLEDGE_DIR` (default `/knowledge`), `SCOPES_FILE` (default `/knowledge/scopes.yaml`),
-`MIN_SCORE_DEFAULT` (default `0.5`), `DEFAULT_TOP_K` (default `5`),
+`MIN_SCORE_DEFAULT` (default `0.5`), `DEFAULT_TOP_K` (default `4`),
 `CHUNK_MAX_CHARS`, `CHUNK_OVERLAP_CHARS`,
 `MCP_TRANSPORT` / `MCP_HOST` / `MCP_PORT` (8106).
 

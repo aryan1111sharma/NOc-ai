@@ -348,3 +348,85 @@ def test_a_document_with_no_provenance_anywhere_still_reports_none():
 
     doc = store.list_documents()[0]
     assert doc["uploaded_by"] is None and doc["chunks"] == 3
+
+
+# --- hybrid dense+BM25 re-ranking ---------------------------------------
+
+def test_bm25_scores_favor_exact_term_overlap():
+    from kb_mcp.store import _bm25_scores, _tokenize
+
+    docs = [
+        "connector lock failure on port 3",
+        "general charging overview",
+        "connector maintenance guide",
+    ]
+    scores = _bm25_scores(_tokenize("connector lock failure"), [_tokenize(d) for d in docs])
+    assert scores[0] > scores[1]
+    assert scores[0] > scores[2]
+
+
+def test_hybrid_rerank_promotes_exact_match_ranked_low_by_dense():
+    """A chunk with weak dense score but exact lexical overlap should outrank
+    higher-dense, lexically-unrelated chunks once BM25 is fused in — this is
+    what lets an exact ID/error-code chunk survive truncation to top_k
+    instead of being crowded out by looser paraphrases."""
+    from kb_mcp.store import _hybrid_rerank
+
+    hits = [
+        {"source": "a", "location": "1", "text": "general charging overview", "score": 0.9},
+        {"source": "b", "location": "2", "text": "unrelated maintenance notes", "score": 0.85},
+        {"source": "c", "location": "3", "text": "error E204 connector lock failure", "score": 0.5},
+    ]
+    reranked = _hybrid_rerank(hits, "error E204 connector lock failure")
+    assert reranked[0]["source"] == "c"
+
+
+def test_hybrid_rerank_keeps_original_dense_score():
+    """Re-ranking changes order only; each hit keeps its original dense
+    cosine score, so min_score filtering downstream is unaffected."""
+    from kb_mcp.store import _hybrid_rerank
+
+    hits = [
+        {"source": "a", "location": "1", "text": "general overview", "score": 0.9},
+        {"source": "b", "location": "2", "text": "specific error E204", "score": 0.4},
+    ]
+    reranked = _hybrid_rerank(hits, "error E204")
+    assert {h["source"]: h["score"] for h in reranked} == {"a": 0.9, "b": 0.4}
+
+
+def test_hybrid_rerank_is_a_noop_for_empty_query_terms():
+    from kb_mcp.store import _hybrid_rerank
+
+    hits = [{"source": "a", "location": "1", "text": "x", "score": 0.9},
+            {"source": "b", "location": "2", "text": "y", "score": 0.5}]
+    assert _hybrid_rerank(hits, "???") == hits
+
+
+def test_search_with_query_text_still_respects_top_k():
+    s, e = _store(), FakeEmbedder()
+    s.ensure_collection()
+    chunks = [
+        {"source": "a.md", "location": f"h{i}", "text": f"chunk number {i} about charging",
+         "doc_hash": "h", "chunk_idx": i}
+        for i in range(6)
+    ]
+    s.upsert(chunks, e.embed([c["text"] for c in chunks]))
+    hits = s.search(e.embed(["charging"])[0], top_k=2, query_text="charging")
+    assert len(hits) == 2
+
+
+def test_search_many_with_query_text_hybrid_reranks_within_each_store():
+    e = FakeEmbedder()
+    client = QdrantClient(":memory:")
+    reg = StoreRegistry(client, CFG, shared_collection="ev_kb", dim=e.dim)
+    reg.ensure_all()
+    shared = reg.for_scope("ev-core")
+    texts = ["general overview text", "error E204 connector lock failure"]
+    shared.upsert(
+        [_chunk("ev-core/a.md", "ev-core", texts[0], 0),
+         _chunk("ev-core/b.md", "ev-core", texts[1], 1)],
+        e.embed(texts),
+    )
+    hits = search_many(reg.group(["ev-core"]), e.embed(["error E204"])[0],
+                        top_k=1, min_score=0.0, query_text="error E204")
+    assert hits[0]["source"] == "ev-core/b.md"

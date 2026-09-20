@@ -225,7 +225,8 @@ def _register(mcp: FastMCP, profile: Profile, config, registry, embedder) -> Non
         floor = min_score
         if floor is None:
             floor = profile.min_score if profile.min_score is not None else settings.min_score_default
-        return search_many(pairs, embedder.embed([query])[0], top_k=top_k, min_score=floor)
+        return search_many(pairs, embedder.embed([query])[0], top_k=top_k, min_score=floor,
+                           query_text=query)
 
     mcp.tool(name=f"kb_search_{profile.name}", description=_description(profile))(kb_search)
 

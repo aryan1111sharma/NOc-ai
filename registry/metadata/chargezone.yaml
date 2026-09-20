@@ -1,0 +1,67 @@
+schema_version: 1
+mcp_server: chargezone
+tools:
+- tool_name: cz_jira_search
+  domain: Issue Tracking
+  description: Search Quench (QCH) Jira issues, hard-scoped to the QCH project
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_get_issue
+  domain: Issue Tracking
+  description: Full detail of one QCH Jira issue by key
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_get_comments
+  domain: Issue Tracking
+  description: Comments on a QCH Jira issue
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_get_issue_transitions
+  domain: Issue Tracking
+  description: Current status plus available workflow transitions for a QCH issue
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_export
+  domain: Issue Tracking
+  description: Bulk export of QCH issues matching a filter
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_stats
+  domain: Reporting
+  description: Aggregate QCH ticket statistics (by status/type/priority/assignee/trend)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_project_meta
+  domain: Issue Tracking
+  description: 'Reference metadata for the QCH project: statuses, issue types, priorities'
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: cz_jira_list_dashboards
+  domain: Reporting
+  description: List Jira dashboards and saved filters referencing QCH
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

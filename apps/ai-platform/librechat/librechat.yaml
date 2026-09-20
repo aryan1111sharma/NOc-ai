@@ -47,6 +47,33 @@ mcpSettings:
 
 endpoints:
   custom:
+    # NOC LLM Router (services/llm-router) - resolves an agent's own id (e.g.
+    # "agent_kimi26NOCEngineerV1") to that agent's admin-managed fallback Combo, an
+    # ordered list of (credential, model) targets drawn only from the GLM/Kimi entries
+    # below, falling back to the next target on 429/5xx/timeout/connection error before
+    # any response bytes are sent. apiKey here is a placeholder: auth happens per-target
+    # inside llm-router, resolved from the SAME GLM_API_KEY/KIMI_API_KEY as below, never
+    # a separate key. fetch: true so LibreChat calls this router's own GET /v1/models to
+    # learn which agent ids currently have an enabled Combo - required for
+    # validateAgentModel to accept an agent whose provider is "NOC Router" and whose
+    # model is its own agent id. See services/llm-router/README.md.
+    #
+    # baseURL points at tool-filter-proxy, not llm-router directly: LibreChat ->
+    # tool-filter-proxy (shrinks tools[]) -> llm-router (resolves the Combo) ->
+    # provider -> MCP. tool-filter-proxy strips the leading "router" path segment
+    # and forwards the rest to llm-router's own /v1/... routes unchanged - see
+    # services/tool-filter-proxy/README.md.
+    - name: "NOC Router"
+      apiKey: "not-needed"
+      baseURL: "http://tool-filter-proxy:8108/router/v1"
+      models:
+        default:
+          - "noc-engineer"
+        fetch: true
+      titleConvo: true
+      titleModel: "noc-engineer"
+      modelDisplayLabel: "NOC Router"
+
     # GLM (Zhipu / z.ai) ??? OpenAI-compatible API. Key comes from apps/ai-platform/librechat/.env (GLM_API_KEY).
     - name: "GLM"
       apiKey: "${GLM_API_KEY}"

@@ -1,0 +1,67 @@
+schema_version: 1
+mcp_server: platform
+tools:
+- tool_name: platform_health
+  domain: Platform Intelligence
+  description: Liveness check + whether the read-only repo mount is present
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_project
+  domain: Platform Intelligence
+  description: Declared VERSION, top-level layout, list of MCP servers under services/mcp/
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_python
+  domain: Platform Intelligence
+  description: This server's Python runtime + each MCP service's declared requirements.txt
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_git
+  domain: Platform Intelligence
+  description: Current branch, latest commit, working-tree cleanliness
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_filesystem
+  domain: Platform Intelligence
+  description: Shallow directory listing (name/type/size only, dotfiles excluded)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_api
+  domain: Platform Intelligence
+  description: This server's own name/transport/tool list (not cross-server discovery)
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_mcp_discovery
+  domain: Platform Intelligence
+  description: Static source scan of services/mcp/* for @mcp.tool declarations across all servers
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'
+- tool_name: platform_config_validate
+  domain: Platform Intelligence
+  description: Cross-check docker-compose.yml / librechat.yaml / services/mcp/* for configuration drift
+  capability: READ
+  risk: LOW
+  source:
+    classified_from: source-inspection
+    last_reviewed: '2026-08-19'

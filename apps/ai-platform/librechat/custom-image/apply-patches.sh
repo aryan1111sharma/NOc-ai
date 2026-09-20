@@ -1,6 +1,7 @@
 #!/bin/sh
-# Applies the Knowledge Bases additions, and the custom-endpoint file-attachment
-# fix (step 7), to a stock LibreChat tree.
+# Applies the Knowledge Bases additions, the custom-endpoint file-attachment
+# fix (step 7), and the agent-header provider-suffix fix (step 8), to a stock
+# LibreChat tree.
 #
 # Every edit is anchored on a unique, verbatim string and asserted to match
 # exactly once. A silent no-op here would produce an image that builds and boots
@@ -258,5 +259,112 @@ patch_once "$APP/client/src/components/Chat/Input/Files/__tests__/AttachFileMenu
       expect(screen.getByText('Upload Image')).toBeInTheDocument();
       expect(screen.queryByText('Upload to Provider')).not.toBeInTheDocument();
     });"
+
+echo "== 8/8 hide provider suffix in agent chat header =="
+# Agents are sometimes named "<Agent Name> (Provider)" to distinguish variants
+# that differ only in which model serves them, e.g. agent_kimi26NOCEngineerV1's
+# stored name "NOC Engineer (Kimi)" (agents/agents.json). getDisplayValue feeds
+# the chat header's model-selector button directly from that stored name, so it
+# rendered the provider suffix verbatim. Stripped for display only, in the one
+# function that renders it there -- the stored agent.name is untouched.
+cp /patch-files/client/displayAgentName.ts \
+   "$APP/client/src/components/Chat/Menus/Endpoints/displayAgentName.ts"
+
+patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
+  "import { Endpoint, SelectedValues } from '~/common';" \
+  "import { Endpoint, SelectedValues } from '~/common';
+import { displayAgentName } from './displayAgentName';"
+
+patch_once "$APP/client/src/components/Chat/Menus/Endpoints/utils.ts" \
+  "      return endpoint.agentNames[selectedValues.model];
+    } else if (isAgentsEndpoint(endpoint.value) && agentsMap) {
+      const agent = agentsMap[selectedValues.model];
+      return agent?.name || selectedValues.model;
+    }" \
+  "      return displayAgentName(endpoint.agentNames[selectedValues.model]);
+    } else if (isAgentsEndpoint(endpoint.value) && agentsMap) {
+      const agent = agentsMap[selectedValues.model];
+      return displayAgentName(agent?.name || selectedValues.model);
+    }"
+
+echo "== 9/9 LLM Routing admin page =="
+# Thin authenticated facade over the standalone llm-router service
+# (services/llm-router) -- same shape as the Knowledge Bases wiring above, but
+# this route owns no state itself (see files/api/llmRouting.js's header).
+cp /patch-files/api/llmRouting.js "$APP/api/server/routes/llmRouting.js"
+echo "  installed api/server/routes/llmRouting.js"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "const knowledgeBases = require('./knowledgeBases');" \
+  "const knowledgeBases = require('./knowledgeBases');
+const llmRouting = require('./llmRouting');"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "  knowledgeBases," \
+  "  knowledgeBases,
+  llmRouting,"
+
+patch_once "$APP/api/server/index.js" \
+  "  app.use('/api/knowledge-bases', routes.knowledgeBases);" \
+  "  app.use('/api/knowledge-bases', routes.knowledgeBases);
+  app.use('/api/llm-routing', routes.llmRouting);"
+
+mkdir -p "$APP/client/src/components/LlmRouting"
+cp /patch-files/client/LlmRoutingView.tsx \
+   "$APP/client/src/components/LlmRouting/LlmRoutingView.tsx"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "const loadSkillsView = () =>" \
+  "const loadLlmRoutingView = () =>
+  import('~/components/LlmRouting/LlmRoutingView').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadSkillsView = () =>"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "            {
+              path: 'knowledge-bases',
+              lazy: loadKnowledgeBasesView,
+            }," \
+  "            {
+              path: 'knowledge-bases',
+              lazy: loadKnowledgeBasesView,
+            },
+            {
+              path: 'llm-routing',
+              lazy: loadLlmRoutingView,
+            },"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "import { Database, MessagesSquare } from 'lucide-react';" \
+  "import { Database, MessagesSquare, Network } from 'lucide-react';"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "      links.push({
+        title: 'com_ui_knowledge_bases' as NavLink['title'],
+        label: 'Knowledge Bases',
+        icon: Database,
+        id: 'knowledge-bases',
+        onClick: () => navigate('/knowledge-bases'),
+      });
+    }" \
+  "      links.push({
+        title: 'com_ui_knowledge_bases' as NavLink['title'],
+        label: 'Knowledge Bases',
+        icon: Database,
+        id: 'knowledge-bases',
+        onClick: () => navigate('/knowledge-bases'),
+      });
+      /* Same access:admin + manage:mcpservers gate as Knowledge Bases -- see
+         files/api/llmRouting.js. Hiding the entry is convenience only. */
+      links.push({
+        title: 'com_ui_llm_routing' as NavLink['title'],
+        label: 'LLM Routing',
+        icon: Network,
+        id: 'llm-routing',
+        onClick: () => navigate('/llm-routing'),
+      });
+    }"
 
 echo "PATCHES APPLIED OK"

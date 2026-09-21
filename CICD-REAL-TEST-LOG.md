@@ -7,3 +7,4 @@ rebuilds - only noc-librechat restarts briefly (up.sh always does this
 at the end of every deploy to re-handshake with MCP servers).
 
 Test run: 2026-09-21
+Tests-gate verification run: 2026-09-21 - confirming deploy.yml now waits for the Tests workflow to succeed before deploying.

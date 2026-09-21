@@ -32,7 +32,7 @@ services:
     build:
       context: ./custom-image
       args:
-        BASE: ghcr.io/danny-avila/librechat:latest
+        BASE: ghcr.io/danny-avila/librechat@sha256:c5db3331b845e1f289f8d04c0c77936c4bbe372f76730a804abc1c37e44d23a9
     image: noc-librechat-kb:local
     container_name: noc-librechat
     # No published port: nginx (below) is the only browser-facing entry point, on :80.
@@ -187,14 +187,13 @@ services:
   llm-router:
     build: ../../../services/llm-router
     container_name: llm-router
-    env_file:
-      - .env
     environment:
       - LLM_ROUTER_HOST=0.0.0.0
       - LLM_ROUTER_PORT=8110
       - LLM_ROUTER_DATA_FILE=/data/llm-router-registry.json
-      - LLM_ROUTER_LIBRECHAT_YAML_PATH=/librechat-config/librechat.yaml
+      - LLM_ROUTER_LIBRECHAT_API_URL=http://api:3080
       - LLM_ROUTER_SELF_ENDPOINT_NAME=NOC Router
+      - LLM_ROUTER_INTERNAL_SECRET=${LLM_ROUTER_INTERNAL_SECRET}
     volumes:
       # Per-agent Combo assignments (endpoint+model references only, never a
       # key) -- a named volume (not a repo bind mount) purely for consistency

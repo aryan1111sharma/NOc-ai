@@ -4,9 +4,10 @@
  * Flow: LLM Routing -> list existing agents -> select an agent -> manage that
  * agent's fallback Combo. A Combo target is always an {endpoint, model} pair
  * picked from the read-only Catalog (GET /catalog, itself sourced from
- * librechat.yaml's already-registered credentials) -- this page can never
- * accept, store, or display an API key, and never lets an admin type a
- * provider/base_url/model by hand.
+ * LibreChat's own already-registered provider credentials -- librechat.yaml
+ * plus anything since added through LibreChat's own Admin Panel, e.g. a new
+ * OpenRouter entry) -- this page can never accept, store, or display an API
+ * key, and never lets an admin type a provider/base_url/model by hand.
  *
  * Holds no routing logic of its own: every action maps 1:1 onto an endpoint
  * that delegates to llm-router (services/llm-router) or to LibreChat's own

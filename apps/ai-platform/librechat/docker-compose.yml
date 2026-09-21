@@ -56,6 +56,11 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/LibreChat
       - MEILI_HOST=http://meilisearch:7700
       - CONFIG_PATH=/app/librechat.yaml
+      # LLM_ROUTER_INTERNAL_SECRET comes from env_file below (.env). Checked by
+      # llmRouting.js's requireInternalSecret on /api/llm-routing/internal/* --
+      # the routes llm-router calls to learn the registered catalog and to
+      # resolve a Combo target's real credential. See llm-router's own compose
+      # block above and services/llm-router/README.md.
       # Browser-facing address, used to build share links. Derived from SERVER_HOST (.env)
       # so only that one value needs to change if the deployment moves host/domain.
       # The :-localhost default is load-bearing: with SERVER_HOST unset this resolves to the
@@ -181,12 +186,16 @@ services:
 
   # OpenAI-compatible chat-completions proxy: an agent id (e.g.
   # "agent_kimi26NOCEngineerV1") resolves to that agent's admin-managed
-  # fallback Combo -- an ordered list of (credential, model) targets sourced
-  # entirely from librechat.yaml's own endpoints.custom list (mounted below,
-  # read-only, the same file the api service reads) -- with automatic
-  # fallback on 429/5xx/timeout/connection failure before the first response
-  # byte. Wired into librechat.yaml as the "NOC Router" custom endpoint, behind
-  # tool-filter-proxy below (LibreChat -> tool-filter-proxy -> llm-router ->
+  # fallback Combo -- an ordered list of (credential, model) targets. The
+  # catalog and every credential come from LibreChat's own api service (the
+  # SAME endpoints.custom resolution direct model execution uses, base
+  # librechat.yaml plus any admin-panel-added provider like OpenRouter) via
+  # the internal-only routes on the LLM Routing facade -- this service parses
+  # no yaml and holds no credential of its own; see services/llm-router/README.md
+  # and llm_router/catalog.py. Automatic fallback on 429/5xx/timeout/connection
+  # failure before the first response byte. Wired into librechat.yaml as the
+  # "NOC Router" custom endpoint, behind tool-filter-proxy below (LibreChat ->
+  # tool-filter-proxy -> llm-router -> LibreChat api (credential resolve) ->
   # provider). Combo assignments are managed from the LLM Routing admin page
   # (apps/ai-platform/librechat/custom-image/files/api/llmRouting.js), which
   # is the only thing that talks to it: no published port here, same
@@ -194,25 +203,27 @@ services:
   llm-router:
     build: ../../../services/llm-router
     container_name: llm-router
-    env_file:
-      - .env
+    # No env_file here (unlike every other service in this file): this service
+    # resolves every provider credential from LibreChat's api service at
+    # request time (see llm_router/catalog.py) and must never hold a copy of
+    # GLM_API_KEY/KIMI_API_KEY/etc. at rest -- so it gets ONLY the one secret
+    # it actually needs, explicitly, not the whole .env file.
     environment:
       - LLM_ROUTER_HOST=0.0.0.0
       - LLM_ROUTER_PORT=8110
       - LLM_ROUTER_DATA_FILE=/data/llm-router-registry.json
-      - LLM_ROUTER_LIBRECHAT_YAML_PATH=/librechat-config/librechat.yaml
+      - LLM_ROUTER_LIBRECHAT_API_URL=http://api:3080
       - LLM_ROUTER_SELF_ENDPOINT_NAME=NOC Router
+      # Same value the api service reads (its own env_file: .env below) to
+      # authorize this specific caller on /api/llm-routing/internal/*. Never
+      # a provider API key.
+      - LLM_ROUTER_INTERNAL_SECRET=${LLM_ROUTER_INTERNAL_SECRET}
     volumes:
       # Per-agent Combo assignments (endpoint+model references only, never a
       # key) -- a named volume (not a repo bind mount) purely for consistency
       # with the rest of this stack's persisted state. See
       # services/llm-router/README.md.
       - llm-router-data:/data
-      # Same librechat.yaml the api service reads (line 68) -- the ONLY
-      # source of provider credentials/models. Mounted read-only a second
-      # time here rather than duplicated: this service never gets its own
-      # copy of a credential and never writes to this file.
-      - ./librechat.yaml:/librechat-config/librechat.yaml:ro
     restart: unless-stopped
 
   # Shrinks the tools[] array on every /chat/completions request before it

@@ -80,18 +80,18 @@ def _target_label(target: ComboTarget) -> str:
     return f"{target.endpoint}/{target.model}"
 
 
-def _resolve_candidates(
+async def _resolve_candidates(
     catalog: Catalog, combo: Combo
 ) -> list[tuple[ComboTarget, ResolvedTarget]]:
     """Enabled targets, in priority order, with their real base_url/api_key
-    resolved from the catalog. A target whose endpoint/model has since
-    disappeared from librechat.yaml is silently skipped -- config drift, not
-    an error (see Catalog.resolve)."""
+    resolved from the catalog. A target whose endpoint/model is no longer
+    registered is silently skipped -- config drift, not an error (see
+    Catalog.resolve)."""
     resolved: list[tuple[ComboTarget, ResolvedTarget]] = []
     for target in combo.targets:
         if not target.enabled:
             continue
-        real = catalog.resolve(target.endpoint, target.model)
+        real = await catalog.resolve(target.endpoint, target.model)
         if real is not None:
             resolved.append((target, real))
     return resolved
@@ -135,7 +135,7 @@ class Router:
         if not combo.enabled:
             raise ComboDisabledError(agent_id)
 
-        candidates = _resolve_candidates(self._catalog, combo)
+        candidates = await _resolve_candidates(self._catalog, combo)
         if not candidates:
             raise NoEnabledTargetsError(agent_id)
 

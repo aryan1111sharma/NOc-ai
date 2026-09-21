@@ -169,14 +169,15 @@ function requireInternalSecret(req, res, next) {
 /** Every {endpoint, model} pair llm-router may currently route to, masked -- the
  *  live equivalent of the old librechat.yaml-parsing Catalog, now sourced from
  *  getAppConfig() so an admin-added endpoint (e.g. OpenRouter) appears with zero
- *  change on either side. baseOnly: true mirrors admin/config.js's own /base route --
- *  an agent-level Combo target resolves against the global, admin-registered
+ *  change on either side. getAppConfig() already includes the LibreChat Admin/
+ *  MongoDB `__base__` configuration override merged on top of librechat.yaml --
+ *  an agent-level Combo target resolves against that same global, admin-registered
  *  config, not any one browser session's per-principal overrides. */
 router.get(
   '/internal/catalog',
   requireInternalSecret,
   handle(async (req, res) => {
-    const appConfig = await getAppConfig({ baseOnly: true });
+    const appConfig = await getAppConfig({});
     const customEndpoints = appConfig?.endpoints?.[EModelEndpoint.custom] ?? [];
     const endpoints = customEndpoints
       .filter((endpoint) => endpoint.name !== ROUTER_PROVIDER_NAME)
@@ -204,7 +205,10 @@ router.post(
     if (typeof endpoint !== 'string' || typeof model !== 'string') {
       return res.status(400).json({ message: '`endpoint` and `model` (strings) are required' });
     }
-    const appConfig = await getAppConfig({ baseOnly: true });
+    // getAppConfig() already includes the LibreChat Admin/MongoDB `__base__`
+    // configuration override merged on top of librechat.yaml -- the same
+    // effective config direct model execution resolves against.
+    const appConfig = await getAppConfig({});
     const endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
     const models = endpointConfig?.models?.default ?? [];
     if (!endpointConfig || !models.includes(model)) {

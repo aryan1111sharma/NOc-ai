@@ -169,14 +169,15 @@ function requireInternalSecret(req, res, next) {
 /** Every {endpoint, model} pair llm-router may currently route to, masked -- the
  *  live equivalent of the old librechat.yaml-parsing Catalog, now sourced from
  *  getAppConfig() so an admin-added endpoint (e.g. OpenRouter) appears with zero
- *  change on either side. baseOnly: true mirrors admin/config.js's own /base route --
- *  an agent-level Combo target resolves against the global, admin-registered
- *  config, not any one browser session's per-principal overrides. */
+ *  change on either side. getAppConfig() (no baseOnly) includes the LibreChat
+ *  Admin Panel/MongoDB `__base__` configuration override, so an agent-level Combo
+ *  target resolves against the same effective, admin-registered config LibreChat's
+ *  own backend would use -- not just librechat.yaml's static base config. */
 router.get(
   '/internal/catalog',
   requireInternalSecret,
   handle(async (req, res) => {
-    const appConfig = await getAppConfig({ baseOnly: true });
+    const appConfig = await getAppConfig({});
     const customEndpoints = appConfig?.endpoints?.[EModelEndpoint.custom] ?? [];
     const endpoints = customEndpoints
       .filter((endpoint) => endpoint.name !== ROUTER_PROVIDER_NAME)
@@ -189,10 +190,13 @@ router.get(
 );
 
 /** Resolves ONE {endpoint, model} pair to its real {baseURL, apiKey}, via the same
- *  getCustomEndpointConfig() LibreChat's own direct-model execution uses (see
- *  server/services/Endpoints/agents/initialize.js) -- never a second, hand-rolled
- *  credential lookup. The returned apiKey is for llm-router to use for ONE outbound
- *  call; this route neither logs it nor persists it. A "user_provided" (bring-your-own-
+ *  getAppConfig()/getCustomEndpointConfig() LibreChat's own direct-model execution
+ *  uses (see server/services/Endpoints/agents/initialize.js) -- never a second,
+ *  hand-rolled credential lookup. getAppConfig() (no baseOnly) includes the
+ *  LibreChat Admin Panel/MongoDB `__base__` configuration override, so this resolves
+ *  against the same effective config an admin-added endpoint (e.g. OpenRouter) would
+ *  have. The returned apiKey is for llm-router to use for ONE outbound call; this
+ *  route neither logs it nor persists it. A "user_provided" (bring-your-own-
  *  key) endpoint has no single resolvable credential for an agent-level Combo target,
  *  so it 404s exactly like an endpoint/model that was never registered -- llm-router
  *  already treats that as ordinary config drift (see Catalog.resolve). */
@@ -204,7 +208,7 @@ router.post(
     if (typeof endpoint !== 'string' || typeof model !== 'string') {
       return res.status(400).json({ message: '`endpoint` and `model` (strings) are required' });
     }
-    const appConfig = await getAppConfig({ baseOnly: true });
+    const appConfig = await getAppConfig({});
     const endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
     const models = endpointConfig?.models?.default ?? [];
     if (!endpointConfig || !models.includes(model)) {

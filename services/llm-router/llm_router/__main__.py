@@ -10,7 +10,9 @@ from .store import Registry
 if __name__ == "__main__":
     registry = Registry(settings.data_file)
     catalog = Catalog(
-        settings.librechat_yaml_path, self_endpoint_name=settings.self_endpoint_name
+        settings.librechat_api_url,
+        internal_secret=settings.internal_secret,
+        self_endpoint_name=settings.self_endpoint_name,
     )
     app = create_app(
         registry,

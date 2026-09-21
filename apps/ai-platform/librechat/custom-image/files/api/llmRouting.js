@@ -3,10 +3,14 @@
  *
  * A thin, authenticated HTTP facade over the EXISTING llm-router service, plus the
  * minimal Agent CRUD needed to point an agent at it. It owns no credential state of
- * its own: the set of selectable (credential, model) targets is llm-router's own
- * read-only /admin/catalog, itself sourced from librechat.yaml's endpoints.custom list
- * -- the SAME provider registration LibreChat's own agents already use. This file
- * never accepts, stores or returns an API key -- same design as knowledgeBases.js.
+ * its own: the set of selectable (credential, model) targets, and the real credential
+ * behind any one of them, come from LibreChat's OWN existing provider registration --
+ * getAppConfig/getCustomEndpointConfig, the EXACT functions LibreChat's own backend
+ * already calls to resolve a custom endpoint (librechat.yaml's base endpoints.custom,
+ * merged with whatever an admin has since added or changed through LibreChat's own
+ * Admin Panel, e.g. a new OpenRouter entry) for direct model execution. This file
+ * re-implements none of that resolution and keeps no copy of a credential at rest --
+ * same design as knowledgeBases.js, extended only by the two /internal/* routes below.
  *
  *   GET    /api/llm-routing/agents                 -> LibreChat's own Agent collection (getAgents)
  *   GET    /api/llm-routing/catalog                -> GET    llm-router /admin/catalog
@@ -15,6 +19,9 @@
  *   PUT    /api/llm-routing/combos/:agentId        -> PUT    llm-router /admin/combos/:agentId (+ Agent sync)
  *   PUT    /api/llm-routing/combos/:agentId/enabled -> PUT   llm-router /admin/combos/:agentId/enabled (+ Agent sync)
  *   DELETE /api/llm-routing/combos/:agentId        -> DELETE llm-router /admin/combos/:agentId (+ Agent revert)
+ *
+ *   GET    /api/llm-routing/internal/catalog  -> every registered {endpoint, model}, masked
+ *   POST   /api/llm-routing/internal/resolve  -> one {endpoint, model} -> {baseURL, apiKey}
  *
  * Authorization uses LibreChat's own capability system, not a new one -- identical
  * to knowledgeBases.js, see that file's comment for the full rationale:
@@ -26,8 +33,16 @@
  * llm-router is internal to the Docker network and is never reachable from the
  * browser; it has no published port and no auth of its own (see
  * services/llm-router/README.md "Security model"). No provider API key ever crosses
- * this boundary in either direction: a Combo target is an {endpoint, model} reference,
- * never a key.
+ * the browser-facing boundary in either direction: every route below the requireJwtAuth
+ * gate treats a Combo target as an {endpoint, model} reference only, never a key.
+ *
+ * The two /internal/* routes are the one deliberate exception, and exist ONLY for
+ * llm-router itself to call: it is a separate process with no browser session, so it
+ * cannot satisfy requireJwtAuth, and is registered ABOVE that gate for exactly this
+ * reason. It is instead gated by a shared secret (LLM_ROUTER_INTERNAL_SECRET, known
+ * only to this process and llm-router -- never a provider API key). /internal/resolve
+ * hands back a real credential, in-memory, for llm-router to make ONE outbound call
+ * with; nothing here writes it anywhere, logs it, or returns it from any other route.
  *
  * Agent <-> Combo wiring, without touching Agent creation/editing or its schema:
  * enabling a Combo (PUT .../combos/:agentId with enabled targets, or PUT .../enabled)
@@ -45,6 +60,9 @@ const { SystemCapabilities } = require('@librechat/data-schemas');
 const { requireCapability } = require('~/server/middleware/roles/capabilities');
 const { requireJwtAuth } = require('~/server/middleware');
 const { getAgent, getAgents, updateAgent } = require('~/models');
+const { getAppConfig } = require('~/server/services/Config');
+const { getCustomEndpointConfig, isUserProvided } = require('@librechat/api');
+const { extractEnvVariable, EModelEndpoint } = require('librechat-data-provider');
 
 const router = express.Router();
 
@@ -130,6 +148,75 @@ async function restoreAgentProvider(agentId, originalProvider, originalModel) {
   }
   await updateAgent({ id: agentId }, { provider: originalProvider, model: originalModel });
 }
+
+/**
+ * Gates the two /internal/* routes below. They exist for llm-router (a separate
+ * process, no browser session) to call, so they cannot go through requireJwtAuth --
+ * this shared secret is the only thing standing between them and the Docker network
+ * boundary. Fails closed: an unconfigured secret refuses every request rather than
+ * silently allowing one, so a deployment can never end up with this route effectively
+ * unauthenticated because a .env line was forgotten.
+ */
+const INTERNAL_SECRET = process.env.LLM_ROUTER_INTERNAL_SECRET || '';
+
+function requireInternalSecret(req, res, next) {
+  if (!INTERNAL_SECRET || req.headers['x-internal-secret'] !== INTERNAL_SECRET) {
+    return res.status(401).json({ message: 'invalid or missing internal secret' });
+  }
+  return next();
+}
+
+/** Every {endpoint, model} pair llm-router may currently route to, masked -- the
+ *  live equivalent of the old librechat.yaml-parsing Catalog, now sourced from
+ *  getAppConfig() so an admin-added endpoint (e.g. OpenRouter) appears with zero
+ *  change on either side. baseOnly: true mirrors admin/config.js's own /base route --
+ *  an agent-level Combo target resolves against the global, admin-registered
+ *  config, not any one browser session's per-principal overrides. */
+router.get(
+  '/internal/catalog',
+  requireInternalSecret,
+  handle(async (req, res) => {
+    const appConfig = await getAppConfig({ baseOnly: true });
+    const customEndpoints = appConfig?.endpoints?.[EModelEndpoint.custom] ?? [];
+    const endpoints = customEndpoints
+      .filter((endpoint) => endpoint.name !== ROUTER_PROVIDER_NAME)
+      .map((endpoint) => ({
+        name: endpoint.name,
+        models: { default: endpoint.models?.default ?? [] },
+      }));
+    return res.status(200).json({ endpoints });
+  }),
+);
+
+/** Resolves ONE {endpoint, model} pair to its real {baseURL, apiKey}, via the same
+ *  getCustomEndpointConfig() LibreChat's own direct-model execution uses (see
+ *  server/services/Endpoints/agents/initialize.js) -- never a second, hand-rolled
+ *  credential lookup. The returned apiKey is for llm-router to use for ONE outbound
+ *  call; this route neither logs it nor persists it. A "user_provided" (bring-your-own-
+ *  key) endpoint has no single resolvable credential for an agent-level Combo target,
+ *  so it 404s exactly like an endpoint/model that was never registered -- llm-router
+ *  already treats that as ordinary config drift (see Catalog.resolve). */
+router.post(
+  '/internal/resolve',
+  requireInternalSecret,
+  handle(async (req, res) => {
+    const { endpoint, model } = req.body || {};
+    if (typeof endpoint !== 'string' || typeof model !== 'string') {
+      return res.status(400).json({ message: '`endpoint` and `model` (strings) are required' });
+    }
+    const appConfig = await getAppConfig({ baseOnly: true });
+    const endpointConfig = getCustomEndpointConfig({ endpoint, appConfig });
+    const models = endpointConfig?.models?.default ?? [];
+    if (!endpointConfig || !models.includes(model)) {
+      return res.status(404).json({ message: `not a registered credential/model: ${endpoint} / ${model}` });
+    }
+    const apiKey = extractEnvVariable(endpointConfig.apiKey ?? '');
+    if (!apiKey || isUserProvided(apiKey)) {
+      return res.status(404).json({ message: `no resolvable credential for endpoint: ${endpoint}` });
+    }
+    return res.status(200).json({ baseURL: endpointConfig.baseURL || '', apiKey });
+  }),
+);
 
 /**
  * Both capabilities are required. Order matches knowledgeBases.js: access:admin

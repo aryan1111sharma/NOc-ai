@@ -6,9 +6,12 @@ of `{endpoint, model}` targets, and falls back to the next target only when
 the current one fails before producing any response bytes.
 
 It never holds its own copy of a provider credential. Every target it can
-route to is read live from `librechat.yaml`'s existing `endpoints.custom`
-list (the GLM/Kimi entries LibreChat already uses) -- this service adds
-fallback ordering on top of that, nothing else.
+route to, and the real credential behind any one of them, is resolved live by
+LibreChat's own backend -- the exact `getAppConfig`/`getCustomEndpointConfig`
+resolution direct model execution already uses (`librechat.yaml`'s base
+`endpoints.custom` list, merged with anything an admin has since added or
+changed through LibreChat's own Admin Panel, e.g. a new OpenRouter entry) --
+this service adds fallback ordering on top of that, nothing else.
 
 ## Why this exists
 
@@ -22,13 +25,18 @@ fallback -- once bytes have gone to the caller, that target is committed.
 
 ## Core concepts
 
-- **Catalog** (`llm_router/catalog.py`) -- a read-only view of
-  `librechat.yaml`'s `endpoints.custom` list. Expands each custom endpoint's
-  declared models into `{endpoint, model}` target pairs, resolving
-  `${ENV_VAR}` API key placeholders against this container's own environment
-  only to dial upstream -- a key is never returned by any endpoint. This is
-  the *entire* set of targets an admin is allowed to pick from; there is no
-  second credential store.
+- **Catalog** (`llm_router/catalog.py`) -- a read-only view of every
+  `endpoints.custom` entry LibreChat itself currently resolves, fetched over
+  the internal Docker network from two routes added to the LLM Routing admin
+  facade (`apps/ai-platform/librechat/custom-image/files/api/llmRouting.js`):
+  `GET .../internal/catalog` (every `{endpoint, model}` pair, masked -- what
+  `list_targets()` returns) and `POST .../internal/resolve` (one pair's real
+  `{baseURL, apiKey}` -- what `resolve()` returns, used only in-memory to dial
+  upstream for a single request). Both calls are authorized by a shared
+  secret (`LLM_ROUTER_INTERNAL_SECRET`), never a provider API key. This is
+  the *entire* set of targets an admin is allowed to pick from -- exactly
+  what LibreChat's own Admin Panel has registered, with zero duplication;
+  there is no second credential store, and this service parses no yaml.
 - **Combo** (`llm_router/store.py`) -- one agent's ordered, admin-managed list
   of `ComboTarget`s (`{endpoint, model, enabled}` -- never a key), persisted
   in this service's own JSON registry, keyed by the LibreChat `Agent.id`
@@ -93,8 +101,19 @@ This service has no published port in `docker-compose.yml` and no auth of
 its own on `/admin/*`, the same as `kb-admin-mcp-server`. The boundary is the
 Docker network plus the LibreChat custom-image facade
 (`apps/ai-platform/librechat/custom-image/files/api/llmRouting.js`), which
-requires `access:admin` **and** `manage:mcpservers` before any request
-reaches this service.
+requires `access:admin` **and** `manage:mcpservers` before any browser
+request reaches this service's `/admin/*` (proxied through `GET/PUT/DELETE
+.../combos*` and `GET .../catalog` on that facade).
+
+This service's own outbound calls -- to `GET/POST
+.../api/llm-routing/internal/{catalog,resolve}` on that same facade, to learn
+the catalog and to resolve a Combo target's real credential -- carry no
+browser session, so they cannot satisfy that gate. Those two routes are
+registered outside it and instead check a shared secret
+(`LLM_ROUTER_INTERNAL_SECRET`, `X-Internal-Secret` header) known only to this
+service and that facade. It authorizes exactly one caller (this service) to
+resolve one thing (a registered provider credential) -- it is not, and must
+never become, a provider API key itself.
 
 ## Integrating with LibreChat
 
@@ -104,9 +123,10 @@ Already wired into the live `librechat.yaml`:
 endpoints:
   custom:
     - name: "NOC Router"
-      apiKey: "not-needed"          # auth happens per-target inside llm-router,
-                                     # resolved from the SAME GLM_API_KEY/KIMI_API_KEY
-      baseURL: "http://llm-router:8110/v1"
+      apiKey: "not-needed"          # unused: this endpoint's requests are relayed
+                                     # through tool-filter-proxy to llm-router, which
+                                     # resolves each target's real credential itself
+      baseURL: "http://tool-filter-proxy:8108/router/v1"
       models:
         default:
           - "noc-engineer"
@@ -130,9 +150,12 @@ agent here with zero LibreChat code changes. The LLM Routing admin page
 does this automatically when a Combo is enabled, and reverts the agent to its
 original provider/model when the Combo is disabled or deleted.
 
-`docker-compose.yml`'s `llm-router` service mounts `librechat.yaml` read-only
-and reads `GLM_API_KEY`/`KIMI_API_KEY` from the same `.env` LibreChat itself
-uses -- it is never given a separate credential.
+`docker-compose.yml`'s `llm-router` service calls LibreChat's own `api`
+service (`LLM_ROUTER_LIBRECHAT_API_URL`, default `http://api:3080`) for the
+catalog and for every credential resolution, authorized by
+`LLM_ROUTER_INTERNAL_SECRET` (from the same `.env` LibreChat itself reads) --
+it parses no yaml and is never given a copy of `GLM_API_KEY`/`KIMI_API_KEY`
+or any other provider credential.
 
 ## Running the tests
 

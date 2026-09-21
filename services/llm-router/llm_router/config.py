@@ -33,10 +33,20 @@ class Settings(BaseSettings):
     # real chat turn gets.
     test_timeout_seconds: float = 10.0
 
-    # The SAME librechat.yaml the LibreChat api container reads (mounted
-    # read-only a second time here) -- see llm_router.catalog.Catalog. This
-    # service never gets its own copy of provider credentials/models.
-    librechat_yaml_path: str = "/librechat-config/librechat.yaml"
+    # LibreChat's own api container, reached over the internal Docker
+    # network -- see llm_router.catalog.Catalog. This service never parses
+    # librechat.yaml or holds a provider credential itself; it asks
+    # LibreChat's own backend, which already resolves endpoints.custom
+    # (base file + any admin-panel-authored overrides) for direct model
+    # execution, for the exact same answer.
+    librechat_api_url: str = "http://api:3080"
+
+    # Shared secret proving a request to LibreChat's internal LLM-routing
+    # catalog/resolve routes came from this service, not a browser -- those
+    # routes sit outside LibreChat's normal requireJwtAuth gate (this caller
+    # has no browser session) so this is the only thing standing between
+    # them and the Docker network boundary. Never a provider API key.
+    internal_secret: str = ""
 
     # The custom-endpoint `name` this router is wired into librechat.yaml
     # under. Excluded from the Catalog so a Combo can never target itself.

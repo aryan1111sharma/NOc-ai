@@ -133,7 +133,7 @@ def create_app(
     # -- admin: catalog (read-only) ---------------------------------------
 
     async def get_catalog(request: Request):
-        return JSONResponse({"targets": [t.masked() for t in catalog.list_targets()]})
+        return JSONResponse({"targets": [t.masked() for t in await catalog.list_targets()]})
 
     # -- admin: combos ------------------------------------------------------
 
@@ -147,11 +147,11 @@ def create_app(
             return _error(f"no such combo: {agent_id!r}", status_code=404)
         return JSONResponse({"combo": combo.to_json()})
 
-    def _validate_targets_in_catalog(targets: list[dict]) -> str | None:
+    async def _validate_targets_in_catalog(targets: list[dict]) -> str | None:
         """None if every target names a real catalog entry; otherwise an
         error message naming the first one that doesn't. A Combo must only
         ever be built from what's already registered."""
-        known = {(t.endpoint, t.model) for t in catalog.list_targets()}
+        known = {(t.endpoint, t.model) for t in await catalog.list_targets()}
         for t in targets:
             pair = (t.get("endpoint"), t.get("model"))
             if pair not in known:
@@ -162,7 +162,7 @@ def create_app(
         agent_id = request.path_params["agent_id"]
         body = await request.json()
         targets = body.get("targets", [])
-        error = _validate_targets_in_catalog(targets)
+        error = await _validate_targets_in_catalog(targets)
         if error:
             return _error(error, status_code=400)
         existing = registry.get_combo(agent_id)

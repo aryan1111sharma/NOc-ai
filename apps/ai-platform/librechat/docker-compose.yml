@@ -64,7 +64,7 @@ services:
       - APP_TITLE=Ador Manthan.AI
       - "APP_VERSION=${APP_VERSION:-dev}"
       - "GIT_SHA=${GIT_SHA:-local}"
-      - "CUSTOM_FOOTER=Ador Manthan.AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/main/CHANGELOG.md)"
+      - "CUSTOM_FOOTER=Ador Manthan.AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/feat/mcp-server/CHANGELOG.md)"
     volumes:
       - ./librechat.yaml:/app/librechat.yaml:ro
       - librechat-images:/app/client/public/images

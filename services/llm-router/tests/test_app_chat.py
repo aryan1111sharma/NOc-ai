@@ -129,6 +129,44 @@ async def test_chat_completions_streaming_falls_back_before_first_byte(registry,
 
 
 @pytest.mark.asyncio
+async def test_chat_completions_response_carries_the_target_header(registry, catalog):
+    registry.upsert_combo(
+        agent_id="agent-x",
+        targets=[{"endpoint": "Kimi", "model": "k3"}, {"endpoint": "GLM", "model": "glm-5.2"}],
+    )
+    providers = FakeProviders()
+    providers.script("https://kimi.example", status(500))
+    providers.script("https://glm.example", json_ok({"id": "ok"}))
+
+    async with make_client(registry, catalog, providers) as client:
+        resp = await client.post(
+            "/v1/chat/completions", json={"model": "agent-x", "messages": []}
+        )
+
+    assert resp.headers["x-noc-router-target"] == "GLM/glm-5.2"
+    # Additive only -- the body a client parses as the completion is untouched.
+    assert resp.json() == {"id": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_streaming_response_carries_the_target_header(registry, catalog):
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", stream_ok([b"data: ok\n\n"]))
+
+    async with make_client(registry, catalog, providers) as client:
+        async with client.stream(
+            "POST",
+            "/v1/chat/completions",
+            json={"model": "agent-x", "messages": [], "stream": True},
+        ) as resp:
+            assert resp.headers["x-noc-router-target"] == "Kimi/k3"
+            body = b"".join([c async for c in resp.aiter_raw()])
+
+    assert body == b"data: ok\n\n"
+
+
+@pytest.mark.asyncio
 async def test_response_never_contains_the_resolved_api_key(registry, catalog):
     registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
     providers = FakeProviders()

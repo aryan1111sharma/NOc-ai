@@ -194,6 +194,12 @@ services:
       - LLM_ROUTER_LIBRECHAT_API_URL=http://api:3080
       - LLM_ROUTER_SELF_ENDPOINT_NAME=NOC Router
       - LLM_ROUTER_INTERNAL_SECRET=${LLM_ROUTER_INTERNAL_SECRET}
+      # Admin-declared FREE/PAID label for the Usage/Status page (see
+      # llm_router/config.py:cost_type_for) -- both GLM (z.ai Coding Plan)
+      # and Kimi (Kimi For Coding subscription) are paid subscriptions, per
+      # apps/ai-platform/librechat/RUNBOOK.md's "LLM providers" section.
+      # Never inferred from per-model pricing.
+      - 'LLM_ROUTER_PROVIDER_COST_TYPES={"GLM": "PAID", "Kimi": "PAID"}'
     volumes:
       # Per-agent Combo assignments (endpoint+model references only, never a
       # key) -- a named volume (not a repo bind mount) purely for consistency

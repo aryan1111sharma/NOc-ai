@@ -24,6 +24,8 @@ from starlette.responses import JSONResponse, StreamingResponse
 from starlette.routing import Route as ASGIRoute
 
 from .catalog import Catalog
+from .config import settings as default_settings
+from .config import Settings
 from .proxy import (
     AllTargetsFailedError,
     ComboDisabledError,
@@ -76,7 +78,9 @@ def create_app(
     *,
     http_client: httpx.AsyncClient | None = None,
     request_timeout_seconds: float = 30.0,
+    settings: Settings | None = None,
 ) -> Starlette:
+    settings = settings if settings is not None else default_settings
     router = Router(registry, catalog, http_client=http_client, timeout=request_timeout_seconds)
 
     # -- OpenAI-compatible surface ---------------------------------------
@@ -118,22 +122,46 @@ def create_app(
         except AllTargetsFailedError as exc:
             return _error(str(exc), status_code=502, error_type="upstream_error")
 
+        # The one thing this route adds on top of the provider's own response:
+        # which Combo target actually answered ("Kimi/k3-256k"), for whoever
+        # is inspecting the exchange (curl, a future consumer) -- LibreChat
+        # itself does not read this today; see Registry.record_dispatch for
+        # the same information surfaced on GET /admin/combos*. Header-only so
+        # neither relay path (streamed or not) has to touch the response body.
+        response_headers = {**_forwardable_headers(result.headers), "X-Noc-Router-Target": result.target}
+
         if result.stream_response is not None:
             return StreamingResponse(
                 _relay(result.stream_response),
                 status_code=result.status_code,
-                headers=_forwardable_headers(result.headers),
+                headers=response_headers,
             )
         return JSONResponse(
             result.body,
             status_code=result.status_code,
-            headers=_forwardable_headers(result.headers),
+            headers=response_headers,
         )
 
     # -- admin: catalog (read-only) ---------------------------------------
 
     async def get_catalog(request: Request):
-        return JSONResponse({"targets": [t.masked() for t in await catalog.list_targets()]})
+        # cost_type is admin-declared local metadata (see Settings.cost_type_for),
+        # never inferred from model pricing -- "UNKNOWN" for anything not
+        # explicitly configured, including an endpoint an admin just added
+        # through LibreChat's own Admin Panel.
+        targets = await catalog.list_targets()
+        return JSONResponse(
+            {
+                "targets": [
+                    {**t.masked(), "cost_type": settings.cost_type_for(t.endpoint)} for t in targets
+                ]
+            }
+        )
+
+    # -- admin: usage (locally observed, never provider-reported) --------
+
+    async def get_usage(request: Request):
+        return JSONResponse({"usage": [u.to_json() for u in registry.list_usage()]})
 
     # -- admin: combos ------------------------------------------------------
 
@@ -202,6 +230,7 @@ def create_app(
             ASGIRoute("/v1/models", list_models, methods=["GET"]),
             ASGIRoute("/v1/chat/completions", chat_completions, methods=["POST"]),
             ASGIRoute("/admin/catalog", get_catalog, methods=["GET"]),
+            ASGIRoute("/admin/usage", get_usage, methods=["GET"]),
             ASGIRoute("/admin/combos", list_combos, methods=["GET"]),
             ASGIRoute("/admin/combos/{agent_id}", get_combo, methods=["GET"]),
             ASGIRoute("/admin/combos/{agent_id}", upsert_combo, methods=["PUT"]),

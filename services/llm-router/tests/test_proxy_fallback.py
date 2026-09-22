@@ -350,6 +350,41 @@ async def test_streaming_pre_first_byte_failure_falls_back(registry, catalog):
 
 
 @pytest.mark.asyncio
+async def test_successful_dispatch_records_last_target_in_registry(registry, catalog):
+    registry.upsert_combo(
+        agent_id="agent-x",
+        targets=[{"endpoint": "Kimi", "model": "k3"}, {"endpoint": "GLM", "model": "glm-5.2"}],
+    )
+    providers = FakeProviders()
+    providers.script("https://kimi.example", status(500))
+    providers.script("https://glm.example", json_ok({"id": "ok"}))
+    router = make_router(registry, catalog, providers)
+
+    await router.dispatch({"model": "agent-x", "messages": []})
+
+    combo = registry.get_combo("agent-x")
+    assert combo.last_target == "GLM/glm-5.2"
+    assert combo.last_attempted == ("Kimi/k3", "GLM/glm-5.2")
+    assert combo.last_dispatched_at is not None
+
+
+@pytest.mark.asyncio
+async def test_all_targets_failing_does_not_record_a_last_target(registry, catalog):
+    """There is no "actual target used" when nothing answered -- the last
+    successful dispatch (if any) must be left alone, not overwritten with a
+    failure."""
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", status(500))
+    router = make_router(registry, catalog, providers)
+
+    with pytest.raises(AllTargetsFailedError):
+        await router.dispatch({"model": "agent-x", "messages": []})
+
+    assert registry.get_combo("agent-x").last_target is None
+
+
+@pytest.mark.asyncio
 async def test_streaming_mid_stream_failure_does_not_fall_back(registry, catalog):
     """Once the first byte has gone out, the response is committed -- a drop
     mid-stream ends the stream, it never triggers a second target."""
@@ -371,3 +406,135 @@ async def test_streaming_mid_stream_failure_does_not_fall_back(registry, catalog
 
     assert received == [b"data: 1\n\n"]
     assert providers.calls == ["https://kimi.example"]
+
+
+# -- usage recording (locally observed) ------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_successful_dispatch_records_usage_success_with_tokens(registry, catalog):
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script(
+        "https://kimi.example",
+        json_ok({"id": "ok", "usage": {"prompt_tokens": 12, "completion_tokens": 8, "total_tokens": 20}}),
+    )
+    router = make_router(registry, catalog, providers)
+
+    await router.dispatch({"model": "agent-x", "messages": []})
+
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.request_count == 1
+    assert usage.success_count == 1
+    assert usage.failure_count == 0
+    assert usage.prompt_tokens == 12
+    assert usage.completion_tokens == 8
+    assert usage.total_tokens == 20
+
+
+@pytest.mark.asyncio
+async def test_successful_dispatch_without_usage_object_records_no_tokens(registry, catalog):
+    """Do not invent token counts: a response with no `usage` object records
+    a success but leaves the token fields at zero, not a guess."""
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", json_ok({"id": "ok"}))
+    router = make_router(registry, catalog, providers)
+
+    await router.dispatch({"model": "agent-x", "messages": []})
+
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.success_count == 1
+    assert usage.prompt_tokens == 0
+    assert usage.completion_tokens == 0
+    assert usage.total_tokens == 0
+
+
+@pytest.mark.asyncio
+async def test_fallback_records_a_failure_for_the_failed_target_and_success_for_the_winner(
+    registry, catalog
+):
+    registry.upsert_combo(
+        agent_id="agent-x",
+        targets=[{"endpoint": "Kimi", "model": "k3"}, {"endpoint": "GLM", "model": "glm-5.2"}],
+    )
+    providers = FakeProviders()
+    providers.script("https://kimi.example", status(500))
+    providers.script("https://glm.example", json_ok({"id": "ok"}))
+    router = make_router(registry, catalog, providers)
+
+    await router.dispatch({"model": "agent-x", "messages": []})
+
+    kimi_usage = registry.get_usage("Kimi", "k3")
+    glm_usage = registry.get_usage("GLM", "glm-5.2")
+    assert kimi_usage.failure_count == 1
+    assert kimi_usage.success_count == 0
+    assert kimi_usage.last_failure_class == "500"
+    assert glm_usage.success_count == 1
+    assert glm_usage.failure_count == 0
+
+
+@pytest.mark.asyncio
+async def test_timeout_records_a_usage_failure_classified_as_timeout(registry, catalog):
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", httpx.TimeoutException("boom"))
+    router = make_router(registry, catalog, providers)
+
+    with pytest.raises(AllTargetsFailedError):
+        await router.dispatch({"model": "agent-x", "messages": []})
+
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.failure_count == 1
+    assert usage.last_failure_class == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_connection_error_records_a_usage_failure_classified_as_connection_error(
+    registry, catalog
+):
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", httpx.ConnectError("boom"))
+    router = make_router(registry, catalog, providers)
+
+    with pytest.raises(AllTargetsFailedError):
+        await router.dispatch({"model": "agent-x", "messages": []})
+
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.last_failure_class == "connection_error"
+
+
+@pytest.mark.asyncio
+async def test_non_retryable_error_status_still_records_a_usage_failure(registry, catalog):
+    """A 401 is returned to the caller as-is (never retried -- see the
+    fallback-rules docstring), but it is still a failure for this target's
+    own observed health."""
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", status(401))
+    router = make_router(registry, catalog, providers)
+
+    result = await router.dispatch({"model": "agent-x", "messages": []})
+
+    assert result.status_code == 401
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.failure_count == 1
+    assert usage.success_count == 0
+    assert usage.last_failure_class == "401"
+
+
+@pytest.mark.asyncio
+async def test_streaming_success_records_usage_without_tokens(registry, catalog):
+    registry.upsert_combo(agent_id="agent-x", targets=[{"endpoint": "Kimi", "model": "k3"}])
+    providers = FakeProviders()
+    providers.script("https://kimi.example", stream_ok([b"data: ok\n\n"]))
+    router = make_router(registry, catalog, providers)
+
+    result = await router.dispatch({"model": "agent-x", "messages": [], "stream": True})
+    async for _ in result.stream_response.aiter_raw():
+        pass
+
+    usage = registry.get_usage("Kimi", "k3")
+    assert usage.success_count == 1
+    assert usage.total_tokens == 0

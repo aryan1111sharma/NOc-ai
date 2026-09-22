@@ -80,6 +80,25 @@ def _target_label(target: ComboTarget) -> str:
     return f"{target.endpoint}/{target.model}"
 
 
+def _extract_usage_tokens(body: dict | None) -> dict | None:
+    """The provider's own `usage` object from a non-streaming OpenAI-shaped
+    response, if present and well-formed -- never estimated. Returns None
+    (not a partial/zeroed dict) the moment any of the three fields is
+    missing or not an int, so a malformed/absent `usage` object never
+    becomes a fabricated 0."""
+    if not isinstance(body, dict):
+        return None
+    usage = body.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    prompt = usage.get("prompt_tokens")
+    completion = usage.get("completion_tokens")
+    total = usage.get("total_tokens")
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in (prompt, completion, total)):
+        return None
+    return {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total}
+
+
 async def _resolve_candidates(
     catalog: Catalog, combo: Combo
 ) -> list[tuple[ComboTarget, ResolvedTarget]]:
@@ -149,38 +168,81 @@ class Router:
             url, headers, upstream_body = _upstream_request(target, real, body)
             try:
                 if is_stream:
-                    result = await self._try_stream(label, url, headers, upstream_body, attempted)
+                    result = await self._try_stream(target, url, headers, upstream_body, attempted)
                 else:
-                    result = await self._try_json(label, url, headers, upstream_body, attempted)
+                    result = await self._try_json(target, url, headers, upstream_body, attempted)
             except _RETRYABLE_EXCEPTIONS as exc:
+                # Usage observability only -- does not change which target is
+                # tried next or how long this waited; that logic above is
+                # untouched.
+                failure_class = "timeout" if isinstance(exc, httpx.TimeoutException) else "connection_error"
+                self._registry.record_usage_failure(
+                    target.endpoint, target.model, failure_class=failure_class
+                )
                 last_error = f"{label}: {type(exc).__name__}: {exc}"
                 continue
             if result is None:
                 # Retryable HTTP status; already logged below by the helper.
                 last_error = f"{label}: retryable HTTP status"
                 continue
+            # Record which target actually answered -- read by the admin
+            # surface (GET /admin/combos*) so a fallback is visible without a
+            # log search. Best-effort: a Combo an admin disabled/deleted
+            # between resolving candidates and this line just has nothing
+            # left to record onto (record_dispatch returns None), which must
+            # never fail the request that already succeeded.
+            self._registry.record_dispatch(agent_id, target=label, attempted=list(attempted))
             return result
 
         raise AllTargetsFailedError(agent_id, attempted, last_error)
 
-    async def _try_json(self, label, url, headers, upstream_body, attempted) -> DispatchResult | None:
+    async def _try_json(self, target: ComboTarget, url, headers, upstream_body, attempted) -> DispatchResult | None:
+        label = _target_label(target)
         response = await self._client.post(url, json=upstream_body, headers=headers)
         if _is_retryable_status(response.status_code):
+            self._registry.record_usage_failure(
+                target.endpoint, target.model, failure_class=str(response.status_code)
+            )
             return None
+        body = response.json()
+        if 200 <= response.status_code < 300:
+            self._registry.record_usage_success(
+                target.endpoint, target.model, tokens=_extract_usage_tokens(body)
+            )
+        else:
+            # Not retryable (a 400/401/404 -- see the fallback-rules docstring
+            # above), but still a failure for THIS target's own observed health.
+            self._registry.record_usage_failure(
+                target.endpoint, target.model, failure_class=str(response.status_code)
+            )
         return DispatchResult(
             target=label,
             attempted=list(attempted),
             status_code=response.status_code,
             headers=response.headers,
-            body=response.json(),
+            body=body,
         )
 
-    async def _try_stream(self, label, url, headers, upstream_body, attempted) -> DispatchResult | None:
+    async def _try_stream(self, target: ComboTarget, url, headers, upstream_body, attempted) -> DispatchResult | None:
+        label = _target_label(target)
         request = self._client.build_request("POST", url, json=upstream_body, headers=headers)
         response = await self._client.send(request, stream=True)
         if _is_retryable_status(response.status_code):
+            self._registry.record_usage_failure(
+                target.endpoint, target.model, failure_class=str(response.status_code)
+            )
             await response.aclose()
             return None
+        # No token usage for a streaming response -- this router relays raw
+        # bytes and never buffers/parses the SSE body (see _relay in app.py),
+        # so there is nothing to extract without estimating. See proxy.py's
+        # module docstring / the "no mid-stream fallback" rule this mirrors.
+        if 200 <= response.status_code < 300:
+            self._registry.record_usage_success(target.endpoint, target.model, tokens=None)
+        else:
+            self._registry.record_usage_failure(
+                target.endpoint, target.model, failure_class=str(response.status_code)
+            )
         return DispatchResult(
             target=label,
             attempted=list(attempted),

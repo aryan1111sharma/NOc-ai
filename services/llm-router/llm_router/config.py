@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_VALID_COST_TYPES = frozenset({"FREE", "PAID"})
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LLM_ROUTER_")
@@ -51,6 +53,21 @@ class Settings(BaseSettings):
     # The custom-endpoint `name` this router is wired into librechat.yaml
     # under. Excluded from the Catalog so a Combo can never target itself.
     self_endpoint_name: str = "NOC Router"
+
+    # Admin-declared FREE/PAID label per Catalog endpoint name, e.g.
+    # '{"GLM": "PAID", "Kimi": "PAID"}'. This is the smallest mechanism that
+    # satisfies the requirement without touching librechat.yaml or
+    # LibreChat's own endpoint schema (neither has a cost-type field, and
+    # nothing here should infer one from per-model pricing): a single env
+    # var, parsed by pydantic-settings as JSON since the field type is
+    # dict[str, str]. An endpoint with no entry -- e.g. one an admin just
+    # added through LibreChat's own Admin Panel -- reads as "UNKNOWN" via
+    # cost_type_for() below, never a guess.
+    provider_cost_types: dict[str, str] = {}
+
+    def cost_type_for(self, endpoint: str) -> str:
+        value = self.provider_cost_types.get(endpoint)
+        return value if value in _VALID_COST_TYPES else "UNKNOWN"
 
 
 settings = Settings()

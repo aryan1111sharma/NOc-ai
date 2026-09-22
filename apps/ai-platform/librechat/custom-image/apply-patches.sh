@@ -312,11 +312,18 @@ patch_once "$APP/api/server/index.js" \
 mkdir -p "$APP/client/src/components/LlmRouting"
 cp /patch-files/client/LlmRoutingView.tsx \
    "$APP/client/src/components/LlmRouting/LlmRoutingView.tsx"
+cp /patch-files/client/LlmUsageView.tsx \
+   "$APP/client/src/components/LlmRouting/LlmUsageView.tsx"
 
 patch_once "$APP/client/src/routes/index.tsx" \
   "const loadSkillsView = () =>" \
   "const loadLlmRoutingView = () =>
   import('~/components/LlmRouting/LlmRoutingView').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadLlmUsageView = () =>
+  import('~/components/LlmRouting/LlmUsageView').then((m) => ({
     Component: m.default,
   }));
 
@@ -334,6 +341,10 @@ patch_once "$APP/client/src/routes/index.tsx" \
             {
               path: 'llm-routing',
               lazy: loadLlmRoutingView,
+            },
+            {
+              path: 'llm-routing/usage',
+              lazy: loadLlmUsageView,
             },"
 
 patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \

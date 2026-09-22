@@ -91,6 +91,15 @@ class Combo:
     original_model: str | None = None
     created_at: str = field(default_factory=_now)
     updated_at: str = field(default_factory=_now)
+    #: The target that actually answered the most recent request ("Kimi/k3-256k"),
+    #: the full priority-ordered list of targets that were tried to get there, and
+    #: when -- set by Registry.record_dispatch after each successful dispatch, so
+    #: an admin can see which fallback actually fired without a separate log
+    #: search. None/() until the first dispatch. Never touched by upsert_combo's
+    #: own target/enabled edits -- see record_dispatch's docstring.
+    last_target: str | None = None
+    last_attempted: tuple[str, ...] = ()
+    last_dispatched_at: str | None = None
 
     def to_json(self) -> dict:
         return {
@@ -101,6 +110,9 @@ class Combo:
             "original_model": self.original_model,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
+            "last_target": self.last_target,
+            "last_attempted": list(self.last_attempted),
+            "last_dispatched_at": self.last_dispatched_at,
         }
 
     @staticmethod
@@ -113,6 +125,71 @@ class Combo:
             original_model=data.get("original_model"),
             created_at=data.get("created_at", _now()),
             updated_at=data.get("updated_at", _now()),
+            last_target=data.get("last_target"),
+            last_attempted=tuple(data.get("last_attempted", [])),
+            last_dispatched_at=data.get("last_dispatched_at"),
+        )
+
+
+@dataclass(frozen=True)
+class UsageStats:
+    """Locally observed traffic through this router for one (endpoint,
+    model) pair -- never a provider-reported figure. Counts every dispatch
+    attempt against this target, whether or not it ultimately won: a target
+    that keeps failing is exactly what an admin needs to see here.
+
+    Token counts are cumulative sums of whatever `usage` object a
+    non-streaming provider response actually included (see
+    llm_router.proxy._extract_usage_tokens) -- never estimated, and never
+    populated for a streaming response, which this router does not inspect.
+    """
+
+    endpoint: str
+    model: str
+    request_count: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    #: HTTP status code (as a string, e.g. "429", "500") or "timeout" /
+    #: "connection_error" for the most recent non-2xx outcome.
+    last_failure_class: str | None = None
+    last_success_at: str | None = None
+    last_failure_at: str | None = None
+    last_used_at: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+
+    def to_json(self) -> dict:
+        return {
+            "endpoint": self.endpoint,
+            "model": self.model,
+            "request_count": self.request_count,
+            "success_count": self.success_count,
+            "failure_count": self.failure_count,
+            "last_failure_class": self.last_failure_class,
+            "last_success_at": self.last_success_at,
+            "last_failure_at": self.last_failure_at,
+            "last_used_at": self.last_used_at,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+        }
+
+    @staticmethod
+    def from_json(data: dict) -> "UsageStats":
+        return UsageStats(
+            endpoint=data["endpoint"],
+            model=data["model"],
+            request_count=data.get("request_count", 0),
+            success_count=data.get("success_count", 0),
+            failure_count=data.get("failure_count", 0),
+            last_failure_class=data.get("last_failure_class"),
+            last_success_at=data.get("last_success_at"),
+            last_failure_at=data.get("last_failure_at"),
+            last_used_at=data.get("last_used_at"),
+            prompt_tokens=data.get("prompt_tokens", 0),
+            completion_tokens=data.get("completion_tokens", 0),
+            total_tokens=data.get("total_tokens", 0),
         )
 
 
@@ -130,15 +207,15 @@ class Registry:
         self._path = Path(path)
         self._lock = threading.Lock()
         if not self._path.exists():
-            self._save({"combos": []})
+            self._save({"combos": [], "usage": []})
 
     # -- persistence -------------------------------------------------
 
     def _load(self) -> dict:
         if not self._path.exists():
-            return {"combos": []}
+            return {"combos": [], "usage": []}
         raw = json.loads(self._path.read_text(encoding="utf-8"))
-        return {"combos": raw.get("combos", [])}
+        return {"combos": raw.get("combos", []), "usage": raw.get("usage", [])}
 
     def _save(self, data: dict) -> None:
         """Atomic write: tempfile in the same directory, then os.replace.
@@ -220,6 +297,13 @@ class Registry:
                 ),
                 created_at=existing["created_at"] if existing else _now(),
                 updated_at=_now(),
+                # A target/enabled edit doesn't change what most recently answered
+                # a real request, so this carries forward exactly like
+                # original_provider/original_model above -- only record_dispatch
+                # writes these.
+                last_target=existing.get("last_target") if existing else None,
+                last_attempted=tuple(existing.get("last_attempted", [])) if existing else (),
+                last_dispatched_at=existing.get("last_dispatched_at") if existing else None,
             )
             data["combos"] = [
                 c for c in data["combos"] if c["agent_id"] != agent_id
@@ -237,6 +321,28 @@ class Registry:
             enabled=enabled,
         )
 
+    def record_dispatch(self, agent_id: str, *, target: str, attempted: list[str]) -> Combo | None:
+        """Called by Router.dispatch after a request actually succeeds, so an
+        admin can see which fallback target answered without a log search.
+
+        Deliberately bypasses upsert_combo: this is a metadata bump, not a
+        config edit, so it must not re-validate targets against the Catalog,
+        must not touch `updated_at` (that reflects an admin edit), and must
+        never fail on a Combo an admin just disabled/deleted mid-flight --
+        it simply has nothing left to record onto, hence the None return
+        instead of RegistryError.
+        """
+        with self._lock:
+            data = self._load()
+            for c in data["combos"]:
+                if c["agent_id"] == agent_id:
+                    c["last_target"] = target
+                    c["last_attempted"] = list(attempted)
+                    c["last_dispatched_at"] = _now()
+                    self._save(data)
+                    return Combo.from_json(c)
+            return None
+
     def delete_combo(self, agent_id: str) -> None:
         with self._lock:
             data = self._load()
@@ -245,3 +351,72 @@ class Registry:
                 raise RegistryError(f"no such combo: {agent_id!r}")
             data["combos"] = remaining
             self._save(data)
+
+    # -- usage (locally observed, never provider-reported) ---------------
+
+    def list_usage(self) -> list[UsageStats]:
+        return [UsageStats.from_json(u) for u in self._load()["usage"]]
+
+    def get_usage(self, endpoint: str, model: str) -> UsageStats | None:
+        for u in self.list_usage():
+            if u.endpoint == endpoint and u.model == model:
+                return u
+        return None
+
+    def _record_usage(
+        self,
+        endpoint: str,
+        model: str,
+        *,
+        success: bool,
+        failure_class: str | None,
+        tokens: dict | None,
+    ) -> UsageStats:
+        with self._lock:
+            data = self._load()
+            existing = next(
+                (u for u in data["usage"] if u["endpoint"] == endpoint and u["model"] == model),
+                None,
+            )
+            prior = UsageStats.from_json(existing) if existing else UsageStats(endpoint, model)
+            now = _now()
+            updated = UsageStats(
+                endpoint=endpoint,
+                model=model,
+                request_count=prior.request_count + 1,
+                success_count=prior.success_count + (1 if success else 0),
+                failure_count=prior.failure_count + (0 if success else 1),
+                last_failure_class=failure_class if not success else prior.last_failure_class,
+                last_success_at=now if success else prior.last_success_at,
+                last_failure_at=prior.last_failure_at if success else now,
+                last_used_at=now,
+                prompt_tokens=prior.prompt_tokens + (tokens["prompt_tokens"] if tokens else 0),
+                completion_tokens=prior.completion_tokens
+                + (tokens["completion_tokens"] if tokens else 0),
+                total_tokens=prior.total_tokens + (tokens["total_tokens"] if tokens else 0),
+            )
+            data["usage"] = [
+                u for u in data["usage"] if not (u["endpoint"] == endpoint and u["model"] == model)
+            ] + [updated.to_json()]
+            self._save(data)
+            return updated
+
+    def record_usage_success(
+        self, endpoint: str, model: str, *, tokens: dict | None = None
+    ) -> UsageStats:
+        """Called for any non-retryable 2xx response this target produced --
+        success in the observability sense, independent of whether this
+        target was the Combo's overall winner (see record_dispatch for
+        that). `tokens`, when given, must already be the validated
+        {prompt_tokens, completion_tokens, total_tokens} shape (see
+        llm_router.proxy._extract_usage_tokens) -- this method only adds
+        what it is handed, never invents a number."""
+        return self._record_usage(endpoint, model, success=True, failure_class=None, tokens=tokens)
+
+    def record_usage_failure(self, endpoint: str, model: str, *, failure_class: str) -> UsageStats:
+        """Called for every non-2xx outcome this target produced, whether or
+        not it triggered a fallback (a 400/401/404 does not, but is still a
+        failure for this target's own health)."""
+        return self._record_usage(
+            endpoint, model, success=False, failure_class=failure_class, tokens=None
+        )

@@ -110,6 +110,7 @@ test('routes are declared for every documented Agent/Catalog/Combo/internal oper
   const expected = [
     ["router.get(\n  '/agents'", 'GET /agents'],
     ["router.get(\n  '/catalog'", 'GET /catalog'],
+    ["router.get(\n  '/usage'", 'GET /usage'],
     ["router.get(\n  '/combos'", 'GET /combos'],
     ["router.get(\n  '/combos/:agentId'", 'GET /combos/:agentId'],
     ["router.put(\n  '/combos/:agentId'", 'PUT /combos/:agentId'],

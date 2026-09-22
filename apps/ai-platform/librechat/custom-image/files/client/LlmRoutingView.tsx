@@ -20,8 +20,9 @@
  * page being hidden from non-admins is convenience, not security.
  */
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, ArrowDown, ArrowUp, Network, Plus, Trash2 } from 'lucide-react';
+import { ActivitySquare, AlertCircle, ArrowDown, ArrowUp, Network, Plus, Trash2 } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { request } from 'librechat-data-provider';
 
@@ -32,9 +33,12 @@ type AgentSummary = {
   model?: string;
 };
 
+type CostType = 'FREE' | 'PAID' | 'UNKNOWN';
+
 type CatalogTarget = {
   endpoint: string;
   model: string;
+  cost_type: CostType;
 };
 
 type ComboTarget = {
@@ -47,7 +51,24 @@ type Combo = {
   agent_id: string;
   targets: ComboTarget[];
   enabled: boolean;
+  // Set by Router.dispatch (services/llm-router/llm_router/proxy.py) after the
+  // most recent successful request -- the actual runtime-observed winner,
+  // not just Combo priority order. null/[] until the first dispatch.
+  last_target: string | null;
+  last_attempted: string[];
+  last_dispatched_at: string | null;
 };
+
+/** Combo.last_target's format ("Kimi/k3") vs. this file's own targetKey
+ *  ("Kimi::k3") -- two different separators for the same pair, so this is a
+ *  one-line adapter, not a new concept. */
+const dispatchLabel = (t: { endpoint: string; model: string }) => `${t.endpoint}/${t.model}`;
+
+function formatTimestamp(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+}
 
 /** Same reasoning as KnowledgeBasesView.tsx's `api` helper: `request` carries the
  *  bearer token requireJwtAuth expects, a bare fetch would not. */
@@ -275,6 +296,16 @@ function ComboEditor({ agent, catalog }: { agent: AgentSummary; catalog: Catalog
         )}
       </div>
 
+      {combo?.last_target && (
+        <p className="mb-3 text-xs text-text-secondary">
+          Last served by <span className="text-text-primary">{combo.last_target}</span> at{' '}
+          {formatTimestamp(combo.last_dispatched_at)}
+          {combo.last_attempted.length > 1 && (
+            <> -- fallback chain: {combo.last_attempted.join(' → ')}</>
+          )}
+        </p>
+      )}
+
       {error && <Banner kind="error">{error}</Banner>}
 
       {activeTargets.length === 0 ? (
@@ -283,19 +314,38 @@ function ComboEditor({ agent, catalog }: { agent: AgentSummary; catalog: Catalog
         </p>
       ) : (
         <ol className="mb-3 flex flex-col gap-2">
-          {activeTargets.map((t, i) => (
+          {activeTargets.map((t, i) => {
+            const isActive = combo?.last_target === dispatchLabel(t);
+            return (
             <li
               key={targetKey(t)}
-              className="flex items-center justify-between rounded-lg border border-border-light bg-surface-primary px-3 py-2"
+              className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+                isActive
+                  ? 'border-green-500/40 bg-green-500/5'
+                  : 'border-border-light bg-surface-primary'
+              }`}
             >
               <div className="flex items-center gap-3">
                 <span className="w-5 shrink-0 text-center text-xs text-text-secondary">
                   {i + 1}
                 </span>
+                {isActive ? (
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full bg-green-500"
+                    title="Currently serving"
+                  />
+                ) : (
+                  <span className="h-2 w-2 shrink-0 rounded-full border border-border-medium" />
+                )}
                 <div>
                   <div className="text-sm text-text-primary">{t.endpoint}</div>
                   <div className="text-xs text-text-secondary">{t.model}</div>
                 </div>
+                {isActive && (
+                  <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs text-green-600">
+                    Currently serving
+                  </span>
+                )}
                 {!t.enabled && (
                   <span className="rounded-full bg-surface-tertiary px-2 py-0.5 text-xs text-text-secondary">
                     disabled
@@ -321,7 +371,8 @@ function ComboEditor({ agent, catalog }: { agent: AgentSummary; catalog: Catalog
                 </Button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
 
@@ -369,6 +420,7 @@ function ComboEditor({ agent, catalog }: { agent: AgentSummary; catalog: Catalog
 /* -------------------------------------------------------------------------- */
 
 export default function LlmRoutingView() {
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const agentsQuery = useQuery({
@@ -402,16 +454,22 @@ export default function LlmRoutingView() {
 
   return (
     <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-6 flex items-center gap-2">
-        <Network className="h-6 w-6 text-text-primary" />
-        <div>
-          <h1 className="text-2xl font-semibold text-text-primary">LLM Routing</h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Pick an agent, then build its ordered provider fallback combo from credentials and
-            models already registered in this deployment. API keys are never shown or entered
-            here.
-          </p>
+      <div className="mb-6 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Network className="h-6 w-6 text-text-primary" />
+          <div>
+            <h1 className="text-2xl font-semibold text-text-primary">LLM Routing</h1>
+            <p className="mt-1 text-sm text-text-secondary">
+              Pick an agent, then build its ordered provider fallback combo from credentials and
+              models already registered in this deployment. API keys are never shown or entered
+              here.
+            </p>
+          </div>
         </div>
+        <Button variant="outline" onClick={() => navigate('/llm-routing/usage')}>
+          <ActivitySquare className="mr-2 h-4 w-4" />
+          Usage / Status
+        </Button>
       </div>
 
       {loadError && (

@@ -20,12 +20,16 @@
  * read-only endpoints return -- same "thin view over existing data" shape as
  * LlmRoutingView.tsx beside this file.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ArrowLeft, Gauge } from 'lucide-react';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { AlertCircle, ArrowLeft, Gauge, RefreshCw } from 'lucide-react';
 import { Button, Spinner } from '@librechat/client';
 import { request } from 'librechat-data-provider';
+
+/** The catalog `endpoint` name this account-level provider quota applies to.
+ *  Must match llm_router.kimi_quota.KIMI_ENDPOINT_NAME. */
+const KIMI_ENDPOINT_NAME = 'Kimi';
 
 type CostType = 'FREE' | 'PAID' | 'UNKNOWN';
 
@@ -51,6 +55,38 @@ type UsageStats = {
   // Never populated today -- see the file header. Kept explicit so a real
   // provider quota resolver has a field to fill in without a UI change.
   quota?: { remaining: number; limit: number; resets_at: string } | null;
+};
+
+// Mirrors llm_router.kimi_quota's ProviderQuota/QuotaWindow/BoosterWallet
+// .to_json() shapes exactly -- account-level, never per-model.
+type QuotaWindow = {
+  name: string;
+  used: number | null;
+  limit: number | null;
+  remaining: number | null;
+  used_percent: number | null;
+  remaining_percent: number | null;
+  reset_at: string | null;
+};
+
+type BoosterWallet = {
+  currency: string | null;
+  monthly_limit: number | null;
+  monthly_used: number | null;
+  monthly_remaining: number | null;
+  period_start: string | null;
+  period_end: string | null;
+};
+
+type ProviderQuota = {
+  provider: string;
+  account_scope: string;
+  windows: QuotaWindow[];
+  booster_wallet: BoosterWallet | null;
+  fetched_at: string;
+  status: 'ok' | 'unavailable';
+  source: string;
+  error: string | null;
 };
 
 const api = {
@@ -221,8 +257,136 @@ function ModelUsageRow({ target, usage }: { target: CatalogTarget; usage: UsageS
       )}
 
       <p className="mt-2 text-xs italic text-text-secondary">
-        Quota information unavailable{usage?.quota ? '' : ' -- not exposed by this provider'}.
+        {target.endpoint === KIMI_ENDPOINT_NAME
+          ? 'Account-level quota only -- see the Kimi quota section above, not tracked per model.'
+          : `Quota information unavailable${usage?.quota ? '' : ' -- not exposed by this provider'}.`}
       </p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Provider-reported quota (Kimi)                                            */
+/* -------------------------------------------------------------------------- */
+
+function windowTitle(name: string): string {
+  if (name === '5h') return '5-HOUR WINDOW';
+  if (name === '7d') return '7-DAY WINDOW';
+  return `${name.toUpperCase()} WINDOW`;
+}
+
+function ProgressBar({ percent }: { percent: number | null }) {
+  const clamped = percent == null ? 0 : Math.min(100, Math.max(0, percent));
+  const tone = percent != null && percent >= 90 ? 'bg-red-500' : 'bg-blue-500';
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-tertiary">
+      <div className={`h-full rounded-full ${tone}`} style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+function QuotaWindowCard({ quotaWindow }: { quotaWindow: QuotaWindow }) {
+  return (
+    <div className="rounded-lg border border-border-light bg-surface-primary p-3">
+      <div className="mb-2 text-xs font-semibold tracking-wide text-text-secondary">
+        {windowTitle(quotaWindow.name)}
+      </div>
+      <div className="mb-2 grid grid-cols-3 gap-2 text-xs text-text-secondary">
+        <div>
+          Used: <span className="text-text-primary">{quotaWindow.used ?? '—'}</span>
+        </div>
+        <div>
+          Remaining: <span className="text-text-primary">{quotaWindow.remaining ?? '—'}</span>
+        </div>
+        <div>
+          Limit: <span className="text-text-primary">{quotaWindow.limit ?? '—'}</span>
+        </div>
+      </div>
+      <ProgressBar percent={quotaWindow.used_percent} />
+      <div className="mt-2 text-xs text-text-secondary">
+        Reset: <span className="text-text-primary">{formatTimestamp(quotaWindow.reset_at)}</span>
+      </div>
+    </div>
+  );
+}
+
+function BoosterWalletCard({ wallet }: { wallet: BoosterWallet }) {
+  const fmt = (n: number | null) =>
+    n == null ? '—' : `${wallet.currency ? wallet.currency + ' ' : ''}${n.toFixed(2)}`;
+  return (
+    <div className="rounded-lg border border-border-light bg-surface-primary p-3">
+      <div className="mb-2 text-xs font-semibold tracking-wide text-text-secondary">
+        BOOSTER / CREDITS
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-xs text-text-secondary">
+        <div>
+          Balance: <span className="text-text-primary">{fmt(wallet.monthly_remaining)}</span>
+        </div>
+        <div>
+          Monthly used: <span className="text-text-primary">{fmt(wallet.monthly_used)}</span>
+        </div>
+        <div>
+          Monthly limit: <span className="text-text-primary">{fmt(wallet.monthly_limit)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Kimi's own account-level quota, shown above the per-model local/observed
+ *  usage list -- never merged into it, since the quota API is account/key
+ *  scoped, not per model (see llm_router.kimi_quota's module docstring). */
+function KimiQuotaSection({
+  quotaQuery,
+  onRefresh,
+}: {
+  quotaQuery: UseQueryResult<{ quota: ProviderQuota }, Error>;
+  onRefresh: () => void;
+}) {
+  const quota = quotaQuery.data?.quota;
+  const unavailable = Boolean(quotaQuery.error) || (quota != null && quota.status !== 'ok');
+
+  return (
+    <div className="mb-4 rounded-xl border border-border-light bg-surface-secondary p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">
+            Kimi{' '}
+            <span className="rounded-full bg-blue-500/15 px-2 py-0.5 text-xs text-blue-600">
+              PAID
+            </span>
+          </h3>
+          <div className="mt-1 text-xs text-text-secondary">
+            Last updated: {quota ? formatTimestamp(quota.fetched_at) : '—'}
+          </div>
+        </div>
+        <Button variant="outline" onClick={onRefresh} disabled={quotaQuery.isFetching}>
+          <RefreshCw className={`mr-2 h-4 w-4 ${quotaQuery.isFetching ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
+
+      {quotaQuery.isLoading ? (
+        <Spinner className="h-5 w-5" />
+      ) : unavailable ? (
+        <p className="text-sm italic text-text-secondary">Quota unavailable.</p>
+      ) : (
+        <>
+          <div className="mb-2 text-[11px] uppercase tracking-wide text-text-secondary">
+            Provider-reported quota
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {quota!.windows.map((w) => (
+              <QuotaWindowCard key={w.name} quotaWindow={w} />
+            ))}
+          </div>
+          {quota!.booster_wallet ? (
+            <div className="mt-3">
+              <BoosterWalletCard wallet={quota!.booster_wallet} />
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -246,6 +410,25 @@ export default function LlmUsageView() {
     queryFn: () => api.request<{ usage: UsageStats[] }>('/usage'),
     ...QUERY_OPTS,
   });
+
+  // Kimi's own account-level quota -- separate endpoint/cache from the local
+  // usage above; only fetched while the Kimi provider is selected.
+  const forceRefreshRef = useRef(false);
+  const kimiQuotaQuery = useQuery({
+    queryKey: ['llm-quota-kimi'],
+    queryFn: () => {
+      const path = forceRefreshRef.current ? '/quota/kimi?refresh=true' : '/quota/kimi';
+      forceRefreshRef.current = false;
+      return api.request<{ quota: ProviderQuota }>(path);
+    },
+    ...QUERY_OPTS,
+    enabled: selectedEndpoint === KIMI_ENDPOINT_NAME,
+    staleTime: 60_000,
+  });
+  const handleRefreshQuota = () => {
+    forceRefreshRef.current = true;
+    kimiQuotaQuery.refetch();
+  };
 
   const targets = catalogQuery.data?.targets ?? [];
   const usageByTarget = useMemo(
@@ -314,6 +497,9 @@ export default function LlmUsageView() {
                   </h2>
                   <CostBadge costType={selectedProvider.costType} />
                 </div>
+                {selectedProvider.endpoint === KIMI_ENDPOINT_NAME ? (
+                  <KimiQuotaSection quotaQuery={kimiQuotaQuery} onRefresh={handleRefreshQuota} />
+                ) : null}
                 <div className="flex flex-col gap-2">
                   {selectedProvider.models.map((t) => (
                     <ModelUsageRow

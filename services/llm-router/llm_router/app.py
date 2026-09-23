@@ -26,6 +26,7 @@ from starlette.routing import Route as ASGIRoute
 from .catalog import Catalog
 from .config import settings as default_settings
 from .config import Settings
+from .kimi_quota import KimiQuotaAdapter
 from .proxy import (
     AllTargetsFailedError,
     ComboDisabledError,
@@ -82,6 +83,9 @@ def create_app(
 ) -> Starlette:
     settings = settings if settings is not None else default_settings
     router = Router(registry, catalog, http_client=http_client, timeout=request_timeout_seconds)
+    # Reuses the SAME http_client and Catalog.resolve() credential path as
+    # Router above -- no second credential store, no second HTTP client.
+    kimi_quota = KimiQuotaAdapter(catalog, http_client=http_client, timeout=request_timeout_seconds)
 
     # -- OpenAI-compatible surface ---------------------------------------
 
@@ -163,6 +167,15 @@ def create_app(
     async def get_usage(request: Request):
         return JSONResponse({"usage": [u.to_json() for u in registry.list_usage()]})
 
+    # -- admin: provider-reported quota (Kimi only, for now) -------------
+    # Distinct from get_usage above: this is what Kimi itself reports about
+    # the account/key, never what the router locally observed.
+
+    async def get_kimi_quota(request: Request):
+        force_refresh = request.query_params.get("refresh") == "true"
+        quota = await kimi_quota.get_quota(force_refresh=force_refresh)
+        return JSONResponse({"quota": quota.to_json()})
+
     # -- admin: combos ------------------------------------------------------
 
     async def list_combos(request: Request):
@@ -231,6 +244,7 @@ def create_app(
             ASGIRoute("/v1/chat/completions", chat_completions, methods=["POST"]),
             ASGIRoute("/admin/catalog", get_catalog, methods=["GET"]),
             ASGIRoute("/admin/usage", get_usage, methods=["GET"]),
+            ASGIRoute("/admin/quota/kimi", get_kimi_quota, methods=["GET"]),
             ASGIRoute("/admin/combos", list_combos, methods=["GET"]),
             ASGIRoute("/admin/combos/{agent_id}", get_combo, methods=["GET"]),
             ASGIRoute("/admin/combos/{agent_id}", upsert_combo, methods=["PUT"]),

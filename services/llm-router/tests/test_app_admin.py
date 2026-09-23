@@ -93,6 +93,66 @@ async def test_usage_endpoint_empty_when_nothing_observed_yet(registry, catalog)
 
 
 @pytest.mark.asyncio
+async def test_kimi_quota_endpoint_returns_parsed_quota_with_no_secrets(registry, catalog):
+    providers = FakeProviders()
+    providers.script(
+        "https://kimi.example",
+        httpx.Response(
+            200,
+            json={
+                "usage": {"limit": "100", "used": "47", "remaining": "53"},
+                "limits": [],
+            },
+        ),
+    )
+    upstream_client = httpx.AsyncClient(transport=providers.transport())
+    from llm_router.app import create_app
+
+    app = create_app(registry, catalog, http_client=upstream_client)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/admin/quota/kimi")
+
+    assert resp.status_code == 200
+    assert_secret_absent(resp)
+    quota = resp.json()["quota"]
+    assert quota["provider"] == "Kimi"
+    assert quota["status"] == "ok"
+    assert quota["windows"][0]["used"] == 47.0
+
+
+@pytest.mark.asyncio
+async def test_kimi_quota_endpoint_degrades_to_unavailable_on_upstream_failure(registry, catalog):
+    providers = FakeProviders()
+    providers.script("https://kimi.example", httpx.Response(401, json={"error": "bad key"}))
+    upstream_client = httpx.AsyncClient(transport=providers.transport())
+    from llm_router.app import create_app
+
+    app = create_app(registry, catalog, http_client=upstream_client)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/admin/quota/kimi")
+
+    assert resp.status_code == 200
+    assert_secret_absent(resp)
+    assert resp.json()["quota"]["status"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_local_usage_endpoint_unaffected_by_kimi_quota_route(registry, catalog):
+    registry.record_usage_success(
+        "Kimi", "k3", tokens={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+    )
+    async with make_client(registry, catalog) as client:
+        resp = await client.get("/admin/usage")
+
+    assert resp.status_code == 200
+    assert resp.json()["usage"][0]["total_tokens"] == 2
+
+
+@pytest.mark.asyncio
 async def test_create_combo_from_catalog_targets(registry, catalog):
     async with make_client(registry, catalog) as client:
         resp = await client.put(

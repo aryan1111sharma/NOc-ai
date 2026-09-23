@@ -1,15 +1,9 @@
-# LibreChat configuration ??? GLM 5.2 endpoint + NOC read-only MCP server.
-# Docs: https://www.librechat.ai/docs/configuration/librechat_yaml
 version: 1.2.1
 cache: true
 
-# UI branding. The footer (version + commit id) is set via CUSTOM_FOOTER in
-# docker-compose.yml ??? that's the mechanism this LibreChat version renders;
-# interface.customFooter is ignored. This welcome greets the new-chat screen
-# with the release version; the version token is bumped by scripts/bump-version.
+# UI branding
 interface:
-  customWelcome: "Welcome to Ador Manthan.AI v0.13.1 - ask about chargers, tickets, and alarms."
-
+  customWelcome: "Welcome to Ador Manthan.AI. Ask me anything about chargers, tickets, or alarms."
 # Which agent a NEW chat starts on. Without this, LibreChat carries over whatever agent was
 # used last, which is why sessions kept landing back on the GLM agent after it ran out of
 # z.ai balance.
@@ -26,7 +20,7 @@ modelSpecs:
   enforce: false
   list:
     - name: "noc-engineer-kimi"
-      label: "NOC Engineer (Kimi)"
+      label: "NOC Engineer"
       default: true
       description: "NOC engineer assistant on Kimi (kimi-for-coding). Default."
       preset:
@@ -183,3 +177,5 @@ mcpServers:
     type: streamable-http
     url: "http://platform-mcp-server:8107/mcp"
     timeout: 60000
+
+

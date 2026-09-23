@@ -192,10 +192,13 @@ router.get(
 );
 
 /** Resolves ONE {endpoint, model} pair to its real {baseURL, apiKey}, via the same
- *  getCustomEndpointConfig() LibreChat's own direct-model execution uses (see
- *  server/services/Endpoints/agents/initialize.js) -- never a second, hand-rolled
- *  credential lookup. The returned apiKey is for llm-router to use for ONE outbound
- *  call; this route neither logs it nor persists it. A "user_provided" (bring-your-own-
+ *  getAppConfig()/getCustomEndpointConfig() LibreChat's own direct-model execution
+ *  uses (see server/services/Endpoints/agents/initialize.js) -- never a second,
+ *  hand-rolled credential lookup. getAppConfig() (no baseOnly) includes the
+ *  LibreChat Admin Panel/MongoDB `__base__` configuration override, so this resolves
+ *  against the same effective config an admin-added endpoint (e.g. OpenRouter) would
+ *  have. The returned apiKey is for llm-router to use for ONE outbound call; this
+ *  route neither logs it nor persists it. A "user_provided" (bring-your-own-
  *  key) endpoint has no single resolvable credential for an agent-level Combo target,
  *  so it 404s exactly like an endpoint/model that was never registered -- llm-router
  *  already treats that as ordinary config drift (see Catalog.resolve). */

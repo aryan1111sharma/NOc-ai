@@ -29,13 +29,6 @@ services:
     # /api/knowledge-bases route - a silent feature loss, since nothing else references
     # custom-image/. BASE is passed explicitly so the base tag is visible here rather than
     # only in the Dockerfile's ARG default.
-    #
-    # Pinned to the exact digest already running in production, not :latest: upstream
-    # moved since this was last built and apply-patches.sh's line-anchored patches no
-    # longer matched the newer file content, breaking the build outright. Pinning avoids
-    # that drift and guarantees this build reproduces today's running image plus only
-    # this patch set. Bump deliberately (new digest + a full patch-set re-verify), not
-    # as a side effect of an unrelated change.
     build:
       context: ./custom-image
       args:
@@ -57,15 +50,6 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/LibreChat
       - MEILI_HOST=http://meilisearch:7700
       - CONFIG_PATH=/app/librechat.yaml
-      # sessions.js (Admin -> Sessions facade) proxies here. Same isolation
-      # model as llm-router/tool-filter-proxy above -- session:8112 has no
-      # published port.
-      - SESSION_SERVICE_URL=http://session:8112
-      # LLM_ROUTER_INTERNAL_SECRET comes from env_file below (.env). Checked by
-      # llmRouting.js's requireInternalSecret on /api/llm-routing/internal/* --
-      # the routes llm-router calls to learn the registered catalog and to
-      # resolve a Combo target's real credential. See llm-router's own compose
-      # block above and services/llm-router/README.md.
       # Browser-facing address, used to build share links. Derived from SERVER_HOST (.env)
       # so only that one value needs to change if the deployment moves host/domain.
       # The :-localhost default is load-bearing: with SERVER_HOST unset this resolves to the
@@ -81,7 +65,7 @@ services:
       - APP_TITLE=Ador Manthan.AI
       - "APP_VERSION=${APP_VERSION:-dev}"
       - "GIT_SHA=${GIT_SHA:-local}"
-      - "CUSTOM_FOOTER=Ador Manthan.AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/main/CHANGELOG.md)"
+      - "CUSTOM_FOOTER=Ador Manthan.AI v${APP_VERSION:-dev} (${GIT_SHA:-local}) | [Changelog](https://github.com/Quench-EV-Charger/noc-mcp-agent/blob/feat/mcp-server/CHANGELOG.md)"
     volumes:
       - ./librechat.yaml:/app/librechat.yaml:ro
       - librechat-images:/app/client/public/images
@@ -191,16 +175,12 @@ services:
 
   # OpenAI-compatible chat-completions proxy: an agent id (e.g.
   # "agent_kimi26NOCEngineerV1") resolves to that agent's admin-managed
-  # fallback Combo -- an ordered list of (credential, model) targets. The
-  # catalog and every credential come from LibreChat's own api service (the
-  # SAME endpoints.custom resolution direct model execution uses, base
-  # librechat.yaml plus any admin-panel-added provider like OpenRouter) via
-  # the internal-only routes on the LLM Routing facade -- this service parses
-  # no yaml and holds no credential of its own; see services/llm-router/README.md
-  # and llm_router/catalog.py. Automatic fallback on 429/5xx/timeout/connection
-  # failure before the first response byte. Wired into librechat.yaml as the
-  # "NOC Router" custom endpoint, behind tool-filter-proxy below (LibreChat ->
-  # tool-filter-proxy -> llm-router -> LibreChat api (credential resolve) ->
+  # fallback Combo -- an ordered list of (credential, model) targets sourced
+  # entirely from librechat.yaml's own endpoints.custom list (mounted below,
+  # read-only, the same file the api service reads) -- with automatic
+  # fallback on 429/5xx/timeout/connection failure before the first response
+  # byte. Wired into librechat.yaml as the "NOC Router" custom endpoint, behind
+  # tool-filter-proxy below (LibreChat -> tool-filter-proxy -> llm-router ->
   # provider). Combo assignments are managed from the LLM Routing admin page
   # (apps/ai-platform/librechat/custom-image/files/api/llmRouting.js), which
   # is the only thing that talks to it: no published port here, same
@@ -208,20 +188,12 @@ services:
   llm-router:
     build: ../../../services/llm-router
     container_name: llm-router
-    # No env_file here (unlike every other service in this file): this service
-    # resolves every provider credential from LibreChat's api service at
-    # request time (see llm_router/catalog.py) and must never hold a copy of
-    # GLM_API_KEY/KIMI_API_KEY/etc. at rest -- so it gets ONLY the one secret
-    # it actually needs, explicitly, not the whole .env file.
     environment:
       - LLM_ROUTER_HOST=0.0.0.0
       - LLM_ROUTER_PORT=8110
       - LLM_ROUTER_DATA_FILE=/data/llm-router-registry.json
       - LLM_ROUTER_LIBRECHAT_API_URL=http://api:3080
       - LLM_ROUTER_SELF_ENDPOINT_NAME=NOC Router
-      # Same value the api service reads (its own env_file: .env below) to
-      # authorize this specific caller on /api/llm-routing/internal/*. Never
-      # a provider API key.
       - LLM_ROUTER_INTERNAL_SECRET=${LLM_ROUTER_INTERNAL_SECRET}
       # Admin-declared FREE/PAID label for the Usage/Status page (see
       # llm_router/config.py:cost_type_for) -- both GLM (z.ai Coding Plan)
@@ -240,6 +212,11 @@ services:
       # with the rest of this stack's persisted state. See
       # services/llm-router/README.md.
       - llm-router-data:/data
+      # Same librechat.yaml the api service reads -- the ONLY source of
+      # provider credentials/models. Mounted read-only a second time here
+      # rather than duplicated: this service never gets its own copy of a
+      # credential and never writes to this file.
+      - ./librechat.yaml:/librechat-config/librechat.yaml:ro
     restart: unless-stopped
 
   # Shrinks the tools[] array on every /chat/completions request before it
@@ -383,11 +360,10 @@ services:
   # LibreChat Admin Panel — roles/groups + permissions GUI. Talks to the LibreChat API only
   # (not Mongo). GUI at http://<SERVER_HOST>:3091; the first-registered LibreChat user is
   # admin. Needs ADMIN_PANEL_SESSION_SECRET in .env (init-env.ps1 generates it).
-  # Published on its own port rather than proxied under a subpath: this is a prebuilt Vite
-  # SPA with no confirmed support for a non-root base path, so /admin/ risked breaking its
-  # own JS/CSS asset loading. SECURITY: this again exposes an admin surface on a raw port —
-  # in production it MUST sit behind auth/IP-allowlisted TLS termination (P0-1), same
-  # requirement as before, just not handled by nginx for this one service.
+  # No published port: nginx (below) is the only browser-facing entry point now, proxying
+  # https://admin.manthanquench.online (443, TLS-terminated) to this container's :3000. The
+  # host's old bare :8080 mapping to this container is gone - nginx now owns 8080 too, just
+  # to 301 straight to the HTTPS admin URL for anyone still hitting the old link.
   admin-panel:
     image: registry.librechat.ai/clickhouse/librechat-admin-panel:latest
     container_name: noc-librechat-admin
@@ -397,14 +373,13 @@ services:
       - PORT=3000
       - SESSION_SECRET=${ADMIN_PANEL_SESSION_SECRET}
       - API_SERVER_URL=http://api:3080   # server-to-server (in-network)
-      - VITE_API_BASE_URL=http://${SERVER_HOST:-localhost}   # browser-facing LibreChat URL, via nginx
-      - SESSION_COOKIE_SECURE=false      # local http; set true behind TLS in prod
-    ports:
-      - "3091:3000"
+      - VITE_API_BASE_URL=https://ai.manthanquench.online   # browser-facing LibreChat URL, via nginx (HTTPS)
+      - SESSION_COOKIE_SECURE=true       # behind TLS now (nginx terminates HTTPS)
     restart: unless-stopped
 
-  # Reverse proxy: fronts LibreChat (/) and generated file downloads (/files/) on port 80.
-  # admin-panel is NOT routed here (see its own comment above) — it keeps its own port.
+  # Reverse proxy: fronts LibreChat (/) and generated file downloads (/files/) on port 80,
+  # the Admin Panel on 443 (own server_name block, see nginx.conf), and redirects legacy
+  # http://...:8080 admin links straight to the HTTPS admin site.
   nginx:
     image: nginx:alpine
     container_name: noc-nginx
@@ -413,11 +388,17 @@ services:
       - docgen-mcp-server
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot-webroot:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt:ro
     ports:
       - "80:80"
+      - "443:443"
+      - "8080:8080"
     restart: unless-stopped
 
 volumes:
+  certbot-webroot:
+  certbot-certs:
   mongo-data:
   meili-data:
   librechat-images:

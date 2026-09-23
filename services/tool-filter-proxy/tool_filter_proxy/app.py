@@ -92,6 +92,23 @@ class Proxy:
             body_out, decision = self._maybe_filter(raw)
 
         headers = _forwardable(request.headers.items(), _DROP_REQUEST_HEADERS)
+        if decision is not None:
+            # Additive only -- relays the same FilterDecision already computed
+            # above (and logged by self._log below) to whatever is on the
+            # other end of this hop (llm-router today; see
+            # services/session/README.md "Data sources"). Never changes what
+            # gets filtered or forwarded; a consumer that ignores this header
+            # sees byte-identical behaviour to before it existed.
+            headers["x-tool-filter-decision"] = json.dumps(
+                {
+                    "applied": decision.applied,
+                    "reason": decision.reason,
+                    "tools_before": decision.tools_before,
+                    "tools_after": decision.tools_after,
+                    "pinned": decision.pinned,
+                    "fallback_tier": decision.fallback_tier,
+                }
+            )
         params = dict(request.query_params)
 
         try:

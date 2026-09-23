@@ -49,6 +49,7 @@ services:
       - mcp-server
       - llm-router
       - tool-filter-proxy
+      - session
     env_file:
       - .env
     environment:
@@ -56,6 +57,10 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/LibreChat
       - MEILI_HOST=http://meilisearch:7700
       - CONFIG_PATH=/app/librechat.yaml
+      # sessions.js (Admin -> Sessions facade) proxies here. Same isolation
+      # model as llm-router/tool-filter-proxy above -- session:8112 has no
+      # published port.
+      - SESSION_SERVICE_URL=http://session:8112
       # LLM_ROUTER_INTERNAL_SECRET comes from env_file below (.env). Checked by
       # llmRouting.js's requireInternalSecret on /api/llm-routing/internal/* --
       # the routes llm-router calls to learn the registered catalog and to
@@ -224,6 +229,11 @@ services:
       # apps/ai-platform/librechat/RUNBOOK.md's "LLM providers" section.
       # Never inferred from per-model pricing.
       - 'LLM_ROUTER_PROVIDER_COST_TYPES={"GLM": "PAID", "Kimi": "PAID"}'
+      # Enables the best-effort telemetry emit to the session service below
+      # (see llm_router/session_client.py). Empty/unset would disable it
+      # entirely with zero other behavior change -- see that module's
+      # docstring.
+      - LLM_ROUTER_SESSION_SERVICE_URL=http://session:8112
     volumes:
       # Per-agent Combo assignments (endpoint+model references only, never a
       # key) -- a named volume (not a repo bind mount) purely for consistency
@@ -260,6 +270,34 @@ services:
       # and Kimi custom endpoints still call those providers directly -- but
       # left in place as harmless, already-tested capability).
       - PROXY_UPSTREAMS={"glm":"https://api.z.ai/api/coding/paas/v4","kimi":"https://api.kimi.com/coding/v1","router":"http://llm-router:8110"}
+    restart: unless-stopped
+
+  # NOC Session Intelligence -- observes the existing AI pipeline (llm-router's
+  # per-request telemetry via SessionClient, tool-filter-proxy's decision
+  # header, and LibreChat's own Mongo conversations/messages) and records
+  # structured session/turn/tool data for the Admin -> Sessions page
+  # (apps/ai-platform/librechat/custom-image/files/api/sessions.js). Purely
+  # observational: nothing in the real request path depends on this service
+  # being up (see services/session/README.md and llm_router/session_client.py's
+  # "never disrupt a real request" guarantee). No published port -- only the
+  # api service (via sessions.js) and llm-router (fire-and-forget POSTs) talk
+  # to it, same isolation model as llm-router/tool-filter-proxy above.
+  session:
+    build: ../../../services/session
+    container_name: session
+    depends_on:
+      - mongodb
+    environment:
+      - SESSION_HOST=0.0.0.0
+      - SESSION_PORT=8112
+      - SESSION_DATA_FILE=/data/session-events.json
+      - SESSION_MONGO_URI=mongodb://mongodb:27017/LibreChat
+      - SESSION_MONGO_DB=LibreChat
+    volumes:
+      # Ring-buffer of recent per-request telemetry events (see
+      # session/store.py:EventStore) -- a named volume purely for consistency
+      # with llm-router-data above, never the system of record (Mongo is).
+      - session-data:/data
     restart: unless-stopped
 
   # Read-only MCP server for Ecog's Atlassian Cloud Jira (vendor tracker).
@@ -389,3 +427,4 @@ volumes:
   qdrant-data:
   kb-model-cache:
   llm-router-data:
+  session-data:

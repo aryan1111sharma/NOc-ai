@@ -17,6 +17,8 @@ here, only for a Combo that references one.
 
 from __future__ import annotations
 
+import time
+
 import httpx
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -34,7 +36,26 @@ from .proxy import (
     NoEnabledTargetsError,
     Router,
 )
+from .session_client import SessionClient, extract_tool_filter_header
 from .store import Registry, RegistryError
+
+
+def _extract_usage_tokens_for_telemetry(body: dict | None) -> dict | None:
+    """Same shape/strictness as proxy.py's own (module-private)
+    _extract_usage_tokens -- duplicated rather than imported so this
+    telemetry hook never has to reach into proxy.py's internals (see this
+    module's own docstring: proxy.py is intentionally left untouched)."""
+    if not isinstance(body, dict):
+        return None
+    usage = body.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    prompt = usage.get("prompt_tokens")
+    completion = usage.get("completion_tokens")
+    total = usage.get("total_tokens")
+    if not all(isinstance(v, int) and not isinstance(v, bool) for v in (prompt, completion, total)):
+        return None
+    return {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": total}
 
 _HOP_BY_HOP = frozenset(
     {
@@ -80,12 +101,20 @@ def create_app(
     http_client: httpx.AsyncClient | None = None,
     request_timeout_seconds: float = 30.0,
     settings: Settings | None = None,
+    session_client: SessionClient | None = None,
 ) -> Starlette:
     settings = settings if settings is not None else default_settings
     router = Router(registry, catalog, http_client=http_client, timeout=request_timeout_seconds)
     # Reuses the SAME http_client and Catalog.resolve() credential path as
     # Router above -- no second credential store, no second HTTP client.
     kimi_quota = KimiQuotaAdapter(catalog, http_client=http_client, timeout=request_timeout_seconds)
+    # Best-effort telemetry to services/session/ -- see session_client.py's
+    # module docstring for the "never disrupt a real request" guarantee.
+    # Disabled by default (Settings.session_service_url == ""), so an
+    # existing deployment that injects no session_client is unaffected.
+    session_client = (
+        session_client if session_client is not None else SessionClient(settings=settings)
+    )
 
     # -- OpenAI-compatible surface ---------------------------------------
 
@@ -115,6 +144,13 @@ def create_app(
         if not isinstance(body.get("model"), str):
             return _error("`model` (the agent id) is required", status_code=400)
 
+        agent_id = body["model"]
+        # Relayed by tool-filter-proxy (see tool_filter_proxy/app.py) on the
+        # request that reached this router -- enrichment only, see
+        # session_client.py's extract_tool_filter_header.
+        tool_filter = extract_tool_filter_header(request.headers.get("x-tool-filter-decision"))
+        dispatch_started = time.perf_counter()
+
         try:
             result = await router.dispatch(body)
         except ComboNotFoundError as exc:
@@ -124,7 +160,25 @@ def create_app(
         except NoEnabledTargetsError as exc:
             return _error(str(exc), status_code=503)
         except AllTargetsFailedError as exc:
+            session_client.emit_failure(
+                agent_id=agent_id,
+                attempted=exc.attempted,
+                status_code=None,
+                latency_ms=(time.perf_counter() - dispatch_started) * 1000,
+                tool_filter=tool_filter,
+                error=exc.last_error,
+            )
             return _error(str(exc), status_code=502, error_type="upstream_error")
+
+        session_client.emit_success(
+            agent_id=agent_id,
+            target=result.target,
+            attempted=result.attempted,
+            status_code=result.status_code,
+            tokens=_extract_usage_tokens_for_telemetry(result.body),
+            latency_ms=(time.perf_counter() - dispatch_started) * 1000,
+            tool_filter=tool_filter,
+        )
 
         # The one thing this route adds on top of the provider's own response:
         # which Combo target actually answered ("Kimi/k3-256k"), for whoever

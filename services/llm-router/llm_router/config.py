@@ -65,6 +65,19 @@ class Settings(BaseSettings):
     # cost_type_for() below, never a guess.
     provider_cost_types: dict[str, str] = {}
 
+    # Base URL of the optional NOC Session Intelligence service (see
+    # services/session/). Empty (the default) disables telemetry emission
+    # entirely -- session_client.py checks this before doing anything, so an
+    # existing deployment that never sets this env var behaves exactly as it
+    # did before this field existed. See session_client.py's module
+    # docstring for the "observe, never disrupt" guarantee this implies.
+    session_service_url: str = ""
+
+    # Upper bound on how long dispatch() may be blocked waiting for the
+    # telemetry POST to even be attempted. Deliberately tiny: this is a
+    # fire-and-forget emit, not a dependency -- see session_client.py.
+    session_service_timeout_seconds: float = 2.0
+
     def cost_type_for(self, endpoint: str) -> str:
         value = self.provider_cost_types.get(endpoint)
         return value if value in _VALID_COST_TYPES else "UNKNOWN"

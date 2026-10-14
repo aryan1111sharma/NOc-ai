@@ -8,12 +8,13 @@ import httpx
 import pytest
 
 from llm_router.app import create_app
+from llm_router.config import Settings
 from tests.fakes import FakeProviders
 
 
-def make_client(registry, catalog) -> httpx.AsyncClient:
+def make_client(registry, catalog, *, settings=None) -> httpx.AsyncClient:
     upstream_client = httpx.AsyncClient(transport=FakeProviders().transport())
-    app = create_app(registry, catalog, http_client=upstream_client)
+    app = create_app(registry, catalog, http_client=upstream_client, settings=settings)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test")
 
 
@@ -34,6 +35,121 @@ async def test_catalog_lists_targets_with_no_keys(registry, catalog):
     pairs = {(t["endpoint"], t["model"]) for t in resp.json()["targets"]}
     assert ("Kimi", "kimi-for-coding") in pairs
     assert ("GLM", "glm-5.2") in pairs
+
+
+@pytest.mark.asyncio
+async def test_catalog_cost_type_defaults_to_unknown(registry, catalog):
+    async with make_client(registry, catalog) as client:
+        resp = await client.get("/admin/catalog")
+
+    cost_types = {t["endpoint"]: t["cost_type"] for t in resp.json()["targets"]}
+    assert cost_types == {"Kimi": "UNKNOWN", "GLM": "UNKNOWN"}
+
+
+@pytest.mark.asyncio
+async def test_catalog_cost_type_reflects_configured_settings(registry, catalog):
+    settings = Settings(provider_cost_types={"Kimi": "PAID", "GLM": "FREE"})
+    async with make_client(registry, catalog, settings=settings) as client:
+        resp = await client.get("/admin/catalog")
+
+    cost_types = {t["endpoint"]: t["cost_type"] for t in resp.json()["targets"]}
+    assert cost_types == {"Kimi": "PAID", "GLM": "FREE"}
+
+
+@pytest.mark.asyncio
+async def test_catalog_cost_type_ignores_invalid_configured_value(registry, catalog):
+    settings = Settings(provider_cost_types={"Kimi": "not-a-real-value"})
+    async with make_client(registry, catalog, settings=settings) as client:
+        resp = await client.get("/admin/catalog")
+
+    cost_types = {t["endpoint"]: t["cost_type"] for t in resp.json()["targets"]}
+    assert cost_types["Kimi"] == "UNKNOWN"
+
+
+@pytest.mark.asyncio
+async def test_usage_endpoint_lists_recorded_stats_with_no_secrets(registry, catalog):
+    registry.record_usage_success(
+        "Kimi", "k3", tokens={"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+    )
+    registry.record_usage_failure("GLM", "glm-5.2", failure_class="429")
+
+    async with make_client(registry, catalog) as client:
+        resp = await client.get("/admin/usage")
+
+    assert resp.status_code == 200
+    assert_secret_absent(resp)
+    by_target = {(u["endpoint"], u["model"]): u for u in resp.json()["usage"]}
+    assert by_target[("Kimi", "k3")]["total_tokens"] == 15
+    assert by_target[("GLM", "glm-5.2")]["last_failure_class"] == "429"
+
+
+@pytest.mark.asyncio
+async def test_usage_endpoint_empty_when_nothing_observed_yet(registry, catalog):
+    async with make_client(registry, catalog) as client:
+        resp = await client.get("/admin/usage")
+
+    assert resp.status_code == 200
+    assert resp.json()["usage"] == []
+
+
+@pytest.mark.asyncio
+async def test_kimi_quota_endpoint_returns_parsed_quota_with_no_secrets(registry, catalog):
+    providers = FakeProviders()
+    providers.script(
+        "https://kimi.example",
+        httpx.Response(
+            200,
+            json={
+                "usage": {"limit": "100", "used": "47", "remaining": "53"},
+                "limits": [],
+            },
+        ),
+    )
+    upstream_client = httpx.AsyncClient(transport=providers.transport())
+    from llm_router.app import create_app
+
+    app = create_app(registry, catalog, http_client=upstream_client)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/admin/quota/kimi")
+
+    assert resp.status_code == 200
+    assert_secret_absent(resp)
+    quota = resp.json()["quota"]
+    assert quota["provider"] == "Kimi"
+    assert quota["status"] == "ok"
+    assert quota["windows"][0]["used"] == 47.0
+
+
+@pytest.mark.asyncio
+async def test_kimi_quota_endpoint_degrades_to_unavailable_on_upstream_failure(registry, catalog):
+    providers = FakeProviders()
+    providers.script("https://kimi.example", httpx.Response(401, json={"error": "bad key"}))
+    upstream_client = httpx.AsyncClient(transport=providers.transport())
+    from llm_router.app import create_app
+
+    app = create_app(registry, catalog, http_client=upstream_client)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/admin/quota/kimi")
+
+    assert resp.status_code == 200
+    assert_secret_absent(resp)
+    assert resp.json()["quota"]["status"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_local_usage_endpoint_unaffected_by_kimi_quota_route(registry, catalog):
+    registry.record_usage_success(
+        "Kimi", "k3", tokens={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+    )
+    async with make_client(registry, catalog) as client:
+        resp = await client.get("/admin/usage")
+
+    assert resp.status_code == 200
+    assert resp.json()["usage"][0]["total_tokens"] == 2
 
 
 @pytest.mark.asyncio

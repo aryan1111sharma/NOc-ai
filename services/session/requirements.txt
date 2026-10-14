@@ -1,0 +1,8 @@
+# Mirrors services/llm-router/requirements.txt: same ASGI stack. pymongo is
+# additional here -- this is the only one of the three telemetry-adjacent
+# services that reads LibreChat's own database (see session/mongo_reader.py).
+starlette>=0.46
+uvicorn>=0.30
+httpx>=0.28
+pydantic-settings>=2.0
+pymongo>=4.6

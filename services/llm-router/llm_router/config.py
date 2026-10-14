@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_VALID_COST_TYPES = frozenset({"FREE", "PAID"})
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LLM_ROUTER_")
@@ -51,6 +53,34 @@ class Settings(BaseSettings):
     # The custom-endpoint `name` this router is wired into librechat.yaml
     # under. Excluded from the Catalog so a Combo can never target itself.
     self_endpoint_name: str = "NOC Router"
+
+    # Admin-declared FREE/PAID label per Catalog endpoint name, e.g.
+    # '{"GLM": "PAID", "Kimi": "PAID"}'. This is the smallest mechanism that
+    # satisfies the requirement without touching librechat.yaml or
+    # LibreChat's own endpoint schema (neither has a cost-type field, and
+    # nothing here should infer one from per-model pricing): a single env
+    # var, parsed by pydantic-settings as JSON since the field type is
+    # dict[str, str]. An endpoint with no entry -- e.g. one an admin just
+    # added through LibreChat's own Admin Panel -- reads as "UNKNOWN" via
+    # cost_type_for() below, never a guess.
+    provider_cost_types: dict[str, str] = {}
+
+    # Base URL of the optional NOC Session Intelligence service (see
+    # services/session/). Empty (the default) disables telemetry emission
+    # entirely -- session_client.py checks this before doing anything, so an
+    # existing deployment that never sets this env var behaves exactly as it
+    # did before this field existed. See session_client.py's module
+    # docstring for the "observe, never disrupt" guarantee this implies.
+    session_service_url: str = ""
+
+    # Upper bound on how long dispatch() may be blocked waiting for the
+    # telemetry POST to even be attempted. Deliberately tiny: this is a
+    # fire-and-forget emit, not a dependency -- see session_client.py.
+    session_service_timeout_seconds: float = 2.0
+
+    def cost_type_for(self, endpoint: str) -> str:
+        value = self.provider_cost_types.get(endpoint)
+        return value if value in _VALID_COST_TYPES else "UNKNOWN"
 
 
 settings = Settings()

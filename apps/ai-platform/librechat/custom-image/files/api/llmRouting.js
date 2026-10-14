@@ -14,6 +14,8 @@
  *
  *   GET    /api/llm-routing/agents                 -> LibreChat's own Agent collection (getAgents)
  *   GET    /api/llm-routing/catalog                -> GET    llm-router /admin/catalog
+ *   GET    /api/llm-routing/usage                  -> GET    llm-router /admin/usage
+ *   GET    /api/llm-routing/quota/kimi              -> GET    llm-router /admin/quota/kimi
  *   GET    /api/llm-routing/combos                 -> GET    llm-router /admin/combos
  *   GET    /api/llm-routing/combos/:agentId        -> GET    llm-router /admin/combos/:agentId
  *   PUT    /api/llm-routing/combos/:agentId        -> PUT    llm-router /admin/combos/:agentId (+ Agent sync)
@@ -256,6 +258,31 @@ router.get(
   '/catalog',
   handle(async (req, res) => {
     const { status, data } = await proxyToRouter('GET', '/admin/catalog');
+    return res.status(status).json(data);
+  }),
+);
+
+/** Locally observed request/token counters per (endpoint, model), for the
+ *  Usage/Status view -- never a provider-reported quota. See llm-router's
+ *  own README and llm_router/store.py:UsageStats for what this is and isn't. */
+router.get(
+  '/usage',
+  handle(async (req, res) => {
+    const { status, data } = await proxyToRouter('GET', '/admin/usage');
+    return res.status(status).json(data);
+  }),
+);
+
+/** Kimi's own provider-reported account-level quota (used/limit/remaining/reset,
+ *  by window, plus booster wallet balance when available) -- distinct from the
+ *  locally observed /usage above. `?refresh=true` bypasses llm-router's own
+ *  short-lived cache. Never a credential: llm-router resolves and uses it
+ *  in-memory for the one outbound call and returns only the normalized numbers. */
+router.get(
+  '/quota/kimi',
+  handle(async (req, res) => {
+    const refresh = req.query?.refresh === 'true' ? '?refresh=true' : '';
+    const { status, data } = await proxyToRouter('GET', `/admin/quota/kimi${refresh}`);
     return res.status(status).json(data);
   }),
 );

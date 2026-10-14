@@ -1,6 +1,8 @@
 name: Tests
 
-# Run both MCP servers' pytest suites on PRs (the merge gate) and on pushes.
+# Run every NOC platform component's test suite on PRs (the merge gate) and on pushes:
+# the MCP servers (incl. KB/RAG), Tool Filter, Tool Registry, LLM Router, Session service,
+# and the LibreChat custom-image patch contracts.
 on:
   push:
   pull_request:
@@ -19,7 +21,21 @@ jobs:
         # services/mcp/kb carries the KB upload, ingestion and isolation tests, plus the
         # cross-layer upload-limit assertions in tests/test_upload_limits.py — which read
         # nginx.conf and apply-patches.sh, so they need the full checkout this job has.
-        server: [services/mcp/noc, services/mcp/cms, services/mcp/jira, services/mcp/ecog-sd, services/mcp/platform, services/mcp/kb]
+        # services/tool-filter-proxy imports filtering/ and registry/ straight from the
+        # checkout via its conftest.py, so it too relies on the full checkout.
+        server:
+          - services/mcp/noc
+          - services/mcp/cms
+          - services/mcp/jira
+          - services/mcp/ecog-sd
+          - services/mcp/platform
+          - services/mcp/kb
+          - services/mcp/chargezone
+          - filtering
+          - registry
+          - services/tool-filter-proxy
+          - services/llm-router
+          - services/session
     name: pytest (${{ matrix.server }})
     steps:
       - name: Checkout
@@ -43,9 +59,11 @@ jobs:
         # invocation the READMEs document.
         run: python -m pytest -v
 
-  # The Knowledge Bases upload queue and the API-side size gate. Both are plain modules
-  # with no dependencies, so they run on the Node test runner directly — no jest and no
-  # built LibreChat image, which is what makes them runnable in CI at all.
+  # The LibreChat custom-image contracts: the Knowledge Bases upload queue and API-side
+  # size gate, agent display names, and the LLM routing / sessions patches (asserted
+  # against the patched sources under files/). All are dependency-free, so they run on the
+  # Node test runner directly — no jest and no built LibreChat image, which is what makes
+  # them runnable in CI at all.
   node:
     runs-on: ubuntu-latest
     name: node --test (librechat KB upload)

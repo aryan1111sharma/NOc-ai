@@ -56,6 +56,10 @@ RUN test -f /app/api/server/routes/knowledgeBases.js || (echo "API route missing
  && test -f /app/api/server/routes/llmRouting.js || (echo "LLM Routing API route missing" && exit 1) \
  && grep -q "app.use('/api/llm-routing', routes.llmRouting)" /app/api/server/index.js \
       || (echo "LLM Routing route not mounted" && exit 1) \
- && grep -rq "llm-routing" /app/client/dist/assets/ || (echo "client bundle missing LLM Routing page" && exit 1)
+ && grep -rq "llm-routing" /app/client/dist/assets/ || (echo "client bundle missing LLM Routing page" && exit 1) \
+ && test -f /app/api/server/routes/sessions.js || (echo "Sessions API route missing" && exit 1) \
+ && grep -q "app.use('/api/sessions', routes.sessions)" /app/api/server/index.js \
+      || (echo "Sessions route not mounted" && exit 1) \
+ && grep -rq "com_ui_sessions" /app/client/dist/assets/ || (echo "client bundle missing Sessions page" && exit 1)
 
 USER node

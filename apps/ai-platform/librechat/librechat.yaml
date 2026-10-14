@@ -3,8 +3,7 @@ cache: true
 
 # UI branding
 interface:
-  customWelcome: "Welcome to Ador Manthan.AI v0.13.1 - ask about chargers, tickets, and alarms."
-
+  customWelcome: "Welcome to Ador Manthan.AI. Ask me anything about chargers, tickets, or alarms."
 # Which agent a NEW chat starts on. Without this, LibreChat carries over whatever agent was
 # used last, which is why sessions kept landing back on the GLM agent after it ran out of
 # z.ai balance.

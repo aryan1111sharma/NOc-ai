@@ -312,11 +312,18 @@ patch_once "$APP/api/server/index.js" \
 mkdir -p "$APP/client/src/components/LlmRouting"
 cp /patch-files/client/LlmRoutingView.tsx \
    "$APP/client/src/components/LlmRouting/LlmRoutingView.tsx"
+cp /patch-files/client/LlmUsageView.tsx \
+   "$APP/client/src/components/LlmRouting/LlmUsageView.tsx"
 
 patch_once "$APP/client/src/routes/index.tsx" \
   "const loadSkillsView = () =>" \
   "const loadLlmRoutingView = () =>
   import('~/components/LlmRouting/LlmRoutingView').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadLlmUsageView = () =>
+  import('~/components/LlmRouting/LlmUsageView').then((m) => ({
     Component: m.default,
   }));
 
@@ -334,6 +341,10 @@ patch_once "$APP/client/src/routes/index.tsx" \
             {
               path: 'llm-routing',
               lazy: loadLlmRoutingView,
+            },
+            {
+              path: 'llm-routing/usage',
+              lazy: loadLlmUsageView,
             },"
 
 patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
@@ -364,6 +375,92 @@ patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
         icon: Network,
         id: 'llm-routing',
         onClick: () => navigate('/llm-routing'),
+      });
+    }"
+
+echo "== 10/10 Session Intelligence admin page =="
+# Thin authenticated facade over standalone session service
+# (services/session) -- same shape as LLM Routing wiring above, but this
+# route only ever reads (see files/api/sessions.js's header).
+cp /patch-files/api/sessions.js "$APP/api/server/routes/sessions.js"
+echo " installed api/server/routes/sessions.js"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "const llmRouting = require('./llmRouting');" \
+  "const llmRouting = require('./llmRouting');
+const sessions = require('./sessions');"
+
+patch_once "$APP/api/server/routes/index.js" \
+  "  llmRouting," \
+  "  llmRouting,
+  sessions,"
+
+patch_once "$APP/api/server/index.js" \
+  "  app.use('/api/llm-routing', routes.llmRouting);" \
+  "  app.use('/api/llm-routing', routes.llmRouting);
+  app.use('/api/sessions', routes.sessions);"
+
+mkdir -p "$APP/client/src/components/Sessions"
+cp /patch-files/client/SessionsView.tsx \
+  "$APP/client/src/components/Sessions/SessionsView.tsx"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "const loadLlmUsageView = () =>
+  import('~/components/LlmRouting/LlmUsageView').then((m) => ({
+    Component: m.default,
+  }));" \
+  "const loadLlmUsageView = () =>
+  import('~/components/LlmRouting/LlmUsageView').then((m) => ({
+    Component: m.default,
+  }));
+
+const loadSessionsView = () =>
+  import('~/components/Sessions/SessionsView').then((m) => ({
+    Component: m.default,
+  }));"
+
+patch_once "$APP/client/src/routes/index.tsx" \
+  "            {
+              path: 'llm-routing/usage',
+              lazy: loadLlmUsageView,
+            }," \
+  "            {
+              path: 'llm-routing/usage',
+              lazy: loadLlmUsageView,
+            },
+            {
+              path: 'sessions',
+              lazy: loadSessionsView,
+            },"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "import { Database, MessagesSquare, Network } from 'lucide-react';" \
+  "import { Activity, Database, MessagesSquare, Network } from 'lucide-react';"
+
+patch_once "$APP/client/src/hooks/Nav/useUnifiedSidebarLinks.ts" \
+  "      links.push({
+        title: 'com_ui_llm_routing' as NavLink['title'],
+        label: 'LLM Routing',
+        icon: Network,
+        id: 'llm-routing',
+        onClick: () => navigate('/llm-routing'),
+      });
+    }" \
+  "      links.push({
+        title: 'com_ui_llm_routing' as NavLink['title'],
+        label: 'LLM Routing',
+        icon: Network,
+        id: 'llm-routing',
+        onClick: () => navigate('/llm-routing'),
+      });
+      /* Same access:admin + manage:mcpservers gate as LLM Routing -- see
+         files/api/sessions.js. Hiding the entry is convenience only. */
+      links.push({
+        title: 'com_ui_sessions' as NavLink['title'],
+        label: 'Sessions',
+        icon: Activity,
+        id: 'sessions',
+        onClick: () => navigate('/sessions'),
       });
     }"
 
